@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { sfetch, q } from "@/lib/supa";
-import { ASSIGNMENT_ID, REFRESH_MS } from "@/lib/supa";
+import { DEFAULT_AID } from "@/lib/supabase";
+import { fetchLeaderboard } from "@/lib/api";
 
-type Item = { title?: string; detail?: string; };
+type Item = { title: string; detail: string; };
 
 export default function Ticker() {
   const [items, setItems] = useState<Item[]>([]);
@@ -11,24 +11,17 @@ export default function Ticker() {
     let alive = true;
     const load = async () => {
       try {
-        // Try trophies_live first
-        const base = `trophies_live?${q({ "assignment_id": `eq.${ASSIGNMENT_ID}` })}`;
-        const data = await sfetch<any[]>(base).catch(() => []);
-        let out: Item[] = [];
-        if (Array.isArray(data) && data.length) {
-          out = data.map(d => ({ title: d.trophy_name ?? "Trophy", detail: d.holder_name ?? d.public_handle ?? "" }));
-        } else {
-          // Fallback to toxic trophy only
-          const tox = await sfetch<any[]>(
-            `trophy_toxic_topper_v1?${q({ "assignment_id": `eq.${ASSIGNMENT_ID}` })}`
-          ).catch(() => []);
-          out = (tox ?? []).map(t => ({ title: "Toxic Topper", detail: t.student_id }));
-        }
+        const data = await fetchLeaderboard(DEFAULT_AID);
+        const top3 = data.slice(0, 3);
+        const out: Item[] = top3.map(r => ({
+          title: r.display_name ?? 'Unknown',
+          detail: `${r.points ?? 0} pts`
+        }));
         if (alive) setItems(out);
       } catch { /* ignore */ }
     };
     load();
-    const id = setInterval(load, REFRESH_MS);
+    const id = setInterval(load, 60000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 
@@ -38,7 +31,7 @@ export default function Ticker() {
       <div className="animate-[ticker_20s_linear_infinite] whitespace-nowrap">
         {items.map((it, i) => (
           <span key={i} className="mx-6">
-            <span className="font-semibold">{it.title}</span>: {it.detail}
+            <span className="font-semibold">{it.title}</span> takes the lead with {it.detail}!
           </span>
         ))}
       </div>
