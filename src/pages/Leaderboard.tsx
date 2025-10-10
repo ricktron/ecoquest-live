@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { listAssignments, getLeaderboard } from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { listAssignments, getLeaderboard, getLeaderboardDelta } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trophy, Medal, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Trophy, Medal, TrendingUp, RefreshCw, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function Leaderboard() {
   const [selectedAssignment, setSelectedAssignment] = useState<string>('');
@@ -13,10 +14,24 @@ export default function Leaderboard() {
     queryFn: listAssignments,
   });
 
-  const { data: leaderboard, isLoading: leaderboardLoading } = useQuery({
+  const { data: leaderboard, isLoading: leaderboardLoading, refetch: refetchLeaderboard } = useQuery({
     queryKey: ['leaderboard', selectedAssignment],
     queryFn: () => getLeaderboard(selectedAssignment),
     enabled: !!selectedAssignment,
+    refetchInterval: 60000, // Auto-refresh every 60 seconds
+  });
+
+  const { data: deltaData } = useQuery({
+    queryKey: ['leaderboard-delta', selectedAssignment],
+    queryFn: () => getLeaderboardDelta(selectedAssignment),
+    enabled: !!selectedAssignment,
+    refetchInterval: 60000,
+  });
+
+  // Build delta map
+  const deltaMap: Record<string, number> = {};
+  (deltaData || []).forEach((m: any) => {
+    deltaMap[m.student_id] = (m.rank_then ?? 999) - (m.rank_now ?? 999);
   });
 
   // Auto-select first assignment
@@ -35,21 +50,33 @@ export default function Leaderboard() {
     <div className="space-y-4">
       {/* Assignment Selector */}
       <Card className="p-4">
-        <label className="block text-sm font-medium text-foreground mb-2">
-          Select Assignment
-        </label>
-        <Select value={selectedAssignment} onValueChange={setSelectedAssignment}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Choose an assignment..." />
-          </SelectTrigger>
-          <SelectContent>
-            {assignments?.map((assignment) => (
-              <SelectItem key={assignment.id} value={assignment.id}>
-                {assignment.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Select Assignment
+            </label>
+            <Select value={selectedAssignment} onValueChange={setSelectedAssignment}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose an assignment..." />
+              </SelectTrigger>
+              <SelectContent>
+                {assignments?.map((assignment) => (
+                  <SelectItem key={assignment.id} value={assignment.id}>
+                    {assignment.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => refetchLeaderboard()}
+            disabled={leaderboardLoading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${leaderboardLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </Card>
 
       {/* Leaderboard Table */}
@@ -84,34 +111,55 @@ export default function Leaderboard() {
                     <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Points
                     </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Change
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {leaderboard.map((entry: any, index: number) => (
-                    <tr
-                      key={entry.student_id}
-                      className="hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          {getRankIcon(index + 1)}
+                  {leaderboard.map((entry: any, index: number) => {
+                    const rankChange = deltaMap[entry.student_id] ?? 0;
+                    return (
+                      <tr
+                        key={entry.student_id}
+                        className="hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {getRankIcon(index + 1)}
+                            <span className="text-sm font-medium text-foreground">
+                              #{index + 1}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-foreground">
-                            #{index + 1}
+                            {entry.public_handle || 'Anonymous'}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-foreground">
-                          {entry.public_handle || 'Anonymous'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <span className="text-sm font-semibold text-primary">
-                          {entry.points?.toLocaleString() || 0}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <span className="text-sm font-semibold text-primary">
+                            {entry.points?.toLocaleString() || 0}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {rankChange > 0 ? (
+                            <span className="text-sm font-medium text-green-600 dark:text-green-500 flex items-center justify-center gap-1">
+                              <ArrowUp className="w-3 h-3" />
+                              {rankChange}
+                            </span>
+                          ) : rankChange < 0 ? (
+                            <span className="text-sm font-medium text-red-600 dark:text-red-500 flex items-center justify-center gap-1">
+                              <ArrowDown className="w-3 h-3" />
+                              {Math.abs(rankChange)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
