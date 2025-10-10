@@ -1,68 +1,33 @@
-import { useState } from 'react';
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Leaderboard from './pages/Leaderboard';
-import NotFound from "./pages/NotFound";
+import { useState } from "react";
+import Leaderboard from "@/pages/Leaderboard";
+import Today from "@/pages/Today";
+import Trophies from "@/pages/Trophies";
+import Ticker from "@/components/Ticker";
 
-const queryClient = new QueryClient();
+const TABS = ["Leaderboard","Today","Trophies"] as const;
+type Tab = typeof TABS[number];
 
-function Tab({ active, onClick, children }: any) {
+export default function App() {
+  const [tab, setTab] = useState<Tab>("Leaderboard");
   return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-        active 
-          ? 'bg-primary text-primary-foreground shadow-md' 
-          : 'bg-muted text-muted-foreground hover:bg-muted/80'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function AppContent() {
-  const [tab, setTab] = useState<'leaderboard'|'today'|'trophies'|'trends'>('leaderboard');
-
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto p-4 space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">EcoQuest Live</h1>
-        <div className="flex gap-2 flex-wrap">
-          <Tab active={tab==='leaderboard'} onClick={()=>setTab('leaderboard')}>Leaderboard</Tab>
-          <Tab active={tab==='today'} onClick={()=>setTab('today')}>Today</Tab>
-          <Tab active={tab==='trophies'} onClick={()=>setTab('trophies')}>Trophies</Tab>
-          <Tab active={tab==='trends'} onClick={()=>setTab('trends')}>Trends</Tab>
+    <div className="min-h-dvh bg-neutral-50 flex flex-col">
+      <Ticker />
+      <header className="p-3 bg-white shadow-sm">
+        <h1 className="text-xl font-bold">EcoQuest Live</h1>
+        <div className="text-xs text-neutral-500">Costa Rica BioBlitz</div>
+      </header>
+      <main className="flex-1">
+        {tab==="Leaderboard" && <Leaderboard/>}
+        {tab==="Today" && <Today/>}
+        {tab==="Trophies" && <Trophies/>}
+      </main>
+      <nav className="sticky bottom-0 bg-white border-t">
+        <div className="grid grid-cols-3">
+          {TABS.map(t=>(
+            <button key={t} onClick={()=>setTab(t)} className={`py-3 ${tab===t?"font-semibold text-blue-600":"text-neutral-500"}`}>{t}</button>
+          ))}
         </div>
-
-        {tab==='leaderboard' && <Leaderboard />}
-        {tab==='today' && <div className="text-muted-foreground p-8 text-center">Today view coming next.</div>}
-        {tab==='trophies' && <div className="text-muted-foreground p-8 text-center">Trophies view coming next.</div>}
-        {tab==='trends' && <div className="text-muted-foreground p-8 text-center">Trends view coming next.</div>}
-      </div>
+      </nav>
     </div>
   );
 }
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<AppContent />} />
-          <Route path="/landing" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
-
-export default App;
