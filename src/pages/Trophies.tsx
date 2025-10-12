@@ -1,21 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
-import { DEFAULT_AID } from '../lib/supabase';
-import { fetchTrophies, TrophyRow } from '../lib/api';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+
+type TrophyRow = {
+  created_at: string;
+  display_label: string;
+  trophy_title: string;
+  points: number;
+};
 
 export default function Trophies() {
   const [rows, setRows] = useState<TrophyRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const assignmentId = DEFAULT_AID;
 
   async function load() {
+    setLoading(true);
     try {
-      setLoading(true); setError(null);
-      const data = await fetchTrophies(assignmentId);
-      setRows(data);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load trophies');
-    } finally { setLoading(false); }
+      const { data, error } = await supabase
+        .from('trophies_live_v1')
+        .select('created_at, display_label, trophy_title, points')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      setRows(data || []);
+    } catch (e) {
+      console.error('Error loading trophies:', e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -24,40 +36,48 @@ export default function Trophies() {
     return () => clearInterval(t);
   }, []);
 
-  const body = useMemo(() => {
-    if (loading) return <div className="px-4 py-8 text-gray-500">Refreshing…</div>;
-    if (error) return <div className="px-4 py-8 text-red-600">{error}</div>;
-    if (!rows.length) return <div className="px-4 py-8 text-gray-500">No trophies yet.</div>;
-    return (
-      <div className="space-y-3">
-        {rows.map((r, i) => (
-          <div key={i} className="rounded-lg border p-4">
-            <div className="font-semibold text-lg">{r.trophy}</div>
-            <div className="text-sm text-gray-600 mt-1">
-              Winner: {r.winner_display_name ?? 'Unknown'}
-            </div>
-            <div className="text-sm text-gray-600">
-              Metric: {r.metric_value ?? 0}
-            </div>
-            {r.updated_at_utc && (
-              <div className="text-xs text-gray-400 mt-2">
-                Updated: {new Date(r.updated_at_utc).toLocaleString()}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }, [rows, loading, error]);
-
   return (
-    <div className="p-3 space-y-3">
+    <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600">Trophies</div>
-        <button onClick={load} className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-sm">Refresh</button>
+        <h2 className="text-lg font-semibold">Trophies</h2>
+        <button 
+          onClick={load} 
+          className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+        >
+          Refresh
+        </button>
       </div>
-      <div className="text-xs text-gray-500 mb-3">Trophies update as new observations are scored. Look, don't touch. Photos from a safe distance only.</div>
-      {body}
+
+      {loading ? (
+        <div className="text-center text-gray-500 py-8">Loading...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center text-gray-500 py-8">No trophies yet.</div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="px-3 py-2 text-left text-sm">Date</th>
+                <th className="px-3 py-2 text-left text-sm">Name</th>
+                <th className="px-3 py-2 text-left text-sm">Trophy</th>
+                <th className="px-3 py-2 text-right text-sm">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} className="border-t">
+                  <td className="px-3 py-2 text-sm">
+                    {new Date(row.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-3 py-2 text-sm">{row.display_label}</td>
+                  <td className="px-3 py-2 text-sm">{row.trophy_title}</td>
+                  <td className="px-3 py-2 text-right text-sm">{row.points}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
