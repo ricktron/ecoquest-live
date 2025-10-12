@@ -201,8 +201,14 @@ export default function Admin() {
       return;
     }
     
+    if (!inatPayload) {
+      toast({ title: 'Error', description: 'No data to save. Fetch from iNaturalist first.', variant: 'destructive' });
+      return;
+    }
+    
     setSaving(true);
     try {
+      // ds_upsert_scores: call public.upsert_daily_scores RPC
       const { data, error } = await supabase.rpc('upsert_daily_scores', {
         p_window_label: windowLabel,
         p_scored_on: scoredOn,
@@ -212,7 +218,10 @@ export default function Admin() {
 
       if (error) throw error;
 
-      toast({ title: 'Saved', description: `Saved ${data || 0} rows` });
+      const upsertedCount = data || 0;
+      toast({ title: 'Success', description: `Saved ${upsertedCount} rows` });
+      
+      // Refresh both leaderboards
       loadLeaderboards();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
