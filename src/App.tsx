@@ -2,9 +2,11 @@ import { useState } from "react";
 import Leaderboard from "@/pages/Leaderboard";
 import Today from "@/pages/Today";
 import Trophies from "@/pages/Trophies";
+import Admin from "@/pages/Admin";
 import Ticker from "@/components/Ticker";
+import { Toaster } from "@/components/ui/toaster";
 
-const TABS = ["Leaderboard","Today","Trophies"] as const;
+const TABS = ["Leaderboard","Today","Trophies","Admin"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
@@ -20,14 +22,16 @@ export default function App() {
         {tab==="Leaderboard" && <Leaderboard/>}
         {tab==="Today" && <Today/>}
         {tab==="Trophies" && <Trophies/>}
+        {tab==="Admin" && <Admin/>}
       </main>
       <nav className="sticky bottom-0 bg-white border-t">
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {TABS.map(t=>(
-            <button key={t} onClick={()=>setTab(t)} className={`py-3 ${tab===t?"font-semibold text-blue-600":"text-neutral-500"}`}>{t}</button>
+            <button key={t} onClick={()=>setTab(t)} className={`py-3 text-xs ${tab===t?"font-semibold text-blue-600":"text-neutral-500"}`}>{t}</button>
           ))}
         </div>
       </nav>
+      <Toaster />
     </div>
   );
 }
