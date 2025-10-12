@@ -46,6 +46,7 @@ export default function Admin() {
   const [debugUnrosteredObservers, setDebugUnrosteredObservers] = useState<string[]>([]);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Load windows and roster on mount
   useEffect(() => {
@@ -245,6 +246,36 @@ export default function Admin() {
     }
   }
 
+  async function syncRoster() {
+    if (!adminPin) {
+      toast({ title: 'Error', description: 'Admin PIN required', variant: 'destructive' });
+      return;
+    }
+    
+    setSyncing(true);
+    try {
+      // ds_sync_roster: call public.sync_roster_from_external_accounts RPC
+      const { data, error } = await supabase.rpc('sync_roster_from_external_accounts', {
+        p_admin_pin: adminPin
+      });
+
+      if (error) throw error;
+
+      const insertedCount = data || 0;
+      toast({ title: 'Success', description: `Added ${insertedCount} new iNat users` });
+      
+      // Refresh roster
+      await loadRoster();
+      
+      // Re-run xform_build_inat_payload
+      await fetchFromINat();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="p-4 space-y-6">
       {/* Top bar */}
@@ -296,6 +327,14 @@ export default function Admin() {
           className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Snapshot'}
+        </button>
+
+        <button 
+          onClick={syncRoster}
+          disabled={syncing}
+          className="px-4 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+        >
+          {syncing ? 'Syncing...' : 'Sync roster'}
         </button>
       </div>
 
