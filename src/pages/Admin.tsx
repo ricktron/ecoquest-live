@@ -254,15 +254,15 @@ export default function Admin() {
     
     setSyncing(true);
     try {
-      // Call RPC: sync_roster_from_external_accounts
-      const { data, error } = await supabase.rpc('sync_roster_from_external_accounts', {
-        p_admin_pin: adminPin,
-        p_table_name: 'public.student_identities'
+      // ds_sync_roster: Call RPC sync_roster_student_identities
+      const { data, error } = await supabase.rpc('sync_roster_student_identities', {
+        p_admin_pin: adminPin
       });
 
       if (error) throw error;
 
-      const insertedCount = data || 0;
+      // Handle different possible response structures
+      const insertedCount = typeof data === 'number' ? data : (data?.[0]?.sync_roster_student_identities || data?.[0]?.count || data || 0);
       toast({ title: 'Success', description: `Added ${insertedCount} new iNat users` });
       
       // Refresh ds_roster_public
