@@ -29,6 +29,7 @@ type LeaderRow = {
 type PreviewRow = {
   user: string;
   obs_count: number;
+  is_adult: boolean;
 };
 
 export default function Admin() {
@@ -185,15 +186,10 @@ export default function Admin() {
     const projectEnabled = (filterByProject === true) || (win?.use_project_filter === true);
     const projectId = projectEnabled ? (projectIdOrSlug || win?.inat_project || '') : '';
     
-    // 5) Build the roster login list, respecting includeAdults
-    let filteredRoster = roster;
-    if (!includeAdultsComputed) {
-      // Filter out rows where exclude_from_scoring=true when includeAdults is false
-      filteredRoster = roster.filter(r => !r.exclude_from_scoring);
-    }
-    
-    const logins = filteredRoster.map(r => (r.inat_login || '').trim()).filter(Boolean);
-    const loginCsv = logins.join(',');
+    // 5) Build roster login lists - ALWAYS include ALL users
+    const allLogins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
+    const studentLogins = roster.filter(r => !r.exclude_from_scoring).map(r => (r.inat_login || '').trim()).filter(Boolean);
+    const loginCsv = allLogins.join(',');
     
     // Store transform outputs
     setWindowStart(d1);
@@ -254,32 +250,40 @@ export default function Admin() {
         .concat(page2.results || [])
         .concat(page3.results || []);
 
+      // Count observations for ALL roster users
       const counts: Record<string, number> = {};
       const seen = new Set<string>();
       
-      // Use filtered logins based on includeAdults
-      const logins = loginListCsv.split(',').filter(Boolean);
-      const loginsLC = logins.map(u => u.toLowerCase());
+      const allLogins = loginListCsv.split(',').filter(Boolean);
+      const allLoginsLC = allLogins.map(u => u.toLowerCase());
 
       for (const obs of merged) {
         const u = (obs?.user?.login || '').toLowerCase();
         if (!u) continue;
         seen.add(u);
-        if (!loginsLC.includes(u)) continue;
-        counts[u] = (counts[u] || 0) + 1;
+        if (allLoginsLC.includes(u)) {
+          counts[u] = (counts[u] || 0) + 1;
+        }
       }
 
-      const payload = logins.map(u => ({
+      // Build payload using ALL logins
+      const payload = allLogins.map(u => ({
         inat_login: u,
         obs_count: counts[u.toLowerCase()] || 0
+      }));
+      
+      // Build preview with is_adult flag
+      const preview = roster.map(r => ({
+        user: r.inat_login,
+        obs_count: counts[(r.inat_login || '').toLowerCase()] || 0,
+        is_adult: !!r.exclude_from_scoring
       }));
       
       // Store diagnostics
       const uniqueObservers = Array.from(seen);
       setDebugTotalResults(merged.length);
       setDebugUniqueObservers(uniqueObservers);
-      setDebugUnrosteredObservers(uniqueObservers.filter(u => !loginsLC.includes(u)));
-      const preview = payload.map(p => ({ user: p.inat_login, obs_count: p.obs_count }));
+      setDebugUnrosteredObservers(uniqueObservers.filter(u => !allLoginsLC.includes(u)));
 
       setInatPayload(JSON.stringify(payload));
       setPreview(preview);
@@ -437,6 +441,7 @@ export default function Admin() {
                 <tr className="bg-gray-100">
                   <th className="border px-3 py-1 text-left">User</th>
                   <th className="border px-3 py-1 text-left">Obs Count</th>
+                  <th className="border px-3 py-1 text-left">Adult</th>
                 </tr>
               </thead>
               <tbody>
@@ -444,6 +449,7 @@ export default function Admin() {
                   <tr key={i}>
                     <td className="border px-3 py-1">{row.user}</td>
                     <td className="border px-3 py-1">{row.obs_count}</td>
+                    <td className="border px-3 py-1">{row.is_adult ? '✓' : ''}</td>
                   </tr>
                 ))}
               </tbody>
