@@ -96,34 +96,41 @@ export default function Admin() {
   }
 
   async function loadLeaderboards() {
-    // Official leaderboard
-    const { data: official, error: err1 } = await supabase
-      .from('public_leaderboard_official_v1')
-      .select(`
-        *,
-        window:trip_windows!inner(label)
-      `)
-      .eq('trip_windows.label', windowLabel)
-      .order('obs_count', { ascending: false });
+    if (!windowLabel) return;
     
-    if (!err1 && official) {
-      setOfficialLeaderboard(official);
+    // First, get the window_id for the selected label
+    const { data: windowData } = await supabase
+      .from('trip_windows')
+      .select('id')
+      .eq('label', windowLabel)
+      .single();
+    
+    if (!windowData?.id) {
+      setOfficialLeaderboard([]);
+      setPublicLeaderboard([]);
+      return;
     }
 
-    // Public leaderboard
-    const { data: pub, error: err2 } = await supabase
-      .from('public_leaderboard_with_flags_v1')
-      .select(`
-        *,
-        window:trip_windows!inner(label)
-      `)
-      .eq('trip_windows.label', windowLabel)
-      .order('exhibition', { ascending: true })
-      .order('obs_count', { ascending: false });
+    // Official leaderboard
+    const { data: official } = await supabase
+      .from('public_leaderboard_official_v1')
+      .select('*')
+      .eq('window_id', windowData.id)
+      .order('obs_count', { ascending: false })
+      .order('display_label', { ascending: true });
     
-    if (!err2 && pub) {
-      setPublicLeaderboard(pub);
-    }
+    setOfficialLeaderboard(official || []);
+
+    // Public leaderboard
+    const { data: pub } = await supabase
+      .from('public_leaderboard_with_flags_v1')
+      .select('*')
+      .eq('window_id', windowData.id)
+      .order('exhibition', { ascending: true })
+      .order('obs_count', { ascending: false })
+      .order('display_label', { ascending: true });
+    
+    setPublicLeaderboard(pub || []);
   }
 
   async function fetchFromINat() {
@@ -284,44 +291,52 @@ export default function Admin() {
       <div className="grid md:grid-cols-2 gap-6">
         <div>
           <h3 className="font-semibold mb-2">Official Leaderboard</h3>
-          <table className="w-full border-collapse border">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border px-3 py-1 text-left">Display Name</th>
-                <th className="border px-3 py-1 text-left">Obs Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {officialLeaderboard.map((row, i) => (
-                <tr key={i}>
-                  <td className="border px-3 py-1">{row.display_label}</td>
-                  <td className="border px-3 py-1">{row.obs_count}</td>
+          {officialLeaderboard.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">No scores yet.</div>
+          ) : (
+            <table className="w-full border-collapse border">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border px-3 py-1 text-left">Display Name</th>
+                  <th className="border px-3 py-1 text-left">Obs Count</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {officialLeaderboard.map((row, i) => (
+                  <tr key={i}>
+                    <td className="border px-3 py-1">{row.display_label}</td>
+                    <td className="border px-3 py-1">{row.obs_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div>
           <h3 className="font-semibold mb-2">Public Leaderboard</h3>
-          <table className="w-full border-collapse border">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border px-3 py-1 text-left">Exhibition</th>
-                <th className="border px-3 py-1 text-left">Display Name</th>
-                <th className="border px-3 py-1 text-left">Obs Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {publicLeaderboard.map((row, i) => (
-                <tr key={i}>
-                  <td className="border px-3 py-1">{row.exhibition ? '✓' : ''}</td>
-                  <td className="border px-3 py-1">{row.display_label}</td>
-                  <td className="border px-3 py-1">{row.obs_count}</td>
+          {publicLeaderboard.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">No scores yet.</div>
+          ) : (
+            <table className="w-full border-collapse border">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border px-3 py-1 text-left">Exhibition</th>
+                  <th className="border px-3 py-1 text-left">Display Name</th>
+                  <th className="border px-3 py-1 text-left">Obs Count</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {publicLeaderboard.map((row, i) => (
+                  <tr key={i}>
+                    <td className="border px-3 py-1">{row.exhibition ? '✓' : ''}</td>
+                    <td className="border px-3 py-1">{row.display_label}</td>
+                    <td className="border px-3 py-1">{row.obs_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
