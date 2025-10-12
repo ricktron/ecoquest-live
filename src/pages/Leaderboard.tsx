@@ -9,22 +9,18 @@ type Window = {
   is_current: boolean;
 };
 
-type OfficialRow = {
-  display_label: string;
-  obs_count: number;
-};
-
-type PublicRow = {
+type UnifiedRow = {
   display_label: string;
   obs_count: number;
   exhibition: boolean;
+  official_rank: number | null;
+  overall_rank: number;
 };
 
 export default function Leaderboard() {
   const [windows, setWindows] = useState<Window[]>([]);
   const [windowLabel, setWindowLabel] = useState('');
-  const [officialRows, setOfficialRows] = useState<OfficialRow[]>([]);
-  const [publicRows, setPublicRows] = useState<PublicRow[]>([]);
+  const [unifiedRows, setUnifiedRows] = useState<UnifiedRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Load windows on mount
@@ -75,34 +71,22 @@ export default function Leaderboard() {
         .single();
       
       if (!windowData?.id) {
-        setOfficialRows([]);
-        setPublicRows([]);
+        setUnifiedRows([]);
         setLoading(false);
         return;
       }
 
-      // Load official leaderboard
-      const { data: official } = await supabase
-        .from('public_leaderboard_official_v1')
-        .select('display_label, obs_count')
+      // Load unified leaderboard
+      const { data: unified } = await supabase
+        .from('public_leaderboard_unified_v1')
+        .select('display_label, obs_count, exhibition, official_rank, overall_rank')
         .eq('window_id', windowData.id)
-        .order('obs_count', { ascending: false })
-        .order('display_label', { ascending: true });
+        .order('official_rank', { ascending: true, nullsFirst: false })
+        .order('overall_rank', { ascending: true });
       
-      setOfficialRows(official || []);
-
-      // Load public leaderboard
-      const { data: pub } = await supabase
-        .from('public_leaderboard_with_flags_v1')
-        .select('display_label, obs_count, exhibition')
-        .eq('window_id', windowData.id)
-        .order('exhibition', { ascending: true })
-        .order('obs_count', { ascending: false })
-        .order('display_label', { ascending: true });
-      
-      setPublicRows(pub || []);
+      setUnifiedRows(unified || []);
     } catch (e) {
-      console.error('Error loading leaderboards:', e);
+      console.error('Error loading leaderboard:', e);
     } finally {
       setLoading(false);
     }
@@ -124,67 +108,37 @@ export default function Leaderboard() {
         </select>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Official Leaderboard */}
-        <div>
-          <h3 className="font-semibold mb-2">Official Leaderboard</h3>
-          {loading ? (
-            <div className="text-center text-gray-500 py-8">Loading...</div>
-          ) : officialRows.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">No scores yet.</div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="px-3 py-2 text-left text-sm">Name</th>
-                    <th className="px-3 py-2 text-right text-sm">Observations</th>
+      {/* Unified Leaderboard */}
+      <div>
+        <h3 className="font-semibold mb-3">Leaderboard</h3>
+        {loading ? (
+          <div className="text-center text-gray-500 py-8">Loading...</div>
+        ) : unifiedRows.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">No scores yet.</div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="px-3 py-2 text-left text-sm">Student Rank</th>
+                  <th className="px-3 py-2 text-left text-sm">Name</th>
+                  <th className="px-3 py-2 text-right text-sm">Observations</th>
+                  <th className="px-3 py-2 text-center text-sm">Exhibition</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unifiedRows.map((row, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="px-3 py-2 text-sm">{row.official_rank || ''}</td>
+                    <td className="px-3 py-2 text-sm">{row.display_label}</td>
+                    <td className="px-3 py-2 text-right text-sm">{row.obs_count}</td>
+                    <td className="px-3 py-2 text-center text-sm">{row.exhibition ? '✓' : ''}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {officialRows.map((row, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="px-3 py-2 text-sm">{row.display_label}</td>
-                      <td className="px-3 py-2 text-right text-sm">{row.obs_count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Public Leaderboard */}
-        <div>
-          <h3 className="font-semibold mb-2">Public Leaderboard</h3>
-          {loading ? (
-            <div className="text-center text-gray-500 py-8">Loading...</div>
-          ) : publicRows.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">No scores yet.</div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="px-3 py-2 text-left text-sm">Exhibition</th>
-                    <th className="px-3 py-2 text-left text-sm">Name</th>
-                    <th className="px-3 py-2 text-right text-sm">Observations</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {publicRows.map((row, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="px-3 py-2 text-sm">{row.exhibition ? '✓' : ''}</td>
-                      <td className="px-3 py-2 text-sm">{row.display_label}</td>
-                      <td className="px-3 py-2 text-right text-sm">{row.obs_count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
