@@ -38,6 +38,9 @@ export default function Admin() {
   const [officialLeaderboard, setOfficialLeaderboard] = useState<LeaderRow[]>([]);
   const [publicLeaderboard, setPublicLeaderboard] = useState<LeaderRow[]>([]);
   const [inatPayload, setInatPayload] = useState('');
+  const [windowStart, setWindowStart] = useState('');
+  const [windowEnd, setWindowEnd] = useState('');
+  const [loginListCsv, setLoginListCsv] = useState('');
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -136,11 +139,18 @@ export default function Admin() {
   async function fetchFromINat() {
     setFetching(true);
     try {
-      const win = windows.find(w => w.label === windowLabel);
+      // xform_build_inat_payload logic
+      const win = windows.find(r => r.label === windowLabel);
       const d1 = win ? win.starts_on : scoredOn;
       const d2 = win ? win.ends_on : scoredOn;
+      
       const logins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
       const loginCsv = logins.join(',');
+      
+      // Store transform outputs
+      setWindowStart(d1);
+      setWindowEnd(d2);
+      setLoginListCsv(loginCsv);
 
       const params = new URLSearchParams({
         user_login: loginCsv,
@@ -151,7 +161,7 @@ export default function Admin() {
         order_by: 'created_at'
       });
 
-      // Fetch 3 pages
+      // Fetch 3 pages (rest_inat_page1, rest_inat_page2, rest_inat_page3)
       const [page1, page2, page3] = await Promise.all([
         fetch(`https://api.inaturalist.org/v1/observations?${params}&page=1`).then(r => r.json()),
         fetch(`https://api.inaturalist.org/v1/observations?${params}&page=2`).then(r => r.json()),
@@ -172,10 +182,11 @@ export default function Admin() {
       }
 
       const payload = logins.map(u => ({ inat_login: u, obs_count: counts[u] || 0 }));
-      const previewData = payload.map(p => ({ user: p.inat_login, obs_count: p.obs_count }));
+      const preview = payload.map(p => ({ user: p.inat_login, obs_count: p.obs_count }));
 
       setInatPayload(JSON.stringify(payload));
-      setPreview(previewData);
+      setPreview(preview);
+      
       toast({ title: 'Fetched', description: `Retrieved ${pages.length} observations` });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -264,26 +275,28 @@ export default function Admin() {
         </button>
       </div>
 
-      {/* Preview section */}
+      {/* Preview section - xform_build_inat_payload.preview_rows */}
       {preview.length > 0 && (
         <div>
           <h3 className="font-semibold mb-2">Preview counts</h3>
-          <table className="w-full border-collapse border">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border px-3 py-1 text-left">User</th>
-                <th className="border px-3 py-1 text-left">Obs Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {preview.map((row, i) => (
-                <tr key={i}>
-                  <td className="border px-3 py-1">{row.user}</td>
-                  <td className="border px-3 py-1">{row.obs_count}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border px-3 py-1 text-left">User</th>
+                  <th className="border px-3 py-1 text-left">Obs Count</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {preview.map((row, i) => (
+                  <tr key={i}>
+                    <td className="border px-3 py-1">{row.user}</td>
+                    <td className="border px-3 py-1">{row.obs_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
