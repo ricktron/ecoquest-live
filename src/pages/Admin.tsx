@@ -309,6 +309,19 @@ export default function Admin() {
         </div>
       )}
 
+      {/* Debug card */}
+      {(windowStart || windowEnd || loginListCsv) && (
+        <div className="bg-gray-50 border rounded p-3">
+          <h3 className="font-semibold mb-2 text-sm">Debug</h3>
+          <div className="text-xs space-y-1 font-mono">
+            <div><span className="font-semibold">Window:</span> {windowLabel}</div>
+            <div><span className="font-semibold">d1:</span> {windowStart}</div>
+            <div><span className="font-semibold">d2:</span> {windowEnd}</div>
+            <div><span className="font-semibold">logins:</span> {loginListCsv}</div>
+          </div>
+        </div>
+      )}
+
       {/* Leaderboards section */}
       <div className="grid md:grid-cols-2 gap-6">
         <div>
