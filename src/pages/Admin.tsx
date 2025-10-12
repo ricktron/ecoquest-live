@@ -66,9 +66,19 @@ export default function Admin() {
     }
     
     setWindows(data || []);
+    
+    // Default logic: 1) is_current=true, 2) 'Costa Rica 2025 (demo)', 3) first row
     const current = (data || []).find(w => w.is_current);
-    if (current) setWindowLabel(current.label);
-    else if (data && data.length > 0) setWindowLabel(data[0].label);
+    if (current) {
+      setWindowLabel(current.label);
+    } else {
+      const demo = (data || []).find(w => w.label === 'Costa Rica 2025 (demo)');
+      if (demo) {
+        setWindowLabel(demo.label);
+      } else if (data && data.length > 0) {
+        setWindowLabel(data[0].label);
+      }
+    }
   }
 
   async function loadRoster() {
