@@ -254,7 +254,7 @@ export default function Admin() {
     
     setSyncing(true);
     try {
-      // ds_sync_roster: call public.sync_roster_from_external_accounts RPC
+      // ds_sync_roster_sql: Execute SQL query with regclass casting
       const { data, error } = await supabase.rpc('sync_roster_from_external_accounts', {
         p_admin_pin: adminPin,
         p_table_name: 'public.student_identities'
@@ -265,10 +265,10 @@ export default function Admin() {
       const insertedCount = data || 0;
       toast({ title: 'Success', description: `Added ${insertedCount} new iNat users` });
       
-      // Refresh roster
+      // Refresh ds_roster_public
       await loadRoster();
       
-      // Re-run xform_build_inat_payload
+      // Run xform_build_inat_payload
       await fetchFromINat();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
