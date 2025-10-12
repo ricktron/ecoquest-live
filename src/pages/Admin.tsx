@@ -8,6 +8,9 @@ type Window = {
   starts_on: string;
   ends_on: string;
   is_current: boolean;
+  inat_project: string | null;
+  use_project_filter: boolean;
+  include_adults_default: boolean;
 };
 
 type RosterRow = {
@@ -47,6 +50,9 @@ export default function Admin() {
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [filterByProject, setFilterByProject] = useState<boolean | undefined>(undefined);
+  const [projectIdOrSlug, setProjectIdOrSlug] = useState('');
+  const [includeAdults, setIncludeAdults] = useState<boolean | undefined>(undefined);
 
   // Load windows and roster on mount
   useEffect(() => {
@@ -54,17 +60,34 @@ export default function Admin() {
     loadRoster();
   }, []);
 
-  // Load leaderboards when window changes
+  // Load leaderboards and set defaults when window changes
   useEffect(() => {
     if (windowLabel) {
       loadLeaderboards();
+      
+      // Find the selected window row
+      const selectedWindow = windows.find(w => w.label === windowLabel);
+      if (selectedWindow) {
+        // Set filter_by_project if unset
+        if (filterByProject === undefined) {
+          setFilterByProject(selectedWindow.use_project_filter);
+        }
+        // Set project_id_or_slug if empty
+        if (!projectIdOrSlug && selectedWindow.inat_project) {
+          setProjectIdOrSlug(selectedWindow.inat_project);
+        }
+        // Set include_adults if unset
+        if (includeAdults === undefined) {
+          setIncludeAdults(selectedWindow.include_adults_default);
+        }
+      }
     }
-  }, [windowLabel]);
+  }, [windowLabel, windows]);
 
   async function loadWindows() {
     const { data, error } = await supabase
       .from('windows_select_v1')
-      .select('id, label, starts_on, ends_on, is_current')
+      .select('id, label, starts_on, ends_on, is_current, inat_project, use_project_filter, include_adults_default')
       .order('starts_on');
     
     if (error) {
