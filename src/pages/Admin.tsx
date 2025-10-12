@@ -256,7 +256,8 @@ export default function Admin() {
     try {
       // ds_sync_roster: call public.sync_roster_from_external_accounts RPC
       const { data, error } = await supabase.rpc('sync_roster_from_external_accounts', {
-        p_admin_pin: adminPin
+        p_admin_pin: adminPin,
+        p_table_name: 'public.student_identities'
       });
 
       if (error) throw error;
