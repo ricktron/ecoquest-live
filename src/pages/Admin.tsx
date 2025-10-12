@@ -140,6 +140,21 @@ export default function Admin() {
     setPublicLeaderboard(pub || []);
   }
 
+  // Update transform inputs without calling iNat API
+  function updateTransformInputs() {
+    const win = windows.find(r => r.label === windowLabel);
+    const d1 = win ? win.starts_on : scoredOn;
+    const d2 = win ? win.ends_on : scoredOn;
+    
+    const logins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
+    const loginCsv = logins.join(',');
+    
+    // Store transform outputs
+    setWindowStart(d1);
+    setWindowEnd(d2);
+    setLoginListCsv(loginCsv);
+  }
+
   async function fetchFromINat() {
     setFetching(true);
     try {
@@ -148,62 +163,66 @@ export default function Admin() {
       const d1 = win ? win.starts_on : scoredOn;
       const d2 = win ? win.ends_on : scoredOn;
       
-    const logins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
-    const loginsLC = logins.map(u => u.toLowerCase());
-    const loginCsv = logins.join(',');
-    
-    // Store transform outputs
-    setWindowStart(d1);
-    setWindowEnd(d2);
-    setLoginListCsv(loginCsv);
+      const logins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
+      const loginsLC = logins.map(u => u.toLowerCase());
+      const loginCsv = logins.join(',');
+      
+      // Store transform outputs
+      setWindowStart(d1);
+      setWindowEnd(d2);
+      setLoginListCsv(loginCsv);
 
-    const params = new URLSearchParams({
-      user_login: loginCsv,
-      d1,
-      d2,
-      per_page: '200',
-      order: 'desc',
-      order_by: 'created_at'
-    });
+      const params = new URLSearchParams({
+        user_login: loginCsv,
+        d1,
+        d2,
+        per_page: '200',
+        order: 'desc',
+        order_by: 'created_at'
+      });
 
-    // Fetch 3 pages (rest_inat_page1, rest_inat_page2, rest_inat_page3)
-    const [page1, page2, page3] = await Promise.all([
-      fetch(`https://api.inaturalist.org/v1/observations?${params}&page=1`).then(r => r.json()),
-      fetch(`https://api.inaturalist.org/v1/observations?${params}&page=2`).then(r => r.json()),
-      fetch(`https://api.inaturalist.org/v1/observations?${params}&page=3`).then(r => r.json())
-    ]);
+      // Fetch 3 pages (rest_inat_page1, rest_inat_page2, rest_inat_page3)
+      const [page1, page2, page3] = await Promise.all([
+        fetch(`https://api.inaturalist.org/v1/observations?${params}&page=1`).then(r => r.json()),
+        fetch(`https://api.inaturalist.org/v1/observations?${params}&page=2`).then(r => r.json()),
+        fetch(`https://api.inaturalist.org/v1/observations?${params}&page=3`).then(r => r.json())
+      ]);
 
-    const merged = []
-      .concat(page1.results || [])
-      .concat(page2.results || [])
-      .concat(page3.results || []);
+      const merged = []
+        .concat(page1.results || [])
+        .concat(page2.results || [])
+        .concat(page3.results || []);
 
-    const counts: Record<string, number> = {};
-    const seen = new Set<string>();
+      const counts: Record<string, number> = {};
+      const seen = new Set<string>();
 
-    for (const obs of merged) {
-      const u = (obs?.user?.login || '').toLowerCase();
-      if (!u) continue;
-      seen.add(u);
-      if (!loginsLC.includes(u)) continue;
-      counts[u] = (counts[u] || 0) + 1;
-    }
+      for (const obs of merged) {
+        const u = (obs?.user?.login || '').toLowerCase();
+        if (!u) continue;
+        seen.add(u);
+        if (!loginsLC.includes(u)) continue;
+        counts[u] = (counts[u] || 0) + 1;
+      }
 
-    const payload = logins.map(u => ({
-      inat_login: u,
-      obs_count: counts[u.toLowerCase()] || 0
-    }));
-    
-    // Store diagnostics
-    setDebugTotalResults(merged.length);
-    setDebugUniqueObservers(Array.from(seen));
-    setDebugUnrosteredObservers(Array.from(seen).filter(u => !loginsLC.includes(u)));
+      const payload = logins.map(u => ({
+        inat_login: u,
+        obs_count: counts[u.toLowerCase()] || 0
+      }));
+      
+      // Store diagnostics
+      setDebugTotalResults(merged.length);
+      setDebugUniqueObservers(Array.from(seen));
+      setDebugUnrosteredObservers(Array.from(seen).filter(u => !loginsLC.includes(u)));
       const preview = payload.map(p => ({ user: p.inat_login, obs_count: p.obs_count }));
 
       setInatPayload(JSON.stringify(payload));
       setPreview(preview);
-    
-    toast({ title: 'Fetched', description: `Retrieved ${merged.length} observations` });
+      
+      const uniqueCount = debugUniqueObservers.length;
+      toast({ 
+        title: 'Fetched', 
+        description: `${merged.length} observations for ${uniqueCount} observer${uniqueCount !== 1 ? 's' : ''}`
+      });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
@@ -263,13 +282,17 @@ export default function Admin() {
 
       // Handle different possible response structures
       const insertedCount = typeof data === 'number' ? data : (data?.[0]?.sync_roster_student_identities || data?.[0]?.count || data || 0);
-      toast({ title: 'Success', description: `Added ${insertedCount} new iNat users` });
       
       // Refresh ds_roster_public
       await loadRoster();
       
-      // Run xform_build_inat_payload
-      await fetchFromINat();
+      // Run xform_build_inat_payload (update transform inputs only, no iNat fetch)
+      updateTransformInputs();
+      
+      toast({ 
+        title: 'Roster synced', 
+        description: `Added ${insertedCount} new user${insertedCount !== 1 ? 's' : ''}. Preview updated.`
+      });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
