@@ -254,7 +254,7 @@ export default function Admin() {
     
     setSyncing(true);
     try {
-      // ds_sync_roster_sql: Execute SQL query with regclass casting
+      // Call RPC: sync_roster_from_external_accounts
       const { data, error } = await supabase.rpc('sync_roster_from_external_accounts', {
         p_admin_pin: adminPin,
         p_table_name: 'public.student_identities'
