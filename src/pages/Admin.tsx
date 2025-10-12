@@ -13,6 +13,20 @@ type Window = {
   include_adults_default: boolean;
 };
 
+type Zone = {
+  id: string;
+  label: string;
+  kind: 'box' | 'circle';
+  min_lat?: number;
+  max_lat?: number;
+  min_lng?: number;
+  max_lng?: number;
+  center_lat?: number;
+  center_lng?: number;
+  radius_m?: number;
+  is_active: boolean;
+};
+
 type RosterRow = {
   inat_login: string;
   display_name_ui: string;
@@ -34,14 +48,36 @@ type PreviewRow = {
   is_adult: boolean;
 };
 
+type TrophyWinner = {
+  user: string;
+  count: number;
+  is_adult: boolean;
+} | null;
+
+type ZoneTrophy = {
+  label: string;
+  overall: TrophyWinner;
+  student: TrophyWinner;
+};
+
+type TrophyResults = {
+  zones: ZoneTrophy[];
+  turtles: {
+    overall: TrophyWinner;
+    student: TrophyWinner;
+  };
+};
+
 export default function Admin() {
   const [windows, setWindows] = useState<Window[]>([]);
   const [roster, setRoster] = useState<RosterRow[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [windowLabel, setWindowLabel] = useState('');
   const [scoredOn, setScoredOn] = useState(new Date().toISOString().split('T')[0]);
   const [adminPin, setAdminPin] = useState('');
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [unifiedLeaderboard, setUnifiedLeaderboard] = useState<UnifiedRow[]>([]);
+  const [trophies, setTrophies] = useState<TrophyResults | null>(null);
   const [inatPayload, setInatPayload] = useState('');
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
@@ -62,10 +98,11 @@ export default function Admin() {
   const [includeAdultsEffective, setIncludeAdultsEffective] = useState(false);
   const [debugParams, setDebugParams] = useState<Record<string, string>>({});
 
-  // Load windows and roster on mount
+  // Load windows, roster, and zones on mount
   useEffect(() => {
     loadWindows();
     loadRoster();
+    loadZones();
   }, []);
 
   // Load leaderboards and set defaults when window or scoredOn changes
@@ -131,6 +168,20 @@ export default function Admin() {
     }
     
     setRoster(data || []);
+  }
+
+  async function loadZones() {
+    const { data, error } = await supabase
+      .from('trophy_zones')
+      .select('*')
+      .eq('is_active', true);
+    
+    if (error) {
+      console.error('Error loading zones:', error);
+      return;
+    }
+    
+    setZones(data || []);
   }
 
   async function loadLeaderboards() {
@@ -247,6 +298,15 @@ export default function Admin() {
       const allLogins = loginListCsv.split(',').filter(Boolean);
       const allLoginsLC = allLogins.map(u => u.toLowerCase());
 
+      // Build user meta for trophy computation
+      const userMeta: Record<string, { isAdult: boolean }> = {};
+      for (const r of roster) {
+        const login = (r.inat_login || '').toLowerCase();
+        if (login) {
+          userMeta[login] = { isAdult: !!r.exclude_from_scoring };
+        }
+      }
+
       for (const obs of merged) {
         const u = (obs?.user?.login || '').toLowerCase();
         if (!u) continue;
@@ -268,6 +328,104 @@ export default function Admin() {
         obs_count: counts[(r.inat_login || '').toLowerCase()] || 0,
         is_adult: !!r.exclude_from_scoring
       }));
+
+      // Compute trophies
+      const getLatLng = (o: any) => {
+        if (o.geojson?.coordinates && Array.isArray(o.geojson.coordinates)) {
+          const [lng, lat] = o.geojson.coordinates;
+          return { lat, lng };
+        }
+        if (typeof o.location === 'string' && o.location.includes(',')) {
+          const [latS, lngS] = o.location.split(',');
+          return { lat: +latS, lng: +lngS };
+        }
+        if (o.latitude && o.longitude) {
+          return { lat: +o.latitude, lng: +o.longitude };
+        }
+        return null;
+      };
+
+      const inBox = (pt: { lat: number; lng: number }, z: Zone) => {
+        return pt.lat >= (z.min_lat || 0) && pt.lat <= (z.max_lat || 0) &&
+               pt.lng >= (z.min_lng || 0) && pt.lng <= (z.max_lng || 0);
+      };
+
+      const inCircle = (pt: { lat: number; lng: number }, z: Zone) => {
+        const R = 6371000;
+        const dLat = (pt.lat - (z.center_lat || 0)) * Math.PI / 180;
+        const dLng = (pt.lng - (z.center_lng || 0)) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos((z.center_lat || 0) * Math.PI / 180) * 
+                  Math.cos(pt.lat * Math.PI / 180) * 
+                  Math.sin(dLng / 2) ** 2;
+        const d = 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return d <= (z.radius_m || 0);
+      };
+
+      const isTurtle = (o: any) => {
+        const t = o.taxon || {};
+        const n1 = (t.name || '').toLowerCase();
+        const n2 = (t.preferred_common_name || '').toLowerCase();
+        return n1.includes('testudines') || n1.includes('cheloni') || n2.includes('turtle');
+      };
+
+      const zoneCounts: Record<string, Record<string, number>> = {};
+      const turtleCounts: Record<string, number> = {};
+
+      for (const o of merged) {
+        const u = (o?.user?.login || '').toLowerCase();
+        if (!u) continue;
+
+        const pt = getLatLng(o);
+        if (pt) {
+          for (const z of zones) {
+            const hit = z.kind === 'box' ? inBox(pt, z) : inCircle(pt, z);
+            if (hit) {
+              zoneCounts[z.label] ??= {};
+              zoneCounts[z.label][u] = (zoneCounts[z.label][u] || 0) + 1;
+            }
+          }
+        }
+
+        if (isTurtle(o)) {
+          turtleCounts[u] = (turtleCounts[u] || 0) + 1;
+        }
+      }
+
+      const isAdult = (u: string) => !!userMeta[u]?.isAdult;
+
+      const winner = (map: Record<string, number>, studentsOnly: boolean): TrophyWinner => {
+        let bestU: string | null = null;
+        let best = 0;
+        for (const [u, c] of Object.entries(map)) {
+          if (studentsOnly && isAdult(u)) continue;
+          if (c > best) {
+            best = c;
+            bestU = u;
+          }
+        }
+        return bestU ? { user: bestU, count: best, is_adult: isAdult(bestU) } : null;
+      };
+
+      const zoneTrophies = zones.map(z => {
+        const counts = zoneCounts[z.label] || {};
+        return {
+          label: z.label,
+          overall: winner(counts, false),
+          student: winner(counts, true)
+        };
+      });
+
+      const turtleOverall = winner(turtleCounts, false);
+      const turtleStudent = winner(turtleCounts, true);
+
+      const trophyResults: TrophyResults = {
+        zones: zoneTrophies,
+        turtles: {
+          overall: turtleOverall,
+          student: turtleStudent
+        }
+      };
       
       // Store diagnostics
       const uniqueObservers = Array.from(seen);
@@ -277,6 +435,7 @@ export default function Admin() {
 
       setInatPayload(JSON.stringify(payload));
       setPreview(preview);
+      setTrophies(trophyResults);
       
       // 7) Show success toast
       toast({ 
@@ -444,6 +603,66 @@ export default function Admin() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Trophies section */}
+      {trophies && (
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-semibold mb-2">Zone Trophies</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border px-3 py-1 text-left">Zone</th>
+                    <th className="border px-3 py-1 text-left">Overall Winner</th>
+                    <th className="border px-3 py-1 text-left">Count</th>
+                    <th className="border px-3 py-1 text-left">Student Winner</th>
+                    <th className="border px-3 py-1 text-left">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trophies.zones.map((z, i) => (
+                    <tr key={i}>
+                      <td className="border px-3 py-1">{z.label}</td>
+                      <td className="border px-3 py-1">{z.overall?.user || '-'}</td>
+                      <td className="border px-3 py-1">{z.overall?.count || 0}</td>
+                      <td className="border px-3 py-1">{z.student?.user || '-'}</td>
+                      <td className="border px-3 py-1">{z.student?.count || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Turtle Trophies</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border px-3 py-1 text-left">Category</th>
+                    <th className="border px-3 py-1 text-left">Winner</th>
+                    <th className="border px-3 py-1 text-left">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="border px-3 py-1">Overall</td>
+                    <td className="border px-3 py-1">{trophies.turtles.overall?.user || '-'}</td>
+                    <td className="border px-3 py-1">{trophies.turtles.overall?.count || 0}</td>
+                  </tr>
+                  <tr>
+                    <td className="border px-3 py-1">Student</td>
+                    <td className="border px-3 py-1">{trophies.turtles.student?.user || '-'}</td>
+                    <td className="border px-3 py-1">{trophies.turtles.student?.count || 0}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
