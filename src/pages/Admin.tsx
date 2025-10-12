@@ -20,10 +20,12 @@ type RosterRow = {
   exclude_from_scoring: boolean;
 };
 
-type LeaderRow = {
+type UnifiedRow = {
   display_label: string;
   obs_count: number;
-  exhibition?: boolean;
+  exhibition: boolean;
+  official_rank: number | null;
+  overall_rank: number;
 };
 
 type PreviewRow = {
@@ -39,8 +41,7 @@ export default function Admin() {
   const [scoredOn, setScoredOn] = useState(new Date().toISOString().split('T')[0]);
   const [adminPin, setAdminPin] = useState('');
   const [preview, setPreview] = useState<PreviewRow[]>([]);
-  const [officialLeaderboard, setOfficialLeaderboard] = useState<LeaderRow[]>([]);
-  const [publicLeaderboard, setPublicLeaderboard] = useState<LeaderRow[]>([]);
+  const [unifiedLeaderboard, setUnifiedLeaderboard] = useState<UnifiedRow[]>([]);
   const [inatPayload, setInatPayload] = useState('');
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
@@ -67,7 +68,7 @@ export default function Admin() {
     loadRoster();
   }, []);
 
-  // Load leaderboards and set defaults when window changes
+  // Load leaderboards and set defaults when window or scoredOn changes
   useEffect(() => {
     if (windowLabel) {
       loadLeaderboards();
@@ -89,7 +90,7 @@ export default function Admin() {
         }
       }
     }
-  }, [windowLabel, windows]);
+  }, [windowLabel, scoredOn, windows]);
 
   async function loadWindows() {
     const { data, error } = await supabase
@@ -140,34 +141,23 @@ export default function Admin() {
       .from('trip_windows')
       .select('id')
       .eq('label', windowLabel)
-      .single();
+      .maybeSingle();
     
     if (!windowData?.id) {
-      setOfficialLeaderboard([]);
-      setPublicLeaderboard([]);
+      setUnifiedLeaderboard([]);
       return;
     }
 
-    // Official leaderboard
-    const { data: official } = await supabase
-      .from('public_leaderboard_official_v1')
-      .select('*')
+    // Unified leaderboard
+    const { data: unified } = await supabase
+      .from('public_leaderboard_unified_v1')
+      .select('display_label, obs_count, exhibition, official_rank, overall_rank')
       .eq('window_id', windowData.id)
-      .order('obs_count', { ascending: false })
-      .order('display_label', { ascending: true });
+      .eq('scored_on', scoredOn)
+      .order('official_rank', { ascending: true, nullsFirst: false })
+      .order('overall_rank', { ascending: true });
     
-    setOfficialLeaderboard(official || []);
-
-    // Public leaderboard
-    const { data: pub } = await supabase
-      .from('public_leaderboard_with_flags_v1')
-      .select('*')
-      .eq('window_id', windowData.id)
-      .order('exhibition', { ascending: true })
-      .order('obs_count', { ascending: false })
-      .order('display_label', { ascending: true });
-    
-    setPublicLeaderboard(pub || []);
+    setUnifiedLeaderboard(unified || []);
   }
 
   // Update transform inputs without calling iNat API
@@ -487,57 +477,35 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Leaderboards section */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          <h3 className="font-semibold mb-2">Official Leaderboard</h3>
-          {officialLeaderboard.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">No scores yet.</div>
-          ) : (
+      {/* Leaderboard section */}
+      <div>
+        <h3 className="font-semibold mb-2">Unified Leaderboard</h3>
+        {unifiedLeaderboard.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">No scores yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full border-collapse border">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="border px-3 py-1 text-left">Display Name</th>
+                  <th className="border px-3 py-1 text-left">Student Rank</th>
+                  <th className="border px-3 py-1 text-left">Name</th>
                   <th className="border px-3 py-1 text-left">Obs Count</th>
+                  <th className="border px-3 py-1 text-center">Exhibition</th>
                 </tr>
               </thead>
               <tbody>
-                {officialLeaderboard.map((row, i) => (
+                {unifiedLeaderboard.map((row, i) => (
                   <tr key={i}>
+                    <td className="border px-3 py-1">{row.official_rank || ''}</td>
                     <td className="border px-3 py-1">{row.display_label}</td>
                     <td className="border px-3 py-1">{row.obs_count}</td>
+                    <td className="border px-3 py-1 text-center">{row.exhibition ? '✓' : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-
-        <div>
-          <h3 className="font-semibold mb-2">Public Leaderboard</h3>
-          {publicLeaderboard.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">No scores yet.</div>
-          ) : (
-            <table className="w-full border-collapse border">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border px-3 py-1 text-left">Exhibition</th>
-                  <th className="border px-3 py-1 text-left">Display Name</th>
-                  <th className="border px-3 py-1 text-left">Obs Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {publicLeaderboard.map((row, i) => (
-                  <tr key={i}>
-                    <td className="border px-3 py-1">{row.exhibition ? '✓' : ''}</td>
-                    <td className="border px-3 py-1">{row.display_label}</td>
-                    <td className="border px-3 py-1">{row.obs_count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
