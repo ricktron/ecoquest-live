@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from '@/hooks/use-toast';
+import { TrophyResults, RosterRow, TrophyWinner, ZoneTrophy } from '@/types/trophies';
 
 type Window = {
   id: string;
@@ -27,12 +28,6 @@ type Zone = {
   is_active: boolean;
 };
 
-type RosterRow = {
-  inat_login: string;
-  display_name_ui: string;
-  is_adult: boolean;
-  exclude_from_scoring: boolean;
-};
 
 type UnifiedRow = {
   display_label: string;
@@ -48,27 +43,13 @@ type PreviewRow = {
   is_adult: boolean;
 };
 
-type TrophyWinner = {
-  user: string;
-  count: number;
-  is_adult: boolean;
-} | null;
 
-type ZoneTrophy = {
-  label: string;
-  overall: TrophyWinner;
-  student: TrophyWinner;
+type AdminProps = {
+  setTrophies: (trophies: TrophyResults | null) => void;
+  setRoster: (roster: RosterRow[]) => void;
 };
 
-type TrophyResults = {
-  zones: ZoneTrophy[];
-  turtles: {
-    overall: TrophyWinner;
-    student: TrophyWinner;
-  };
-};
-
-export default function Admin() {
+export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRoster }: AdminProps) {
   const [windows, setWindows] = useState<Window[]>([]);
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -77,7 +58,6 @@ export default function Admin() {
   const [adminPin, setAdminPin] = useState('');
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [unifiedLeaderboard, setUnifiedLeaderboard] = useState<UnifiedRow[]>([]);
-  const [trophies, setTrophies] = useState<TrophyResults | null>(null);
   const [inatPayload, setInatPayload] = useState('');
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
@@ -167,7 +147,9 @@ export default function Admin() {
       return;
     }
     
-    setRoster(data || []);
+    const rosterData = data || [];
+    setRoster(rosterData);
+    setAppRoster(rosterData);
   }
 
   async function loadZones() {
@@ -435,7 +417,7 @@ export default function Admin() {
 
       setInatPayload(JSON.stringify(payload));
       setPreview(preview);
-      setTrophies(trophyResults);
+      setAppTrophies(trophyResults);
       
       // 7) Show success toast
       toast({ 
@@ -603,66 +585,6 @@ export default function Admin() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Trophies section */}
-      {trophies && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-semibold mb-2">Zone Trophies</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border px-3 py-1 text-left">Zone</th>
-                    <th className="border px-3 py-1 text-left">Overall Winner</th>
-                    <th className="border px-3 py-1 text-left">Count</th>
-                    <th className="border px-3 py-1 text-left">Student Winner</th>
-                    <th className="border px-3 py-1 text-left">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trophies.zones.map((z, i) => (
-                    <tr key={i}>
-                      <td className="border px-3 py-1">{z.label}</td>
-                      <td className="border px-3 py-1">{z.overall?.user || '-'}</td>
-                      <td className="border px-3 py-1">{z.overall?.count || 0}</td>
-                      <td className="border px-3 py-1">{z.student?.user || '-'}</td>
-                      <td className="border px-3 py-1">{z.student?.count || 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-semibold mb-2">Turtle Trophies</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border px-3 py-1 text-left">Category</th>
-                    <th className="border px-3 py-1 text-left">Winner</th>
-                    <th className="border px-3 py-1 text-left">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="border px-3 py-1">Overall</td>
-                    <td className="border px-3 py-1">{trophies.turtles.overall?.user || '-'}</td>
-                    <td className="border px-3 py-1">{trophies.turtles.overall?.count || 0}</td>
-                  </tr>
-                  <tr>
-                    <td className="border px-3 py-1">Student</td>
-                    <td className="border px-3 py-1">{trophies.turtles.student?.user || '-'}</td>
-                    <td className="border px-3 py-1">{trophies.turtles.student?.count || 0}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
       )}
