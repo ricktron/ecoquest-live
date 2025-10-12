@@ -53,6 +53,11 @@ export default function Admin() {
   const [filterByProject, setFilterByProject] = useState<boolean | undefined>(undefined);
   const [projectIdOrSlug, setProjectIdOrSlug] = useState('');
   const [includeAdults, setIncludeAdults] = useState<boolean | undefined>(undefined);
+  const [useCustomDates, setUseCustomDates] = useState(false);
+  const [d1Custom, setD1Custom] = useState('');
+  const [d2Custom, setD2Custom] = useState('');
+  const [projectIdOutput, setProjectIdOutput] = useState('');
+  const [includeAdultsEffective, setIncludeAdultsEffective] = useState(false);
 
   // Load windows and roster on mount
   useEffect(() => {
@@ -165,44 +170,58 @@ export default function Admin() {
 
   // Update transform inputs without calling iNat API
   function updateTransformInputs() {
+    // 1) Read the selected window row from ds_windows by label
     const win = windows.find(r => r.label === windowLabel);
-    const d1 = win ? win.starts_on : scoredOn;
-    const d2 = win ? win.ends_on : scoredOn;
     
-    const logins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
+    // 2) Compute dates: use window's starts_on/ends_on unless ui.use_custom_dates is true
+    const d1 = useCustomDates ? d1Custom : (win ? win.starts_on : scoredOn);
+    const d2 = useCustomDates ? d2Custom : (win ? win.ends_on : scoredOn);
+    
+    // 3) Compute includeAdults
+    const includeAdultsComputed = (includeAdults !== undefined) ? includeAdults : (win?.include_adults_default ?? false);
+    
+    // 4) Compute project filter
+    const projectEnabled = (filterByProject === true) || (win?.use_project_filter === true);
+    const projectId = projectEnabled ? (projectIdOrSlug || win?.inat_project || '') : '';
+    
+    // 5) Build the roster login list, respecting includeAdults
+    let filteredRoster = roster;
+    if (!includeAdultsComputed) {
+      // Filter out rows where exclude_from_scoring=true when includeAdults is false
+      filteredRoster = roster.filter(r => !r.exclude_from_scoring);
+    }
+    
+    const logins = filteredRoster.map(r => (r.inat_login || '').trim()).filter(Boolean);
     const loginCsv = logins.join(',');
     
     // Store transform outputs
     setWindowStart(d1);
     setWindowEnd(d2);
     setLoginListCsv(loginCsv);
+    setProjectIdOutput(projectId);
+    setIncludeAdultsEffective(includeAdultsComputed);
   }
 
   async function fetchFromINat() {
     setFetching(true);
     try {
-      // xform_build_inat_payload logic
-      const win = windows.find(r => r.label === windowLabel);
-      const d1 = win ? win.starts_on : scoredOn;
-      const d2 = win ? win.ends_on : scoredOn;
+      // Update transform first to get latest computed values
+      updateTransformInputs();
       
-      const logins = roster.map(r => (r.inat_login || '').trim()).filter(Boolean);
-      const loginsLC = logins.map(u => u.toLowerCase());
-      const loginCsv = logins.join(',');
-      
-      // Store transform outputs
-      setWindowStart(d1);
-      setWindowEnd(d2);
-      setLoginListCsv(loginCsv);
-
+      // Use transform outputs for API calls
       const params = new URLSearchParams({
-        user_login: loginCsv,
-        d1,
-        d2,
+        user_login: loginListCsv,
+        d1: windowStart,
+        d2: windowEnd,
         per_page: '200',
         order: 'desc',
         order_by: 'created_at'
       });
+      
+      // Add project_id only if not empty
+      if (projectIdOutput) {
+        params.set('project_id', projectIdOutput);
+      }
 
       // Fetch 3 pages (rest_inat_page1, rest_inat_page2, rest_inat_page3)
       const [page1, page2, page3] = await Promise.all([
@@ -218,6 +237,10 @@ export default function Admin() {
 
       const counts: Record<string, number> = {};
       const seen = new Set<string>();
+      
+      // Use filtered logins based on includeAdults
+      const logins = loginListCsv.split(',').filter(Boolean);
+      const loginsLC = logins.map(u => u.toLowerCase());
 
       for (const obs of merged) {
         const u = (obs?.user?.login || '').toLowerCase();
