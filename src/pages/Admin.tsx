@@ -58,6 +58,7 @@ export default function Admin() {
   const [d2Custom, setD2Custom] = useState('');
   const [projectIdOutput, setProjectIdOutput] = useState('');
   const [includeAdultsEffective, setIncludeAdultsEffective] = useState(false);
+  const [debugParams, setDebugParams] = useState<Record<string, string>>({});
 
   // Load windows and roster on mount
   useEffect(() => {
@@ -200,17 +201,35 @@ export default function Admin() {
     setLoginListCsv(loginCsv);
     setProjectIdOutput(projectId);
     setIncludeAdultsEffective(includeAdultsComputed);
+    
+    // 6) Add debug params output
+    setDebugParams({
+      user_id: loginCsv,
+      d1: d1,
+      d2: d2,
+      project_id: projectId
+    });
   }
 
   async function fetchFromINat() {
     setFetching(true);
     try {
-      // Update transform first to get latest computed values
+      // 1) Run transform first
       updateTransformInputs();
+      
+      // 2) Check if login_list_csv is empty
+      if (!loginListCsv) {
+        toast({
+          title: "No roster usernames to fetch",
+          variant: "destructive"
+        });
+        setFetching(false);
+        return;
+      }
       
       // Use transform outputs for API calls
       const params = new URLSearchParams({
-        user_login: loginListCsv,
+        user_id: loginListCsv,  // Changed from user_login to user_id
         d1: windowStart,
         d2: windowEnd,
         per_page: '200',
@@ -223,7 +242,7 @@ export default function Admin() {
         params.set('project_id', projectIdOutput);
       }
 
-      // Fetch 3 pages (rest_inat_page1, rest_inat_page2, rest_inat_page3)
+      // 3-5) Fetch 3 pages
       const [page1, page2, page3] = await Promise.all([
         fetch(`https://api.inaturalist.org/v1/observations?${params}&page=1`).then(r => r.json()),
         fetch(`https://api.inaturalist.org/v1/observations?${params}&page=2`).then(r => r.json()),
@@ -256,18 +275,18 @@ export default function Admin() {
       }));
       
       // Store diagnostics
+      const uniqueObservers = Array.from(seen);
       setDebugTotalResults(merged.length);
-      setDebugUniqueObservers(Array.from(seen));
-      setDebugUnrosteredObservers(Array.from(seen).filter(u => !loginsLC.includes(u)));
+      setDebugUniqueObservers(uniqueObservers);
+      setDebugUnrosteredObservers(uniqueObservers.filter(u => !loginsLC.includes(u)));
       const preview = payload.map(p => ({ user: p.inat_login, obs_count: p.obs_count }));
 
       setInatPayload(JSON.stringify(payload));
       setPreview(preview);
       
-      const uniqueCount = debugUniqueObservers.length;
+      // 7) Show success toast
       toast({ 
-        title: 'Fetched', 
-        description: `${merged.length} observations for ${uniqueCount} observer${uniqueCount !== 1 ? 's' : ''}`
+        title: `Fetched ${merged.length} observations for ${uniqueObservers.length} users`
       });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -439,6 +458,7 @@ export default function Admin() {
           <h3 className="font-semibold mb-2 text-sm">Debug</h3>
           <div className="text-xs space-y-1 font-mono">
             <div><span className="font-semibold">Window:</span> {windowLabel}</div>
+            <div><span className="font-semibold">Params:</span> {JSON.stringify(debugParams)}</div>
             <div><span className="font-semibold">d1:</span> {windowStart}</div>
             <div><span className="font-semibold">d2:</span> {windowEnd}</div>
             <div><span className="font-semibold">logins:</span> {loginListCsv}</div>
