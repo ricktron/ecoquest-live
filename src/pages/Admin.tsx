@@ -97,6 +97,8 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     new_count: number;
   }>>([]);
   const [loadingScoreChanges, setLoadingScoreChanges] = useState(false);
+  const [auditDays, setAuditDays] = useState(30);
+  const [auditLimit, setAuditLimit] = useState(200);
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -631,8 +633,8 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
       const { data, error } = await supabase.rpc('get_score_changes_admin', {
         p_admin_pin: adminPin,
         p_window_label: windowLabel,
-        p_limit_days: 30,
-        p_limit_rows: 200
+        p_limit_days: auditDays,
+        p_limit_rows: auditLimit
       });
 
       if (error) throw error;
@@ -907,14 +909,32 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Audit</CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={loadScoreChanges}
-                disabled={loadingScoreChanges}
-              >
-                {loadingScoreChanges ? 'Loading...' : 'Refresh'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Days:</label>
+                <input
+                  type="number"
+                  value={auditDays}
+                  onChange={(e) => setAuditDays(Number(e.target.value))}
+                  className="w-20 px-2 py-1 border rounded text-sm"
+                  min="1"
+                />
+                <label className="text-sm font-medium ml-2">Limit:</label>
+                <input
+                  type="number"
+                  value={auditLimit}
+                  onChange={(e) => setAuditLimit(Number(e.target.value))}
+                  className="w-20 px-2 py-1 border rounded text-sm"
+                  min="1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={loadScoreChanges}
+                  disabled={loadingScoreChanges}
+                >
+                  {loadingScoreChanges ? 'Loading...' : 'Refresh'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
