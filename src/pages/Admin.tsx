@@ -48,9 +48,11 @@ type PreviewRow = {
 type AdminProps = {
   setTrophies: (trophies: TrophyResults | null) => void;
   setRoster: (roster: RosterRow[]) => void;
+  setInatResults: (results: any[]) => void;
+  setInatParams: (params: { user_id: string; d1: string; d2: string; project_id: string } | null) => void;
 };
 
-export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRoster }: AdminProps) {
+export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRoster, setInatResults, setInatParams }: AdminProps) {
   const [windows, setWindows] = useState<Window[]>([]);
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -466,6 +468,15 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
       setInatPayload(JSON.stringify(payload));
       setPreview(preview);
       setAppTrophies(trophyResults);
+      
+      // Persist iNat results and params in app state
+      setInatResults(merged);
+      setInatParams({
+        user_id: loginListCsv,
+        d1: windowStart,
+        d2: windowEnd,
+        project_id: projectIdOutput
+      });
       
       // 7) Show success toast
       toast({ 

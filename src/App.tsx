@@ -10,10 +10,19 @@ import { TrophyResults, RosterRow } from "@/types/trophies";
 const TABS = ["Leaderboard","Today","Trophies","Admin"] as const;
 type Tab = typeof TABS[number];
 
+export type INatParams = {
+  user_id: string;
+  d1: string;
+  d2: string;
+  project_id: string;
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("Leaderboard");
   const [trophies, setTrophies] = useState<TrophyResults | null>(null);
   const [roster, setRoster] = useState<RosterRow[]>([]);
+  const [inatResults, setInatResults] = useState<any[]>([]);
+  const [inatParams, setInatParams] = useState<INatParams | null>(null);
   
   return (
     <div className="min-h-dvh bg-neutral-50 flex flex-col">
@@ -25,8 +34,8 @@ export default function App() {
       <main className="flex-1">
         {tab==="Leaderboard" && <Leaderboard/>}
         {tab==="Today" && <Today/>}
-        {tab==="Trophies" && <Trophies trophies={trophies} roster={roster} />}
-        {tab==="Admin" && <Admin setTrophies={setTrophies} setRoster={setRoster} />}
+        {tab==="Trophies" && <Trophies trophies={trophies} roster={roster} inatResults={inatResults} inatParams={inatParams} />}
+        {tab==="Admin" && <Admin setTrophies={setTrophies} setRoster={setRoster} setInatResults={setInatResults} setInatParams={setInatParams} />}
       </main>
       <nav className="sticky bottom-0 bg-white border-t">
         <div className="grid grid-cols-4">
