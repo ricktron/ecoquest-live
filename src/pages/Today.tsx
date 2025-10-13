@@ -128,12 +128,12 @@ export default function Today() {
 
       const scoredOnStr = format(scoredOn, 'yyyy-MM-dd');
 
-      // Load unified data
+      // Load unified data using to_date for exact date matching
       const { data: unified } = await supabase
         .from('public_leaderboard_unified_v1')
-        .select('display_label, obs_count, exhibition, official_rank, overall_rank')
+        .select('display_label, obs_count, exhibition, official_rank, overall_rank, window_id, scored_on')
         .eq('window_id', windowData.id)
-        .eq('scored_on', scoredOnStr)
+        .filter('scored_on', 'eq', `to_date('${scoredOnStr}','YYYY-MM-DD')`)
         .order('official_rank', { ascending: true, nullsFirst: false })
         .order('overall_rank', { ascending: true });
       
