@@ -15,6 +15,7 @@ type UnifiedRow = {
   exhibition: boolean;
   official_rank: number | null;
   overall_rank: number;
+  scored_on: string;
 };
 
 export default function Leaderboard() {
@@ -139,7 +140,7 @@ export default function Leaderboard() {
       // Load unified leaderboard for the latest snapshot only
       const { data: unified } = await supabase
         .from('public_leaderboard_unified_v1')
-        .select('display_label, obs_count, exhibition, official_rank, overall_rank')
+        .select('display_label, obs_count, exhibition, official_rank, overall_rank, scored_on')
         .eq('window_id', windowData.id)
         .eq('scored_on', maxDate.scored_on)
         .order('official_rank', { ascending: true, nullsFirst: false })
@@ -173,6 +174,9 @@ export default function Leaderboard() {
       <div>
         <div className="flex items-baseline gap-3 mb-3">
           <h3 className="font-semibold">Leaderboard</h3>
+          <span className="text-sm text-gray-600">
+            Snapshot date: {unifiedRows[0]?.scored_on || '—'}
+          </span>
           <span className="text-sm text-gray-600">
             Last updated: {lastUpdated.find(r => r.label === windowLabel)?.last_updated 
               ? new Date(lastUpdated.find(r => r.label === windowLabel)!.last_updated).toLocaleString()

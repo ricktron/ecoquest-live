@@ -21,6 +21,7 @@ type UnifiedRow = {
   exhibition: boolean;
   official_rank: number | null;
   overall_rank: number;
+  scored_on: string;
 };
 
 export default function Today() {
@@ -198,6 +199,9 @@ export default function Today() {
       <div>
         <div className="flex items-baseline gap-3 mb-3">
           <h3 className="font-semibold">Today's Leaderboard</h3>
+          <span className="text-sm text-gray-600">
+            Snapshot date: {unifiedRows[0]?.scored_on || '—'}
+          </span>
           <span className="text-sm text-gray-600">
             Last updated: {lastUpdated.find(r => r.label === windowLabel)?.last_updated 
               ? new Date(lastUpdated.find(r => r.label === windowLabel)!.last_updated).toLocaleString()
