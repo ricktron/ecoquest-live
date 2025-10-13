@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from '@/hooks/use-toast';
 import { TrophyResults, RosterRow, TrophyWinner, ZoneTrophy } from '@/types/trophies';
+import { format, subYears } from 'date-fns';
 
 type Window = {
   id: string;
@@ -547,6 +548,21 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }
   }
 
+  function testLastFiveYears() {
+    const today = new Date();
+    const fiveYearsAgo = subYears(today, 5);
+    
+    setUseCustomDates(true);
+    setD1Custom(format(fiveYearsAgo, 'yyyy-MM-dd'));
+    setD2Custom(format(today, 'yyyy-MM-dd'));
+    
+    // Run updateTransformInputs on next tick to ensure state is updated
+    setTimeout(() => {
+      updateTransformInputs();
+      toast({ title: 'Using last 5 years (custom dates)' });
+    }, 0);
+  }
+
   return (
     <div className="p-4 space-y-6">
       {/* Top bar */}
@@ -599,6 +615,13 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
           className="px-4 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
         >
           {syncing ? 'Syncing...' : 'Sync roster'}
+        </button>
+
+        <button 
+          onClick={testLastFiveYears}
+          className="px-4 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm"
+        >
+          Test: last 5 years
         </button>
       </div>
 
