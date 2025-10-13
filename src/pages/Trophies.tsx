@@ -4,12 +4,14 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Fish, MapPin } from 'lucide-react';
+import { ZONES_DEFAULT, ZoneDef } from '@/lib/zones';
 
 type TrophiesProps = {
   trophies: TrophyResults | null;
   roster: RosterRow[];
   inatResults: any[];
   inatParams: { user_id: string; d1: string; d2: string; project_id: string } | null;
+  zoneDefs: ZoneDef[] | null;
 };
 
 type RosterFlag = {
@@ -17,7 +19,7 @@ type RosterFlag = {
   exhibition: boolean;
 };
 
-export default function Trophies({ trophies, roster, inatResults, inatParams }: TrophiesProps) {
+export default function Trophies({ trophies, roster, inatResults, inatParams, zoneDefs }: TrophiesProps) {
   const [windowLabel, setWindowLabel] = useState('');
   const [snapshotDate, setSnapshotDate] = useState('');
   const [windows, setWindows] = useState<any[]>([]);
@@ -123,12 +125,8 @@ export default function Trophies({ trophies, roster, inatResults, inatParams }: 
   const trophyZones = useMemo(() => {
     const obs = inatResults || [];
     
-    // TODO: replace with real boxes
-    const ZONES = [
-      { key: 'river', label: 'On the River', sw: [9.950, -84.200], ne: [9.990, -84.150] },
-      { key: 'beach', label: 'On the Beach', sw: [9.600, -85.000], ne: [9.640, -84.960] },
-      { key: 'hotel', label: 'At the Hotel', sw: [9.800, -84.300], ne: [9.820, -84.280] },
-    ];
+    // Use custom zone defs from state, or fall back to defaults
+    const ZONES = zoneDefs || ZONES_DEFAULT;
 
     const inBox = (lat: number, lng: number, sw: number[], ne: number[]) =>
       lat >= sw[0] && lat <= ne[0] && lng >= sw[1] && lng <= ne[1];
@@ -160,7 +158,7 @@ export default function Trophies({ trophies, roster, inatResults, inatParams }: 
     });
 
     return { zones: byZone };
-  }, [inatResults, flagsByLogin]);
+  }, [inatResults, flagsByLogin, zoneDefs]);
 
   // Helper to get display name from roster
   const getDisplayName = (login: string) => {
