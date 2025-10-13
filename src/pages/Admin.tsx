@@ -578,7 +578,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     setSyncing(true);
     try {
       // Call RPC sync_roster_student_identities
-      const { error } = await supabase.rpc('sync_roster_student_identities', {
+      const { data: rowsTouched, error } = await supabase.rpc('sync_roster_student_identities', {
         p_admin_pin: adminPin
       });
 
@@ -594,7 +594,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
       updateTransformInputs();
       
       toast({ 
-        title: 'Roster synced.'
+        title: `Roster synced (${rowsTouched || 0} changes).`
       });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
