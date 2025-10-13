@@ -99,6 +99,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [loadingScoreChanges, setLoadingScoreChanges] = useState(false);
   const [auditDays, setAuditDays] = useState(30);
   const [auditLimit, setAuditLimit] = useState(200);
+  const [verifyLogins, setVerifyLogins] = useState<string[]>([]);
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -553,6 +554,21 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }
   }
 
+  async function loadVerifyLogins() {
+    try {
+      const { data, error } = await supabase
+        .from('roster')
+        .select('inat_login')
+        .in('inat_login', ['fpelzel', 'sofiamia41'])
+        .order('inat_login');
+
+      if (error) throw error;
+      setVerifyLogins(data?.map(r => r.inat_login) || []);
+    } catch (e: any) {
+      console.error('Error loading verify logins:', e.message);
+    }
+  }
+
   async function syncRoster() {
     if (!adminPin) {
       toast({ title: 'Error', description: 'Admin PIN required', variant: 'destructive' });
@@ -561,25 +577,24 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     
     setSyncing(true);
     try {
-      // ds_sync_roster: Call RPC sync_roster_student_identities
-      const { data, error } = await supabase.rpc('sync_roster_student_identities', {
+      // Call RPC sync_roster_student_identities
+      const { error } = await supabase.rpc('sync_roster_student_identities', {
         p_admin_pin: adminPin
       });
 
       if (error) throw error;
-
-      // Handle different possible response structures
-      const insertedCount = typeof data === 'number' ? data : (data?.[0]?.sync_roster_student_identities || data?.[0]?.count || data || 0);
       
       // Refresh ds_roster_public
       await loadRoster();
+      
+      // Refresh verify table
+      await loadVerifyLogins();
       
       // Run xform_build_inat_payload (update transform inputs only, no iNat fetch)
       updateTransformInputs();
       
       toast({ 
-        title: 'Roster synced', 
-        description: `Added ${insertedCount} new user${insertedCount !== 1 ? 's' : ''}. Preview updated.`
+        title: 'Roster synced.'
       });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -803,7 +818,19 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
           {syncing ? 'Syncing...' : 'Sync roster'}
         </button>
 
-        <button 
+        {/* Verify logins table */}
+        {verifyLogins.length > 0 && (
+          <div className="mt-2 p-2 bg-gray-50 border rounded">
+            <h4 className="text-xs font-semibold mb-1">Verify Logins</h4>
+            <div className="text-xs space-y-0.5">
+              {verifyLogins.map((login, i) => (
+                <div key={i}>{login}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
           onClick={testLastFiveYears}
           className="px-4 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm"
         >
