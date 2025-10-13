@@ -5,6 +5,7 @@ import { TrophyResults, RosterRow, TrophyWinner, ZoneTrophy } from '@/types/trop
 import { format, subYears } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ZONES_DEFAULT, ZoneDef } from '@/lib/zones';
 
 type Window = {
@@ -87,6 +88,15 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [lastUpdated, setLastUpdated] = useState<Array<{ label: string; last_updated: string }>>([]);
   const [zonesDialogOpen, setZonesDialogOpen] = useState(false);
   const [zonesJson, setZonesJson] = useState('');
+  const [scoreChanges, setScoreChanges] = useState<Array<{
+    changed_at: string;
+    scored_on: string;
+    display_label: string | null;
+    change_kind: string;
+    delta: number;
+    new_count: number;
+  }>>([]);
+  const [loadingScoreChanges, setLoadingScoreChanges] = useState(false);
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -610,6 +620,31 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }
   }
 
+  async function loadScoreChanges() {
+    if (!adminPin) {
+      toast({ title: 'Error', description: 'Admin PIN required', variant: 'destructive' });
+      return;
+    }
+
+    setLoadingScoreChanges(true);
+    try {
+      const { data, error } = await supabase.rpc('get_score_changes_admin', {
+        p_admin_pin: adminPin,
+        p_window_label: windowLabel,
+        p_limit_days: 30,
+        p_limit_rows: 200
+      });
+
+      if (error) throw error;
+
+      setScoreChanges(data || []);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoadingScoreChanges(false);
+    }
+  }
+
   function seedMockINat() {
     // Mock observations with turtles and zone-specific observations
     const mockObservations = [
@@ -864,6 +899,61 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
             )}
           </div>
         </div>
+      )}
+
+      {/* Audit section */}
+      {adminPin && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Audit</CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={loadScoreChanges}
+                disabled={loadingScoreChanges}
+              >
+                {loadingScoreChanges ? 'Loading...' : 'Refresh'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {scoreChanges.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">No score changes yet. Click Refresh to load.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border">
+                  <thead>
+                    <tr className="bg-muted">
+                      <th className="border px-3 py-2 text-left text-sm font-medium">Time</th>
+                      <th className="border px-3 py-2 text-left text-sm font-medium">Snapshot</th>
+                      <th className="border px-3 py-2 text-left text-sm font-medium">Name</th>
+                      <th className="border px-3 py-2 text-left text-sm font-medium">Change</th>
+                      <th className="border px-3 py-2 text-right text-sm font-medium">Δ</th>
+                      <th className="border px-3 py-2 text-right text-sm font-medium">New</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scoreChanges.map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-muted/50' : ''}>
+                        <td className="border px-3 py-2 text-sm">{new Date(row.changed_at).toLocaleString()}</td>
+                        <td className="border px-3 py-2 text-sm">{row.scored_on}</td>
+                        <td className="border px-3 py-2 text-sm">{row.display_label || '—'}</td>
+                        <td className="border px-3 py-2 text-sm">{row.change_kind}</td>
+                        <td className={`border px-3 py-2 text-sm text-right font-mono ${
+                          row.delta > 0 ? 'text-green-600' : row.delta < 0 ? 'text-red-600' : ''
+                        }`}>
+                          {row.delta}
+                        </td>
+                        <td className="border px-3 py-2 text-sm text-right font-mono">{row.new_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Leaderboard section */}
