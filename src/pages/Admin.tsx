@@ -647,9 +647,9 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     try {
       const { data, error } = await supabase.rpc('get_score_changes_admin', {
         p_admin_pin: adminPin,
-        p_window_label: windowLabel,
         p_limit_days: auditDays,
-        p_limit_rows: auditLimit
+        p_limit_rows: auditLimit,
+        p_window_label: windowLabel
       });
 
       if (error) throw error;
