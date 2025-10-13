@@ -304,7 +304,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
       
       // Use transform outputs for API calls
       const params = new URLSearchParams({
-        user_id: loginListCsv,  // Changed from user_login to user_id
+        user_id: loginListCsv,
         d1: windowStart,
         d2: windowEnd,
         per_page: '200',
@@ -317,17 +317,28 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
         params.set('project_id', projectIdOutput);
       }
 
-      // 3-5) Fetch 3 pages
-      const [page1, page2, page3] = await Promise.all([
-        fetch(`https://api.inaturalist.org/v1/observations?${params}&page=1`).then(r => r.json()),
-        fetch(`https://api.inaturalist.org/v1/observations?${params}&page=2`).then(r => r.json()),
-        fetch(`https://api.inaturalist.org/v1/observations?${params}&page=3`).then(r => r.json())
-      ]);
+      // Fetch first page to get total_results
+      const firstResponse = await fetch(`https://api.inaturalist.org/v1/observations?${params}&page=1`).then(r => r.json());
+      const totalResults = firstResponse.total_results || 0;
+      const estimatedPages = Math.min(Math.ceil(totalResults / 200), 10);
+      
+      toast({ title: `Fetching page 1 of ~${estimatedPages}…` });
 
-      const merged = []
-        .concat(page1.results || [])
-        .concat(page2.results || [])
-        .concat(page3.results || []);
+      let merged = firstResponse.results || [];
+      let currentPage = 1;
+
+      // Continue fetching until we have all results or hit page 10
+      while (merged.length < totalResults && currentPage < 10) {
+        currentPage++;
+        toast({ title: `Fetching page ${currentPage} of ~${estimatedPages}…` });
+        
+        const pageResponse = await fetch(`https://api.inaturalist.org/v1/observations?${params}&page=${currentPage}`).then(r => r.json());
+        const pageResults = pageResponse.results || [];
+        
+        if (pageResults.length === 0) break;
+        
+        merged = merged.concat(pageResults);
+      }
 
       // Count observations for ALL roster users
       const counts: Record<string, number> = {};
@@ -599,6 +610,108 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }
   }
 
+  function seedMockINat() {
+    // Mock observations with turtles and zone-specific observations
+    const mockObservations = [
+      // Turtle observations
+      {
+        id: 'mock-1',
+        user: { login: 'student1' },
+        taxon: {
+          name: 'Testudines',
+          ancestor_ids: [26036],
+          preferred_common_name: 'Turtle'
+        },
+        geojson: { coordinates: [-84.175, 9.970] }, // river zone
+        latitude: 9.970,
+        longitude: -84.175
+      },
+      {
+        id: 'mock-2',
+        user: { login: 'student1' },
+        taxon: {
+          name: 'Chelonia mydas',
+          ancestor_ids: [26036],
+          preferred_common_name: 'Green Sea Turtle'
+        },
+        geojson: { coordinates: [-84.980, 9.620] }, // beach zone
+        latitude: 9.620,
+        longitude: -84.980
+      },
+      {
+        id: 'mock-3',
+        user: { login: 'instructor1' },
+        taxon: {
+          name: 'Trachemys scripta',
+          ancestor_ids: [26036],
+          preferred_common_name: 'Pond Slider'
+        },
+        geojson: { coordinates: [-84.290, 9.810] }, // hotel zone
+        latitude: 9.810,
+        longitude: -84.290
+      },
+      // Mixed observations in different zones
+      {
+        id: 'mock-4',
+        user: { login: 'student2' },
+        taxon: {
+          name: 'Morpho peleides',
+          ancestor_ids: [47157, 47158],
+          preferred_common_name: 'Blue Morpho'
+        },
+        geojson: { coordinates: [-84.180, 9.975] }, // river zone
+        latitude: 9.975,
+        longitude: -84.180
+      },
+      {
+        id: 'mock-5',
+        user: { login: 'student2' },
+        taxon: {
+          name: 'Alouatta palliata',
+          ancestor_ids: [40151],
+          preferred_common_name: 'Mantled Howler'
+        },
+        geojson: { coordinates: [-84.975, 9.615] }, // beach zone
+        latitude: 9.615,
+        longitude: -84.975
+      },
+      {
+        id: 'mock-6',
+        user: { login: 'student3' },
+        taxon: {
+          name: 'Heliconia',
+          ancestor_ids: [47125],
+          preferred_common_name: 'Lobster Claw'
+        },
+        geojson: { coordinates: [-84.295, 9.815] }, // hotel zone
+        latitude: 9.815,
+        longitude: -84.295
+      },
+      {
+        id: 'mock-7',
+        user: { login: 'student3' },
+        taxon: {
+          name: 'Basiliscus plumifrons',
+          ancestor_ids: [26036],
+          preferred_common_name: 'Green Basilisk'
+        },
+        geojson: { coordinates: [-84.185, 9.965] }, // river zone
+        latitude: 9.965,
+        longitude: -84.185
+      }
+    ];
+
+    setInatResults(mockObservations);
+    setInatParams({
+      user_id: 'mock_users',
+      d1: windowStart || '2020-10-13',
+      d2: windowEnd || '2025-10-13',
+      project_id: projectIdOutput || ''
+    });
+
+    toast({ title: 'Mock observations loaded' });
+  }
+
   return (
     <div className="p-4 space-y-6">
       {/* Top bar */}
@@ -658,6 +771,13 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
           className="px-4 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm"
         >
           Test: last 5 years
+        </button>
+
+        <button 
+          onClick={seedMockINat}
+          className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+        >
+          Seed mock iNat
         </button>
 
         <Dialog open={zonesDialogOpen} onOpenChange={setZonesDialogOpen}>
