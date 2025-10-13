@@ -121,11 +121,27 @@ export default function Leaderboard() {
         return;
       }
 
-      // Load unified leaderboard
+      // Get the latest scored_on for this window
+      const { data: maxDate } = await supabase
+        .from('public_leaderboard_unified_v1')
+        .select('scored_on')
+        .eq('window_id', windowData.id)
+        .order('scored_on', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!maxDate?.scored_on) {
+        setUnifiedRows([]);
+        setLoading(false);
+        return;
+      }
+
+      // Load unified leaderboard for the latest snapshot only
       const { data: unified } = await supabase
         .from('public_leaderboard_unified_v1')
         .select('display_label, obs_count, exhibition, official_rank, overall_rank')
         .eq('window_id', windowData.id)
+        .eq('scored_on', maxDate.scored_on)
         .order('official_rank', { ascending: true, nullsFirst: false })
         .order('overall_rank', { ascending: true });
       
