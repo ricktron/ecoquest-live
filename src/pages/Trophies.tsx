@@ -1,6 +1,9 @@
 import { TrophyResults, RosterRow } from '@/types/trophies';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Fish, MapPin } from 'lucide-react';
 
 type TrophiesProps = {
   trophies: TrophyResults | null;
@@ -165,14 +168,26 @@ export default function Trophies({ trophies, roster, inatResults, inatParams }: 
     return user?.display_name_ui || login;
   };
 
+  if (inatResults.length === 0) {
+    return (
+      <div className="p-4 space-y-4">
+        <h2 className="text-lg font-semibold">Trophies</h2>
+        <div className="text-center text-gray-500 py-8">
+          No observations loaded. Click "Fetch from iNaturalist" on the Admin tab to compute trophies.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-6">
-      <div className="flex items-center gap-3 mb-4">
+      {/* Header */}
+      <div>
         <h2 className="text-lg font-semibold">Trophies</h2>
-        {inatResults.length > 0 && (
-          <span className="text-sm text-gray-500">
-            ({inatResults.length} observations loaded)
-          </span>
+        {inatParams && (
+          <p className="text-xs text-gray-500 mt-1">
+            (computed from last Admin fetch: {inatParams.d1} → {inatParams.d2})
+          </p>
         )}
       </div>
 
@@ -202,168 +217,102 @@ export default function Trophies({ trophies, roster, inatResults, inatParams }: 
         </div>
       </div>
 
-      {inatResults.length === 0 ? (
-        <div className="text-center text-gray-500 py-8">
-          No observations loaded. Click "Fetch from iNaturalist" on the Admin tab to compute trophies.
-        </div>
-      ) : (
-        <>
-          {/* New turtle trophy */}
-          <div>
-            <h3 className="font-semibold mb-3">Most Turtles (Testudines)</h3>
-            <div className="border rounded-lg p-4 bg-white">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Student Winner:</span>
+      {/* Species Trophies */}
+      <div>
+        <h3 className="text-base font-semibold mb-3">Species Trophies</h3>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Fish className="h-5 w-5" />
+              Most Turtles
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between py-2 px-3 bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">Student Winner</Badge>
                   {trophyTurtles.student ? (
-                    <span className="font-medium">
-                      {trophyTurtles.student.login} ({trophyTurtles.student.count})
-                    </span>
+                    <>
+                      <span className="font-medium">{trophyTurtles.student.login}</span>
+                    </>
                   ) : (
                     <span className="text-gray-400">—</span>
                   )}
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Overall Winner:</span>
+                <span className="font-mono text-sm">{trophyTurtles.student?.count || 0}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 px-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">Overall Winner</Badge>
                   {trophyTurtles.overall ? (
-                    <span className="font-medium">
-                      {trophyTurtles.overall.login} ({trophyTurtles.overall.count})
-                    </span>
+                    <>
+                      <span className="font-medium">{trophyTurtles.overall.login}</span>
+                      {trophyTurtles.overall.exhibition && (
+                        <Badge variant="secondary" className="text-xs">✓ Exhibition</Badge>
+                      )}
+                    </>
                   ) : (
                     <span className="text-gray-400">—</span>
                   )}
                 </div>
+                <span className="font-mono text-sm">{trophyTurtles.overall?.count || 0}</span>
               </div>
-
-              {/* Optional: Show all entries for transparency */}
-              {trophyTurtles.entries.length > 0 && (
-                <details className="mt-3 text-sm">
-                  <summary className="cursor-pointer text-gray-600">Show all entries</summary>
-                  <div className="mt-2 space-y-1">
-                    {trophyTurtles.entries.map((e, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <span>{e.login} {e.exhibition && '(exhibition)'}</span>
-                        <span>{e.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
             </div>
-          </div>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* New zone trophies */}
-          <div>
-            <h3 className="font-semibold mb-3">Zone Trophies</h3>
-            <div className="space-y-4">
-              {trophyZones.zones.map((z, i) => (
-                <div key={i} className="border rounded-lg p-4 bg-white">
-                  <h4 className="font-medium mb-3">{z.label}</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Student Winner:</span>
+      {/* Zone Trophies */}
+      <div>
+        <h3 className="text-base font-semibold mb-3">Zone Trophies</h3>
+        <div className="space-y-3">
+          {trophyZones.zones.map((z, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <MapPin className="h-5 w-5" />
+                  {z.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between py-2 px-3 bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">Student Winner</Badge>
                       {z.student ? (
-                        <span className="font-medium">
-                          {z.student.login} ({z.student.count})
-                        </span>
+                        <>
+                          <span className="font-medium">{z.student.login}</span>
+                        </>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Overall Winner:</span>
+                    <span className="font-mono text-sm">{z.student?.count || 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">Overall Winner</Badge>
                       {z.overall ? (
-                        <span className="font-medium">
-                          {z.overall.login} ({z.overall.count})
-                        </span>
+                        <>
+                          <span className="font-medium">{z.overall.login}</span>
+                          {z.overall.exhibition && (
+                            <Badge variant="secondary" className="text-xs">✓ Exhibition</Badge>
+                          )}
+                        </>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
                     </div>
+                    <span className="font-mono text-sm">{z.overall?.count || 0}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
 
-      {/* Legacy trophies from Admin computation (if available) */}
-      {trophies && (
-        <>
-          <div>
-            <h3 className="font-semibold mb-3">Legacy Zone Trophies (from Admin)</h3>
-            {trophies.zones.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">No zone trophies yet.</div>
-            ) : (
-              <div className="space-y-4">
-                {trophies.zones.map((zone, i) => (
-                  <div key={i} className="border rounded-lg p-4 bg-white">
-                    <h4 className="font-medium mb-3">{zone.label}</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Student Winner:</span>
-                        {zone.student ? (
-                          <span className="font-medium">
-                            {getDisplayName(zone.student.user)} ({zone.student.count})
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Overall Winner:</span>
-                        {zone.overall ? (
-                          <span className="font-medium">
-                            {getDisplayName(zone.overall.user)} ({zone.overall.count})
-                            {zone.overall.is_adult && (
-                              <span className="ml-2 text-sm text-blue-600">✓ Exhibition</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <h3 className="font-semibold mb-3">Legacy Species Trophies (from Admin)</h3>
-            <div className="border rounded-lg p-4 bg-white">
-              <h4 className="font-medium mb-3">Most Turtles</h4>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Student Winner:</span>
-                  {trophies.turtles.student ? (
-                    <span className="font-medium">
-                      {getDisplayName(trophies.turtles.student.user)} ({trophies.turtles.student.count})
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Overall Winner:</span>
-                  {trophies.turtles.overall ? (
-                    <span className="font-medium">
-                      {getDisplayName(trophies.turtles.overall.user)} ({trophies.turtles.overall.count})
-                      {trophies.turtles.overall.is_adult && (
-                        <span className="ml-2 text-sm text-blue-600">✓ Exhibition</span>
-                      )}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
