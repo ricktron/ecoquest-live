@@ -77,6 +77,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [projectIdOutput, setProjectIdOutput] = useState('');
   const [includeAdultsEffective, setIncludeAdultsEffective] = useState(false);
   const [debugParams, setDebugParams] = useState<Record<string, string>>({});
+  const [lastUpdated, setLastUpdated] = useState<Array<{ label: string; last_updated: string }>>([]);
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   useEffect(() => {
     if (windowLabel) {
       loadLeaderboards();
+      loadLastUpdated();
       
       // Find the selected window row
       const selectedWindow = windows.find(w => w.label === windowLabel);
@@ -164,6 +166,51 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }
     
     setZones(data || []);
+  }
+
+  async function loadLastUpdated() {
+    const { data, error } = await supabase
+      .from('daily_scores')
+      .select('window_id, updated_at')
+      .order('updated_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error loading last updated:', error);
+      return;
+    }
+
+    // Get window labels
+    const windowIds = [...new Set(data?.map(d => d.window_id) || [])];
+    const windowMap = new Map();
+    
+    for (const wid of windowIds) {
+      const { data: winData } = await supabase
+        .from('trip_windows')
+        .select('label')
+        .eq('id', wid)
+        .maybeSingle();
+      if (winData?.label) {
+        windowMap.set(wid, winData.label);
+      }
+    }
+
+    // Group by window and get max updated_at
+    const grouped = new Map<string, string>();
+    for (const row of data || []) {
+      const label = windowMap.get(row.window_id);
+      if (label) {
+        if (!grouped.has(label) || row.updated_at > grouped.get(label)!) {
+          grouped.set(label, row.updated_at);
+        }
+      }
+    }
+
+    const result = Array.from(grouped.entries()).map(([label, last_updated]) => ({
+      label,
+      last_updated
+    }));
+    
+    setLastUpdated(result);
   }
 
   async function loadLeaderboards() {
@@ -615,7 +662,14 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
       <div>
         <div className="flex items-baseline gap-3 mb-2">
           <h3 className="font-semibold">Unified Leaderboard</h3>
-          <span className="text-sm text-gray-600">Leaderboards update automatically from the scheduled job.</span>
+          <div className="flex items-center gap-3 text-sm text-gray-600">
+            <span>Leaderboards update automatically from the scheduled job.</span>
+            <span>
+              Last updated: {lastUpdated.find(r => r.label === windowLabel)?.last_updated 
+                ? new Date(lastUpdated.find(r => r.label === windowLabel)!.last_updated).toLocaleString()
+                : '—'}
+            </span>
+          </div>
         </div>
         {unifiedLeaderboard.length === 0 ? (
           <div className="text-center text-gray-500 py-8">No scores yet.</div>

@@ -22,6 +22,7 @@ export default function Leaderboard() {
   const [windowLabel, setWindowLabel] = useState('');
   const [unifiedRows, setUnifiedRows] = useState<UnifiedRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Array<{ label: string; last_updated: string }>>([]);
 
   // Load windows on mount
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function Leaderboard() {
   useEffect(() => {
     if (windowLabel) {
       loadLeaderboards();
+      loadLastUpdated();
     }
   }, [windowLabel]);
 
@@ -55,6 +57,49 @@ export default function Leaderboard() {
     } else if (data && data.length > 0) {
       setWindowLabel(data[0].label);
     }
+  }
+
+  async function loadLastUpdated() {
+    const { data, error } = await supabase
+      .from('daily_scores')
+      .select('window_id, updated_at')
+      .order('updated_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error loading last updated:', error);
+      return;
+    }
+
+    const windowIds = [...new Set(data?.map(d => d.window_id) || [])];
+    const windowMap = new Map();
+    
+    for (const wid of windowIds) {
+      const { data: winData } = await supabase
+        .from('trip_windows')
+        .select('label')
+        .eq('id', wid)
+        .maybeSingle();
+      if (winData?.label) {
+        windowMap.set(wid, winData.label);
+      }
+    }
+
+    const grouped = new Map<string, string>();
+    for (const row of data || []) {
+      const label = windowMap.get(row.window_id);
+      if (label) {
+        if (!grouped.has(label) || row.updated_at > grouped.get(label)!) {
+          grouped.set(label, row.updated_at);
+        }
+      }
+    }
+
+    const result = Array.from(grouped.entries()).map(([label, last_updated]) => ({
+      label,
+      last_updated
+    }));
+    
+    setLastUpdated(result);
   }
 
   async function loadLeaderboards() {
@@ -110,7 +155,14 @@ export default function Leaderboard() {
 
       {/* Unified Leaderboard */}
       <div>
-        <h3 className="font-semibold mb-3">Leaderboard</h3>
+        <div className="flex items-baseline gap-3 mb-3">
+          <h3 className="font-semibold">Leaderboard</h3>
+          <span className="text-sm text-gray-600">
+            Last updated: {lastUpdated.find(r => r.label === windowLabel)?.last_updated 
+              ? new Date(lastUpdated.find(r => r.label === windowLabel)!.last_updated).toLocaleString()
+              : '—'}
+          </span>
+        </div>
         {loading ? (
           <div className="text-center text-gray-500 py-8">Loading...</div>
         ) : unifiedRows.length === 0 ? (
