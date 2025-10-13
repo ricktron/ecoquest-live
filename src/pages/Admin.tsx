@@ -100,6 +100,10 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [auditDays, setAuditDays] = useState(30);
   const [auditLimit, setAuditLimit] = useState(200);
   const [verifyLogins, setVerifyLogins] = useState<string[]>([]);
+  const [diagDays, setDiagDays] = useState(30);
+  const [diagLimit, setDiagLimit] = useState(200);
+  const [diagPayload, setDiagPayload] = useState<any>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -662,6 +666,86 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }
   }
 
+  async function generateDiagnostics() {
+    if (!adminPin) {
+      toast({ title: 'Error', description: 'Admin PIN required', variant: 'destructive' });
+      return;
+    }
+
+    setDiagLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_diag_v1', {
+        p_window_label: windowLabel,
+        p_limit_days: diagDays,
+        p_limit_rows: diagLimit
+      });
+
+      if (error) throw error;
+
+      const payload = data?.[0]?.payload || data?.payload || data;
+      setDiagPayload(payload);
+      toast({ title: 'Diagnostics generated.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setDiagLoading(false);
+    }
+  }
+
+  function copyDiagnosticsJSON() {
+    if (!diagPayload) {
+      toast({ title: 'Error', description: 'No diagnostics data available', variant: 'destructive' });
+      return;
+    }
+    
+    navigator.clipboard.writeText(JSON.stringify(diagPayload, null, 2));
+    toast({ title: 'Diagnostics JSON copied.' });
+  }
+
+  function copyDiagnosticsMarkdown() {
+    if (!diagPayload) {
+      toast({ title: 'Error', description: 'No diagnostics data available', variant: 'destructive' });
+      return;
+    }
+
+    let markdown = `# EcoQuest Diagnostics\n`;
+    markdown += `- Window: ${diagPayload.window?.label || 'N/A'}\n`;
+    markdown += `- Latest snapshot: ${diagPayload.latest_scored_on || 'N/A'}\n`;
+    markdown += `- Generated: ${diagPayload.generated_at || 'N/A'}\n\n`;
+
+    markdown += `## Roster summary\n`;
+    markdown += `| total | students | adults | exhibition |\n`;
+    markdown += `| ---: | ---: | ---: | ---: |\n`;
+    const rs = diagPayload.roster_summary || {};
+    markdown += `| ${rs.total || 0} | ${rs.students || 0} | ${rs.adults || 0} | ${rs.exhibition || 0} |\n\n`;
+
+    markdown += `## Leaderboard (latest)\n`;
+    markdown += `| Name | Obs | Exhibition |\n`;
+    markdown += `| --- | ---:| :--: |\n`;
+    (diagPayload.leaderboard || []).forEach((row: any) => {
+      markdown += `| ${row.display_label || ''} | ${row.obs_count || 0} | ${row.exhibition ? '✓' : ''} |\n`;
+    });
+    markdown += `\n`;
+
+    markdown += `## Recent audit (${diagDays} days, up to ${diagLimit})\n`;
+    markdown += `| Time | Snapshot | Name | Kind | Δ | New |\n`;
+    markdown += `| --- | --- | --- | --- | ---: | ---: |\n`;
+    (diagPayload.audit || []).forEach((row: any) => {
+      markdown += `| ${row.changed_at || ''} | ${row.scored_on || ''} | ${row.display_label || ''} | ${row.kind || ''} | ${row.delta || 0} | ${row.new || 0} |\n`;
+    });
+    markdown += `\n`;
+
+    markdown += `## Roster sample (up to 500)\n`;
+    markdown += `| Name | iNat | Adult | Exhibition |\n`;
+    markdown += `| --- | --- | :--: | :--: |\n`;
+    (diagPayload.roster_sample || []).forEach((row: any) => {
+      markdown += `| ${row.display_name || ''} | ${row.inat_login || ''} | ${row.is_adult ? '✓' : ''} | ${row.exhibition ? '✓' : ''} |\n`;
+    });
+
+    navigator.clipboard.writeText(markdown);
+    toast({ title: 'Diagnostics Markdown copied.' });
+  }
+
   function seedMockINat() {
     // Mock observations with turtles and zone-specific observations
     const mockObservations = [
@@ -997,6 +1081,70 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Diagnostics section */}
+      {adminPin && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Diagnostics</CardTitle>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Days:</label>
+                <input
+                  type="number"
+                  value={diagDays}
+                  onChange={(e) => setDiagDays(Number(e.target.value))}
+                  className="w-20 px-2 py-1 border rounded text-sm"
+                  min="1"
+                />
+                <label className="text-sm font-medium ml-2">Limit:</label>
+                <input
+                  type="number"
+                  value={diagLimit}
+                  onChange={(e) => setDiagLimit(Number(e.target.value))}
+                  className="w-20 px-2 py-1 border rounded text-sm"
+                  min="1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={generateDiagnostics}
+                  disabled={diagLoading}
+                >
+                  {diagLoading ? 'Generating...' : 'Generate diagnostics'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyDiagnosticsJSON}
+                  disabled={!diagPayload}
+                >
+                  Copy JSON
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyDiagnosticsMarkdown}
+                  disabled={!diagPayload}
+                >
+                  Copy Markdown
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!diagPayload ? (
+              <div className="text-center text-muted-foreground py-8">No diagnostics yet. Click Generate diagnostics to load.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <pre className="bg-muted p-4 rounded text-xs overflow-auto max-h-96">
+                  <code>{JSON.stringify(diagPayload, null, 2)}</code>
+                </pre>
               </div>
             )}
           </CardContent>
