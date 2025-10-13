@@ -545,13 +545,6 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
           {fetching ? 'Fetching...' : 'Fetch from iNaturalist'}
         </button>
 
-        <button 
-          onClick={saveSnapshot}
-          disabled={saving || !inatPayload}
-          className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Snapshot'}
-        </button>
 
         <button 
           onClick={syncRoster}
@@ -620,7 +613,10 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
 
       {/* Leaderboard section */}
       <div>
-        <h3 className="font-semibold mb-2">Unified Leaderboard</h3>
+        <div className="flex items-baseline gap-3 mb-2">
+          <h3 className="font-semibold">Unified Leaderboard</h3>
+          <span className="text-sm text-gray-600">Leaderboards update automatically from the scheduled job.</span>
+        </div>
         {unifiedLeaderboard.length === 0 ? (
           <div className="text-center text-gray-500 py-8">No scores yet.</div>
         ) : (
