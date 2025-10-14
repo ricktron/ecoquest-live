@@ -104,7 +104,8 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [diagLimit, setDiagLimit] = useState(200);
   const [diagPayload, setDiagPayload] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
-  const [diagVerifyLoginsText, setDiagVerifyLoginsText] = useState('fpelzel,sofiamia41');
+  const [diagVerifyLoginsText, setDiagVerifyLoginsText] = useState('');
+  const [showVerify, setShowVerify] = useState(false);
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -684,7 +685,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
         p_window_label: windowLabel,
         p_limit_days: diagDays,
         p_limit_rows: diagLimit,
-        p_verify_logins: diagVerifyLoginsArray
+        p_verify_logins: diagVerifyLoginsArray.length > 0 ? diagVerifyLoginsArray : []
       });
 
       if (error) throw error;
@@ -693,7 +694,11 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
       setDiagPayload(payload);
       toast({ title: 'Diagnostics generated.' });
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+      toast({ 
+        title: 'Diagnostics failed', 
+        description: e.message, 
+        variant: 'destructive' 
+      });
     } finally {
       setDiagLoading(false);
     }
@@ -1190,21 +1195,33 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">Verify logins:</label>
-              <input
-                type="text"
-                value={diagVerifyLoginsText}
-                onChange={(e) => setDiagVerifyLoginsText(e.target.value)}
-                className="flex-1 px-2 py-1 border rounded text-sm"
-                placeholder="comma-separated logins (e.g., fpelzel, sofiamia41)"
-              />
-              <span 
-                className="text-muted-foreground cursor-help text-xs"
-                title="Checks whether these iNat usernames exist in the roster and appear on the latest leaderboard for the selected window."
+            {/* Collapsible Verify Logins section */}
+            <div className="border rounded p-3 bg-muted/20">
+              <button
+                onClick={() => setShowVerify(!showVerify)}
+                className="flex items-center gap-2 text-sm font-medium hover:underline"
               >
-                ℹ️
-              </span>
+                <span>{showVerify ? '▼' : '▶'}</span>
+                Show verify
+              </button>
+              {showVerify && (
+                <div className="flex items-center gap-2 mt-3">
+                  <label className="text-sm font-medium whitespace-nowrap">Verify logins:</label>
+                  <input
+                    type="text"
+                    value={diagVerifyLoginsText}
+                    onChange={(e) => setDiagVerifyLoginsText(e.target.value)}
+                    className="flex-1 px-2 py-1 border rounded text-sm"
+                    placeholder="comma-separated logins (e.g., fpelzel, sofiamia41)"
+                  />
+                  <span 
+                    className="text-muted-foreground cursor-help text-xs"
+                    title="Checks whether these iNat usernames exist in the roster and appear on the latest leaderboard for the selected window."
+                  >
+                    ℹ️
+                  </span>
+                </div>
+              )}
             </div>
 
             {!diagPayload ? (
