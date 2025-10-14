@@ -3,8 +3,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Fish, MapPin } from 'lucide-react';
+import { Fish, MapPin, Trophy } from 'lucide-react';
 import { ZONES_DEFAULT, ZoneDef } from '@/lib/zones';
+import { format, parseISO } from 'date-fns';
 
 type TrophiesProps = {
   trophies: TrophyResults | null;
@@ -19,14 +20,50 @@ type RosterFlag = {
   exhibition: boolean;
 };
 
+type TrophyPlace = {
+  slug: string;
+  label: string;
+  lat: number;
+  lng: number;
+  radius_m: number;
+  is_active: boolean;
+  sort_order: number;
+};
+
+// Fallback places matching Supabase seed
+const PLACES_FALLBACK: TrophyPlace[] = [
+  { slug: 'library', label: 'Library', lat: 40.7589, lng: -73.9851, radius_m: 100, is_active: true, sort_order: 1 },
+  { slug: 'park', label: 'Central Park', lat: 40.7829, lng: -73.9654, radius_m: 500, is_active: true, sort_order: 2 },
+];
+
+// Haversine distance in meters
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
 export default function Trophies({ trophies, roster, inatResults, inatParams, zoneDefs }: TrophiesProps) {
   const [windowLabel, setWindowLabel] = useState('');
   const [snapshotDate, setSnapshotDate] = useState('');
   const [windows, setWindows] = useState<any[]>([]);
   const [rosterFlags, setRosterFlags] = useState<RosterFlag[]>([]);
-  // Load windows on mount
+  const [places, setPlaces] = useState<TrophyPlace[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [lastUpdate] = useState(new Date());
+  // Load windows and places on mount
   useEffect(() => {
     loadWindows();
+    loadPlaces();
   }, []);
 
   // Load roster flags when window or snapshot date changes
@@ -78,6 +115,20 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
       .eq('scored_on', snapshotDate);
 
     setRosterFlags(data || []);
+  }
+
+  async function loadPlaces() {
+    const { data, error } = await supabase
+      .from('trophy_places')
+      .select('slug, label, lat, lng, radius_m, is_active, sort_order')
+      .eq('is_active', true)
+      .order('sort_order');
+
+    if (error || !data || data.length === 0) {
+      setPlaces(PLACES_FALLBACK);
+    } else {
+      setPlaces(data);
+    }
   }
 
   // Transform roster flags into lookup object
@@ -160,6 +211,60 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
     return { zones: byZone };
   }, [inatResults, flagsByLogin, zoneDefs]);
 
+  // Trophy: Quest (Location radius)
+  const trophyQuest = useMemo(() => {
+    const obs = inatResults || [];
+
+    const byPlace = places.map(place => {
+      const counts: Record<string, { count: number; times: string[] }> = {};
+
+      for (const o of obs) {
+        const lat = o?.geojson?.coordinates ? o.geojson.coordinates[1] : o?.latitude;
+        const lng = o?.geojson?.coordinates ? o.geojson.coordinates[0] : o?.longitude;
+        if (lat == null || lng == null) continue;
+
+        const dist = haversineMeters(lat, lng, place.lat, place.lng);
+        if (dist > place.radius_m) continue;
+
+        const u = (o?.user?.login || '').toLowerCase();
+        if (!u) continue;
+
+        if (!counts[u]) counts[u] = { count: 0, times: [] };
+        counts[u].count += 1;
+
+        // Extract time
+        const timeStr = o?.created_at || o?.observed_on || o?.created_at_details?.date || '';
+        if (timeStr) counts[u].times.push(timeStr);
+      }
+
+      const entries = Object.entries(counts).map(([u, data]) => {
+        const exhibition = !!flagsByLogin[u];
+        const latestTime = data.times.length > 0 
+          ? data.times.sort().reverse()[0]
+          : null;
+        return {
+          login: u,
+          count: data.count,
+          exhibition,
+          winner_time: latestTime
+        };
+      }).sort((a, b) => b.count - a.count || a.login.localeCompare(b.login));
+
+      const overall = entries[0] || null;
+      const student = entries.find(e => !e.exhibition) || null;
+
+      return {
+        slug: place.slug,
+        label: place.label,
+        overall,
+        student,
+        entries
+      };
+    });
+
+    return { places: byPlace };
+  }, [inatResults, flagsByLogin, places]);
+
   // Helper to get display name from roster
   const getDisplayName = (login: string) => {
     const user = roster.find(r => r.inat_login.toLowerCase() === login.toLowerCase());
@@ -182,11 +287,12 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
       {/* Header */}
       <div>
         <h2 className="text-lg font-semibold">Trophies</h2>
-        {inatParams && (
-          <p className="text-xs text-gray-500 mt-1">
-            (computed from last Admin fetch: {inatParams.d1} → {inatParams.d2})
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground mt-1">
+          Computed from iNaturalist observations loaded on this page.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Last update: {format(lastUpdate, 'MMM d, yyyy h:mm a')}
+        </p>
       </div>
 
       {/* Controls */}
@@ -213,7 +319,38 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
             className="border rounded px-3 py-1.5 text-sm"
           />
         </div>
+
+        <button
+          onClick={() => setShowDebug(!showDebug)}
+          className="text-xs text-muted-foreground hover:text-foreground underline ml-auto"
+        >
+          {showDebug ? 'Hide' : 'Show'} debug counts
+        </button>
       </div>
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <Card className="bg-muted">
+          <CardHeader>
+            <CardTitle className="text-sm">Debug Counts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs overflow-auto max-h-96">
+              {JSON.stringify({
+                turtles: trophyTurtles.entries,
+                zones: trophyZones.zones.map(z => ({ 
+                  zone: z.label, 
+                  entries: z.entries 
+                })),
+                quest: trophyQuest.places.map(p => ({ 
+                  place: p.label, 
+                  entries: p.entries 
+                }))
+              }, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Species Trophies */}
       <div>
@@ -257,6 +394,84 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
                 <span className="font-mono text-sm">{trophyTurtles.overall?.count || 0}</span>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quest Trophies */}
+      <div>
+        <h3 className="text-base font-semibold mb-3">Quest Trophies</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {trophyQuest.places.map((place) => {
+            const hasWinner = place.overall || place.student;
+            return (
+              <Card key={place.slug} className={!hasWinner ? 'opacity-60' : ''}>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    {/* Trophy Circle */}
+                    <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
+                      hasWinner 
+                        ? 'bg-gradient-to-br from-teal-200 to-emerald-300' 
+                        : 'bg-gradient-to-br from-slate-200 to-slate-300 grayscale'
+                    }`}>
+                      <Trophy className={`h-10 w-10 ${hasWinner ? 'text-teal-800' : 'text-slate-500'}`} />
+                    </div>
+
+                    {/* Place Label */}
+                    <h4 className={`font-semibold ${hasWinner ? '' : 'text-slate-400'}`}>
+                      {place.label}
+                    </h4>
+
+                    {/* Winners */}
+                    <div className="w-full space-y-2 text-sm">
+                      <div className={hasWinner ? '' : 'text-slate-400'}>
+                        <div className="font-medium text-xs text-muted-foreground mb-1">Student Winner</div>
+                        {place.student ? (
+                          <>
+                            <div className="font-medium">{getDisplayName(place.student.login)}</div>
+                            <div className="text-xs">({place.student.count})</div>
+                            {place.student.winner_time && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Won: {format(parseISO(place.student.winner_time), 'MMM d, h:mma')}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div>—</div>
+                        )}
+                      </div>
+
+                      <div className={hasWinner ? '' : 'text-slate-400'}>
+                        <div className="font-medium text-xs text-muted-foreground mb-1">Overall Winner</div>
+                        {place.overall ? (
+                          <>
+                            <div className="font-medium">{getDisplayName(place.overall.login)}</div>
+                            <div className="text-xs">({place.overall.count})</div>
+                            {place.overall.winner_time && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Won: {format(parseISO(place.overall.winner_time), 'MMM d, h:mma')}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div>—</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Plant Trophies (placeholder) */}
+      <div>
+        <h3 className="text-base font-semibold mb-3">Plant Trophies</h3>
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Coming soon
           </CardContent>
         </Card>
       </div>
