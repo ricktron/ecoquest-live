@@ -681,7 +681,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
         .map(s => s.trim())
         .filter(Boolean);
 
-      const { data, error } = await supabase.rpc('admin_diag_v2', {
+      const { data, error } = await supabase.rpc('get_admin_diag_v3', {
         p_window_label: windowLabel,
         p_limit_days: diagDays,
         p_limit_rows: diagLimit,
@@ -722,7 +722,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
 
     let markdown = `# EcoQuest Diagnostics\n`;
     markdown += `- Window: ${diagPayload.window?.label || 'N/A'}\n`;
-    markdown += `- Latest snapshot: ${diagPayload.latest_scored_on || 'N/A'}\n`;
+    markdown += `- Latest snapshot: ${diagPayload.freshness?.latest_scored_on || 'N/A'}\n`;
     markdown += `- Generated: ${diagPayload.generated_at || 'N/A'}\n\n`;
 
     markdown += `## Roster summary\n`;
@@ -732,7 +732,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     markdown += `| ${rs.total || 0} | ${rs.students || 0} | ${rs.adults || 0} | ${rs.exhibition || 0} |\n\n`;
 
     markdown += `### Coverage\n`;
-    markdown += `${diagPayload.participants_latest || 0} / ${diagPayload.roster_total || 0}\n\n`;
+    markdown += `${diagPayload.coverage?.participants_latest || 0} / ${diagPayload.coverage?.roster_total || 0}\n\n`;
 
     markdown += `## Leaderboard (latest)\n`;
     markdown += `| Name | Obs | Exhibition |\n`;
@@ -1234,12 +1234,12 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <div>
                       <span className="text-muted-foreground">Latest scored:</span>
-                      <div className="font-medium">{diagPayload.latest_scored_on || 'N/A'}</div>
+                      <div className="font-medium">{diagPayload.freshness?.latest_scored_on || 'N/A'}</div>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Coverage:</span>
                       <div className="font-medium">
-                        {diagPayload.participants_latest || 0} / {diagPayload.roster_total || 0}
+                        {diagPayload.coverage?.participants_latest || 0} / {diagPayload.coverage?.roster_total || 0}
                       </div>
                     </div>
                     <div>
