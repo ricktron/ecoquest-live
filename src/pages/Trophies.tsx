@@ -373,40 +373,28 @@ export default function Trophies({ trophies, roster, inatResults, inatParams }: 
                     </h4>
 
                     {/* Winners */}
-                    <div className="w-full space-y-2 text-sm">
-                      <div className={hasWinner ? '' : 'text-slate-400'}>
-                        <div className="font-medium text-xs text-muted-foreground mb-1">Student Winner</div>
-                        {location.student ? (
-                          <>
-                            <div className="font-medium">{getDisplayName(location.student.login)}</div>
-                            <div className="text-xs">({location.student.count})</div>
-                            {location.student.winner_time && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Won: {format(parseISO(location.student.winner_time), 'MMM d, h:mma')}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div>No winner yet</div>
-                        )}
-                      </div>
-
-                      <div className={hasWinner ? '' : 'text-slate-400'}>
-                        <div className="font-medium text-xs text-muted-foreground mb-1">Overall Winner</div>
-                        {location.overall ? (
-                          <>
-                            <div className="font-medium">{getDisplayName(location.overall.login)}</div>
-                            <div className="text-xs">({location.overall.count})</div>
-                            {location.overall.winner_time && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Won: {format(parseISO(location.overall.winner_time), 'MMM d, h:mma')}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div>No winner yet</div>
-                        )}
-                      </div>
+                    <div className="w-full space-y-1 text-sm">
+                      {location.student ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">{getDisplayName(location.student.login)}</span>
+                            <span className="font-semibold ml-2">— {location.student.count}</span>
+                          </div>
+                          {location.student.winner_time && (
+                            <div className="text-xs text-muted-foreground">
+                              Won: {format(parseISO(location.student.winner_time), 'MMM d, h:mma')}
+                            </div>
+                          )}
+                          {location.overall && location.overall.login !== location.student.login && (
+                            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                              <span>adult winner: {getDisplayName(location.overall.login)}</span>
+                              <span className="ml-2">— {location.overall.count}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-slate-400">No winner yet</div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
