@@ -104,6 +104,7 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [diagLimit, setDiagLimit] = useState(200);
   const [diagPayload, setDiagPayload] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [diagVerifyLoginsText, setDiagVerifyLoginsText] = useState('fpelzel,sofiamia41');
 
   // Load windows, roster, and zones on mount
   useEffect(() => {
@@ -674,10 +675,16 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
 
     setDiagLoading(true);
     try {
-      const { data, error } = await supabase.rpc('admin_diag_v1', {
+      const diagVerifyLoginsArray = diagVerifyLoginsText
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const { data, error } = await supabase.rpc('admin_diag_v2', {
         p_window_label: windowLabel,
         p_limit_days: diagDays,
-        p_limit_rows: diagLimit
+        p_limit_rows: diagLimit,
+        p_verify_logins: diagVerifyLoginsArray
       });
 
       if (error) throw error;
@@ -719,12 +726,57 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     const rs = diagPayload.roster_summary || {};
     markdown += `| ${rs.total || 0} | ${rs.students || 0} | ${rs.adults || 0} | ${rs.exhibition || 0} |\n\n`;
 
+    markdown += `### Coverage\n`;
+    markdown += `${diagPayload.participants_latest || 0} / ${diagPayload.roster_total || 0}\n\n`;
+
     markdown += `## Leaderboard (latest)\n`;
     markdown += `| Name | Obs | Exhibition |\n`;
     markdown += `| --- | ---:| :--: |\n`;
     (diagPayload.leaderboard || []).forEach((row: any) => {
       markdown += `| ${row.display_label || ''} | ${row.obs_count || 0} | ${row.exhibition ? '✓' : ''} |\n`;
     });
+    markdown += `\n`;
+
+    markdown += `### Verify logins\n`;
+    markdown += `| login | in roster | on leaderboard | obs |\n`;
+    markdown += `| --- | :--: | :--: | ---: |\n`;
+    (diagPayload.verify || []).forEach((row: any) => {
+      markdown += `| ${row.login || ''} | ${row.in_roster ? '✓' : ''} | ${row.on_leaderboard ? '✓' : ''} | ${row.obs_count || 0} |\n`;
+    });
+    markdown += `\n`;
+
+    markdown += `### Anomalies\n`;
+    const anom = diagPayload.anomalies || {};
+    markdown += `- Duplicate roster logins: ${anom.duplicate_roster_logins?.length || 0}\n`;
+    markdown += `- Roster rows missing names: ${anom.roster_missing_names?.length || 0}\n`;
+    markdown += `- Active iNat identities not in roster: ${anom.active_ids_not_in_roster?.length || 0}\n`;
+    markdown += `- Roster without active iNat identity: ${anom.roster_without_active_id?.length || 0}\n`;
+    
+    // Add first 25 items from each list
+    if (anom.duplicate_roster_logins?.length > 0) {
+      markdown += `\n**Duplicate roster logins (first 25):**\n`;
+      (anom.duplicate_roster_logins.slice(0, 25) || []).forEach((item: any) => {
+        markdown += `- ${item}\n`;
+      });
+    }
+    if (anom.roster_missing_names?.length > 0) {
+      markdown += `\n**Roster rows missing names (first 25):**\n`;
+      (anom.roster_missing_names.slice(0, 25) || []).forEach((item: any) => {
+        markdown += `- ${item}\n`;
+      });
+    }
+    if (anom.active_ids_not_in_roster?.length > 0) {
+      markdown += `\n**Active iNat identities not in roster (first 25):**\n`;
+      (anom.active_ids_not_in_roster.slice(0, 25) || []).forEach((item: any) => {
+        markdown += `- ${item}\n`;
+      });
+    }
+    if (anom.roster_without_active_id?.length > 0) {
+      markdown += `\n**Roster without active iNat identity (first 25):**\n`;
+      (anom.roster_without_active_id.slice(0, 25) || []).forEach((item: any) => {
+        markdown += `- ${item}\n`;
+      });
+    }
     markdown += `\n`;
 
     markdown += `## Recent audit (${diagDays} days, up to ${diagLimit})\n`;
@@ -1137,14 +1189,111 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Verify logins:</label>
+              <input
+                type="text"
+                value={diagVerifyLoginsText}
+                onChange={(e) => setDiagVerifyLoginsText(e.target.value)}
+                className="flex-1 px-2 py-1 border rounded text-sm"
+                placeholder="comma-separated logins (e.g., fpelzel, sofiamia41)"
+              />
+              <span 
+                className="text-muted-foreground cursor-help text-xs"
+                title="Checks whether these iNat usernames exist in the roster and appear on the latest leaderboard for the selected window."
+              >
+                ℹ️
+              </span>
+            </div>
+
             {!diagPayload ? (
               <div className="text-center text-muted-foreground py-8">No diagnostics yet. Click Generate diagnostics to load.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <pre className="bg-muted p-4 rounded text-xs overflow-auto max-h-96">
-                  <code>{JSON.stringify(diagPayload, null, 2)}</code>
-                </pre>
+              <div className="space-y-4">
+                {/* Summary panel */}
+                <div className="bg-muted/50 p-4 rounded border">
+                  <h4 className="font-semibold text-sm mb-2">Summary</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Latest scored:</span>
+                      <div className="font-medium">{diagPayload.latest_scored_on || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Coverage:</span>
+                      <div className="font-medium">
+                        {diagPayload.participants_latest || 0} / {diagPayload.roster_total || 0}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Audit rows:</span>
+                      <div className="font-medium">{diagPayload.audit?.length || 0}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Anomalies:</span>
+                      <div className="font-medium">
+                        {((diagPayload.anomalies?.duplicate_roster_logins?.length || 0) +
+                          (diagPayload.anomalies?.roster_missing_names?.length || 0) +
+                          (diagPayload.anomalies?.active_ids_not_in_roster?.length || 0) +
+                          (diagPayload.anomalies?.roster_without_active_id?.length || 0))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Anomaly details */}
+                  {diagPayload.anomalies && (
+                    <div className="mt-3 pt-3 border-t space-y-1 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">• Duplicate roster logins:</span> {diagPayload.anomalies.duplicate_roster_logins?.length || 0}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">• Roster rows missing names:</span> {diagPayload.anomalies.roster_missing_names?.length || 0}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">• Active IDs not in roster:</span> {diagPayload.anomalies.active_ids_not_in_roster?.length || 0}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">• Roster without active ID:</span> {diagPayload.anomalies.roster_without_active_id?.length || 0}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Verify table */}
+                  {diagPayload.verify && diagPayload.verify.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <h5 className="text-xs font-semibold mb-2">Verify Logins</h5>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-muted">
+                              <th className="border px-2 py-1 text-left">Login</th>
+                              <th className="border px-2 py-1 text-center">In Roster</th>
+                              <th className="border px-2 py-1 text-center">On Leaderboard</th>
+                              <th className="border px-2 py-1 text-right">Obs</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {diagPayload.verify.map((row: any, i: number) => (
+                              <tr key={i}>
+                                <td className="border px-2 py-1">{row.login}</td>
+                                <td className="border px-2 py-1 text-center">{row.in_roster ? '✓' : ''}</td>
+                                <td className="border px-2 py-1 text-center">{row.on_leaderboard ? '✓' : ''}</td>
+                                <td className="border px-2 py-1 text-right">{row.obs_count || 0}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* JSON preview */}
+                <div className="overflow-x-auto">
+                  <pre className="bg-muted p-4 rounded text-xs overflow-auto max-h-96">
+                    <code>{JSON.stringify(diagPayload, null, 2)}</code>
+                  </pre>
+                </div>
               </div>
             )}
           </CardContent>
