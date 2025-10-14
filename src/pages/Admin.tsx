@@ -6,7 +6,6 @@ import { format, subYears } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ZONES_DEFAULT, ZoneDef } from '@/lib/zones';
 
 type Window = {
   id: string;
@@ -54,10 +53,9 @@ type AdminProps = {
   setRoster: (roster: RosterRow[]) => void;
   setInatResults: (results: any[]) => void;
   setInatParams: (params: { user_id: string; d1: string; d2: string; project_id: string } | null) => void;
-  setZoneDefs: (zones: ZoneDef[] | null) => void;
 };
 
-export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRoster, setInatResults, setInatParams, setZoneDefs }: AdminProps) {
+export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRoster, setInatResults, setInatParams }: AdminProps) {
   const [windows, setWindows] = useState<Window[]>([]);
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -86,8 +84,6 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
   const [includeAdultsEffective, setIncludeAdultsEffective] = useState(false);
   const [debugParams, setDebugParams] = useState<Record<string, string>>({});
   const [lastUpdated, setLastUpdated] = useState<Array<{ label: string; last_updated: string }>>([]);
-  const [zonesDialogOpen, setZonesDialogOpen] = useState(false);
-  const [zonesJson, setZonesJson] = useState('');
   const [scoreChanges, setScoreChanges] = useState<Array<{
     changed_at: string;
     scored_on: string;
@@ -624,25 +620,6 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
     }, 0);
   }
 
-  function openZonesDialog() {
-    setZonesJson(JSON.stringify(ZONES_DEFAULT, null, 2));
-    setZonesDialogOpen(true);
-  }
-
-  function saveZones() {
-    try {
-      const parsed = JSON.parse(zonesJson);
-      if (!Array.isArray(parsed)) {
-        throw new Error('Zones must be an array');
-      }
-      setZoneDefs(parsed);
-      setZonesDialogOpen(false);
-      toast({ title: 'Zones updated (not persisted)' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-  }
-
   async function loadScoreChanges() {
     if (!adminPin) {
       toast({ title: 'Error', description: 'Admin PIN required', variant: 'destructive' });
@@ -984,35 +961,6 @@ export default function Admin({ setTrophies: setAppTrophies, setRoster: setAppRo
         >
           Seed mock iNat
         </button>
-
-        <Dialog open={zonesDialogOpen} onOpenChange={setZonesDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" onClick={openZonesDialog}>
-              Edit Zones
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Edit Zone Definitions</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <textarea
-                value={zonesJson}
-                onChange={e => setZonesJson(e.target.value)}
-                className="w-full h-64 border rounded p-2 font-mono text-sm"
-                placeholder="Enter zones JSON..."
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setZonesDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={saveZones}>
-                  Save
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Preview section - xform_build_inat_payload.preview_rows */}

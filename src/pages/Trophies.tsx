@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Fish, MapPin, Trophy } from 'lucide-react';
-import { ZONES_DEFAULT, ZoneDef } from '@/lib/zones';
 import { format, parseISO } from 'date-fns';
 
 type TrophiesProps = {
@@ -12,7 +11,6 @@ type TrophiesProps = {
   roster: RosterRow[];
   inatResults: any[];
   inatParams: { user_id: string; d1: string; d2: string; project_id: string } | null;
-  zoneDefs: ZoneDef[] | null;
 };
 
 type RosterFlag = {
@@ -20,24 +18,27 @@ type RosterFlag = {
   exhibition: boolean;
 };
 
-type TrophyPlace = {
-  slug: string;
+type Location = {
+  id: string;
   label: string;
   lat: number;
   lng: number;
   radius_m: number;
-  is_active: boolean;
-  sort_order: number;
+  active_on?: string[]; // Optional: only count obs on these dates (YYYY-MM-DD)
 };
 
-// Fallback places matching Supabase seed
-const PLACES_FALLBACK: TrophyPlace[] = [
-  { slug: 'library', label: 'Library', lat: 40.7589, lng: -73.9851, radius_m: 100, is_active: true, sort_order: 1 },
-  { slug: 'park', label: 'Central Park', lat: 40.7829, lng: -73.9654, radius_m: 500, is_active: true, sort_order: 2 },
+export const LOCATIONS: Location[] = [
+  { id: 'la-quinta-sarapiqui-lodge', label: 'La Quinta Sarapiquí Lodge',       lat: 10.451711204911138, lng: -84.12112003330185, radius_m: 200 },
+  { id: 'evergreen-lodge',            label: 'Evergreen Lodge (Tortuguero)',    lat: 10.543011121622126, lng: -83.51277609925263, radius_m: 200 },
+  { id: 'cano-palma-station',         label: 'Caño Palma Biological Station',   lat: 10.593844935329683, lng: -83.52763302296113, radius_m: 200 },
+  { id: 'la-selva-station',           label: 'La Selva Biological Station',     lat: 10.431557922979602, lng: -84.0035452332552,  radius_m: 600 },
+  { id: 'volcan-tortuguero-trail',    label: 'Volcán Tortuguero (trail)',       lat: 10.584099218798833, lng: -83.52811616947487, radius_m: 200 },
+  { id: 'san-francisco-town',         label: 'San Francisco (Tortuguero)',      lat: 10.57907817943576,  lng: -83.52360954298479, radius_m: 200 },
+  { id: 'sea-turtle-conservancy',     label: 'Sea Turtle Conservancy',          lat: 10.547494714304397, lng: -83.5051400440278,  radius_m: 300 },
 ];
 
 // Haversine distance in meters
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371e3; // Earth radius in meters
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
@@ -52,18 +53,17 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return R * c;
 }
 
-export default function Trophies({ trophies, roster, inatResults, inatParams, zoneDefs }: TrophiesProps) {
+export default function Trophies({ trophies, roster, inatResults, inatParams }: TrophiesProps) {
   const [windowLabel, setWindowLabel] = useState('');
   const [snapshotDate, setSnapshotDate] = useState('');
   const [windows, setWindows] = useState<any[]>([]);
   const [rosterFlags, setRosterFlags] = useState<RosterFlag[]>([]);
-  const [places, setPlaces] = useState<TrophyPlace[]>([]);
   const [showDebug, setShowDebug] = useState(false);
   const [lastUpdate] = useState(new Date());
-  // Load windows and places on mount
+  
+  // Load windows on mount
   useEffect(() => {
     loadWindows();
-    loadPlaces();
   }, []);
 
   // Load roster flags when window or snapshot date changes
@@ -117,20 +117,6 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
     setRosterFlags(data || []);
   }
 
-  async function loadPlaces() {
-    const { data, error } = await supabase
-      .from('trophy_places')
-      .select('slug, label, lat, lng, radius_m, is_active, sort_order')
-      .eq('is_active', true)
-      .order('sort_order');
-
-    if (error || !data || data.length === 0) {
-      setPlaces(PLACES_FALLBACK);
-    } else {
-      setPlaces(data);
-    }
-  }
-
   // Transform roster flags into lookup object
   const flagsByLogin = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -172,50 +158,11 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
     return { overall, student, entries };
   }, [inatResults, flagsByLogin]);
 
-  // Trophy: Zones
-  const trophyZones = useMemo(() => {
-    const obs = inatResults || [];
-    
-    // Use custom zone defs from state, or fall back to defaults
-    const ZONES = zoneDefs || ZONES_DEFAULT;
-
-    const inBox = (lat: number, lng: number, sw: number[], ne: number[]) =>
-      lat >= sw[0] && lat <= ne[0] && lng >= sw[1] && lng <= ne[1];
-
-    const byZone = ZONES.map(z => {
-      const counts: Record<string, number> = {};
-      
-      for (const o of obs) {
-        const lat = o?.geojson?.coordinates ? o.geojson.coordinates[1] : o?.latitude;
-        const lng = o?.geojson?.coordinates ? o.geojson.coordinates[0] : o?.longitude;
-        if (lat == null || lng == null) continue;
-        if (!inBox(lat, lng, z.sw, z.ne)) continue;
-
-        const u = (o?.user?.login || '').toLowerCase();
-        if (!u) continue;
-        counts[u] = (counts[u] || 0) + 1;
-      }
-
-      const entries = Object.entries(counts).map(([u, c]) => ({
-        login: u,
-        count: c,
-        exhibition: !!flagsByLogin[u]
-      })).sort((a, b) => b.count - a.count || a.login.localeCompare(b.login));
-
-      const overall = entries[0] || null;
-      const student = entries.find(e => !e.exhibition) || null;
-
-      return { key: z.key, label: z.label, overall, student, entries };
-    });
-
-    return { zones: byZone };
-  }, [inatResults, flagsByLogin, zoneDefs]);
-
-  // Trophy: Quest (Location radius)
-  const trophyQuest = useMemo(() => {
+  // Trophy: Locations (radius circles)
+  const trophyLocations = useMemo(() => {
     const obs = inatResults || [];
 
-    const byPlace = places.map(place => {
+    const byLocation = LOCATIONS.map(location => {
       const counts: Record<string, { count: number; times: string[] }> = {};
 
       for (const o of obs) {
@@ -223,8 +170,14 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
         const lng = o?.geojson?.coordinates ? o.geojson.coordinates[0] : o?.longitude;
         if (lat == null || lng == null) continue;
 
-        const dist = haversineMeters(lat, lng, place.lat, place.lng);
-        if (dist > place.radius_m) continue;
+        const dist = distanceMeters(lat, lng, location.lat, location.lng);
+        if (dist > location.radius_m) continue;
+
+        // Optional: filter by active_on dates
+        if (location.active_on && location.active_on.length > 0) {
+          const obsDate = o?.observed_on || o?.created_at?.split('T')[0] || o?.created_at_details?.date || '';
+          if (!obsDate || !location.active_on.includes(obsDate)) continue;
+        }
 
         const u = (o?.user?.login || '').toLowerCase();
         if (!u) continue;
@@ -232,21 +185,21 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
         if (!counts[u]) counts[u] = { count: 0, times: [] };
         counts[u].count += 1;
 
-        // Extract time
+        // Extract time for winner_time (earliest obs)
         const timeStr = o?.created_at || o?.observed_on || o?.created_at_details?.date || '';
         if (timeStr) counts[u].times.push(timeStr);
       }
 
       const entries = Object.entries(counts).map(([u, data]) => {
         const exhibition = !!flagsByLogin[u];
-        const latestTime = data.times.length > 0 
-          ? data.times.sort().reverse()[0]
+        const earliestTime = data.times.length > 0 
+          ? data.times.sort()[0]
           : null;
         return {
           login: u,
           count: data.count,
           exhibition,
-          winner_time: latestTime
+          winner_time: earliestTime
         };
       }).sort((a, b) => b.count - a.count || a.login.localeCompare(b.login));
 
@@ -254,16 +207,17 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
       const student = entries.find(e => !e.exhibition) || null;
 
       return {
-        slug: place.slug,
-        label: place.label,
+        id: location.id,
+        label: location.label,
         overall,
         student,
         entries
       };
     });
 
-    return { places: byPlace };
-  }, [inatResults, flagsByLogin, places]);
+    return { locations: byLocation };
+  }, [inatResults, flagsByLogin]);
+
 
   // Helper to get display name from roster
   const getDisplayName = (login: string) => {
@@ -338,13 +292,9 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
             <pre className="text-xs overflow-auto max-h-96">
               {JSON.stringify({
                 turtles: trophyTurtles.entries,
-                zones: trophyZones.zones.map(z => ({ 
-                  zone: z.label, 
-                  entries: z.entries 
-                })),
-                quest: trophyQuest.places.map(p => ({ 
-                  place: p.label, 
-                  entries: p.entries 
+                locations: trophyLocations.locations.map(l => ({ 
+                  location: l.label, 
+                  entries: l.entries 
                 }))
               }, null, 2)}
             </pre>
@@ -398,14 +348,14 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
         </Card>
       </div>
 
-      {/* Quest Trophies */}
+      {/* Location Trophies */}
       <div>
-        <h3 className="text-base font-semibold mb-3">Quest Trophies</h3>
+        <h3 className="text-base font-semibold mb-3">Location Trophies</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {trophyQuest.places.map((place) => {
-            const hasWinner = place.overall || place.student;
+          {trophyLocations.locations.map((location) => {
+            const hasWinner = location.overall || location.student;
             return (
-              <Card key={place.slug} className={!hasWinner ? 'opacity-60' : ''}>
+              <Card key={location.id} className={!hasWinner ? 'opacity-60' : ''}>
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center text-center space-y-3">
                     {/* Trophy Circle */}
@@ -414,47 +364,47 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
                         ? 'bg-gradient-to-br from-teal-200 to-emerald-300' 
                         : 'bg-gradient-to-br from-slate-200 to-slate-300 grayscale'
                     }`}>
-                      <Trophy className={`h-10 w-10 ${hasWinner ? 'text-teal-800' : 'text-slate-500'}`} />
+                      <MapPin className={`h-10 w-10 ${hasWinner ? 'text-teal-800' : 'text-slate-500'}`} />
                     </div>
 
-                    {/* Place Label */}
+                    {/* Location Label */}
                     <h4 className={`font-semibold ${hasWinner ? '' : 'text-slate-400'}`}>
-                      {place.label}
+                      {location.label}
                     </h4>
 
                     {/* Winners */}
                     <div className="w-full space-y-2 text-sm">
                       <div className={hasWinner ? '' : 'text-slate-400'}>
                         <div className="font-medium text-xs text-muted-foreground mb-1">Student Winner</div>
-                        {place.student ? (
+                        {location.student ? (
                           <>
-                            <div className="font-medium">{getDisplayName(place.student.login)}</div>
-                            <div className="text-xs">({place.student.count})</div>
-                            {place.student.winner_time && (
+                            <div className="font-medium">{getDisplayName(location.student.login)}</div>
+                            <div className="text-xs">({location.student.count})</div>
+                            {location.student.winner_time && (
                               <div className="text-xs text-muted-foreground mt-1">
-                                Won: {format(parseISO(place.student.winner_time), 'MMM d, h:mma')}
+                                Won: {format(parseISO(location.student.winner_time), 'MMM d, h:mma')}
                               </div>
                             )}
                           </>
                         ) : (
-                          <div>—</div>
+                          <div>No winner yet</div>
                         )}
                       </div>
 
                       <div className={hasWinner ? '' : 'text-slate-400'}>
                         <div className="font-medium text-xs text-muted-foreground mb-1">Overall Winner</div>
-                        {place.overall ? (
+                        {location.overall ? (
                           <>
-                            <div className="font-medium">{getDisplayName(place.overall.login)}</div>
-                            <div className="text-xs">({place.overall.count})</div>
-                            {place.overall.winner_time && (
+                            <div className="font-medium">{getDisplayName(location.overall.login)}</div>
+                            <div className="text-xs">({location.overall.count})</div>
+                            {location.overall.winner_time && (
                               <div className="text-xs text-muted-foreground mt-1">
-                                Won: {format(parseISO(place.overall.winner_time), 'MMM d, h:mma')}
+                                Won: {format(parseISO(location.overall.winner_time), 'MMM d, h:mma')}
                               </div>
                             )}
                           </>
                         ) : (
-                          <div>—</div>
+                          <div>No winner yet</div>
                         )}
                       </div>
                     </div>
@@ -466,6 +416,16 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
         </div>
       </div>
 
+      {/* Quest Trophies (placeholder) */}
+      <div>
+        <h3 className="text-base font-semibold mb-3">Quest Trophies</h3>
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Coming soon
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Plant Trophies (placeholder) */}
       <div>
         <h3 className="text-base font-semibold mb-3">Plant Trophies</h3>
@@ -474,56 +434,6 @@ export default function Trophies({ trophies, roster, inatResults, inatParams, zo
             Coming soon
           </CardContent>
         </Card>
-      </div>
-
-      {/* Zone Trophies */}
-      <div>
-        <h3 className="text-base font-semibold mb-3">Zone Trophies</h3>
-        <div className="space-y-3">
-          {trophyZones.zones.map((z, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <MapPin className="h-5 w-5" />
-                  {z.label}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between py-2 px-3 bg-gray-50">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">Student Winner</Badge>
-                      {z.student ? (
-                        <>
-                          <span className="font-medium">{z.student.login}</span>
-                        </>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </div>
-                    <span className="font-mono text-sm">{z.student?.count || 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 px-3">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">Overall Winner</Badge>
-                      {z.overall ? (
-                        <>
-                          <span className="font-medium">{z.overall.login}</span>
-                          {z.overall.exhibition && (
-                            <Badge variant="secondary" className="text-xs">✓ Exhibition</Badge>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </div>
-                    <span className="font-mono text-sm">{z.overall?.count || 0}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       </div>
 
     </div>
