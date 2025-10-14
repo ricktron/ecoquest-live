@@ -34,7 +34,7 @@ export default function App() {
       <main className="flex-1">
         {tab==="Leaderboard" && <Leaderboard/>}
         {tab==="Today" && <Today/>}
-        {tab==="Trophies" && <Trophies trophies={trophies} roster={roster} inatResults={inatResults} inatParams={inatParams} />}
+        {tab==="Trophies" && <Trophies />}
         {tab==="Admin" && <Admin setTrophies={setTrophies} setRoster={setRoster} setInatResults={setInatResults} setInatParams={setInatParams} />}
       </main>
       <nav className="sticky bottom-0 bg-white border-t">
