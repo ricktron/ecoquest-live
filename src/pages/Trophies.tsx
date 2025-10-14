@@ -178,9 +178,9 @@ export default function Trophies() {
                       {hasStudentWinner ? (
                         <>
                           {/* Primary Student Winner */}
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-semibold">{winner.student_name}</span>
-                            <span className="font-semibold">— {winner.student_count}</span>
+                          <div className="flex items-baseline justify-between gap-2 text-sm">
+                            <strong>{winner.student_name}</strong>
+                            <span className="tabular-nums">— {winner.student_count}</span>
                           </div>
                           
                           {/* Won Date */}
@@ -192,14 +192,22 @@ export default function Trophies() {
                           
                           {/* Adult Winner Footnote */}
                           {winner.adult_name && winner.adult_name !== winner.student_name && (
-                            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
-                              <span>Adult winner: {winner.adult_name}</span>
-                              <span>— {winner.adult_count}</span>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Adult winner: {winner.adult_name} — {winner.adult_count}
                             </div>
                           )}
                         </>
                       ) : (
-                        <div className="text-sm text-slate-400">No winner yet</div>
+                        <>
+                          <div className="text-sm text-slate-400">No winner yet</div>
+                          
+                          {/* Show adult footnote even if no student winner */}
+                          {winner?.adult_name && (winner?.adult_count ?? 0) > 0 && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Adult winner: {winner.adult_name} — {winner.adult_count}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
