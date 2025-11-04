@@ -1,25 +1,22 @@
-import { useEffect, useState } from 'react';
-import { FLAGS } from '../env';
-import { getZones, type ZoneRow } from '@/lib/api-bronze';
+import { useEffect } from 'react';
+import { FLAGS } from '@/env';
+import { useAppState } from '@/lib/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Award, Crown } from 'lucide-react';
 
 export default function Trophies() {
-  const [zones, setZones] = useState<ZoneRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { loading, aggregated, initialize } = useAppState();
 
   useEffect(() => {
-    if (!FLAGS.TROPHIES_ENABLED) return;
-
-    getZones()
-      .then(z => setZones(z))
-      .catch(err => console.error('[Trophies] Failed to load zones:', err))
-      .finally(() => setLoading(false));
+    initialize();
   }, []);
 
   if (!FLAGS.TROPHIES_ENABLED) {
     return (
-      <div className="p-4">
-        <div className="text-center py-12">
+      <div className="min-h-screen pb-20 md:pb-6">
+        <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-12 text-center">
           <h2 className="text-xl font-semibold mb-2">Trophies</h2>
           <p className="text-muted-foreground">
             Trophy features are currently disabled.
@@ -29,69 +26,72 @@ export default function Trophies() {
     );
   }
 
-  return (
-    <div className="p-4 space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Trophy Zones</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Read-only view of all configured trophy zones
-        </p>
-      </div>
+  const trophyBuckets = [
+    { title: 'Variety Hero', desc: 'Most unique species', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.speciesCount - a.speciesCount)[0] : null, metric: 'speciesCount' },
+    { title: 'Most Mammals', desc: 'Top mammal observer', winner: aggregated?.byTaxonGroup.mammals[0], metric: 'obsCount' },
+    { title: 'Most Reptiles', desc: 'Top reptile observer', winner: aggregated?.byTaxonGroup.reptiles[0], metric: 'obsCount' },
+    { title: 'Most Birds', desc: 'Top bird observer', winner: aggregated?.byTaxonGroup.birds[0], metric: 'obsCount' },
+    { title: 'Most Amphibians', desc: 'Top amphibian observer', winner: aggregated?.byTaxonGroup.amphibians[0], metric: 'obsCount' },
+    { title: 'Most "Needs ID"', desc: 'Helping identify unknowns', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.needsIdCount - a.needsIdCount)[0] : null, metric: 'needsIdCount' },
+    { title: 'Research Grade Leader', desc: 'Most research-grade obs', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.researchCount - a.researchCount)[0] : null, metric: 'researchCount' },
+  ];
 
-      {loading ? (
-        <div className="text-center py-12 text-muted-foreground">
-          Loading zones...
+  return (
+    <div className="min-h-screen pb-20 md:pb-6">
+      <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Crown className="h-8 w-8 text-yellow-500" />
+            Trophies
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Top performers across different categories
+          </p>
         </div>
-      ) : zones.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No trophy zones configured</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {zones.map(zone => (
-            <Card key={zone.zone_id}>
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  {zone.label || zone.slug}
-                </CardTitle>
-                <div className="text-xs text-muted-foreground uppercase">
-                  {zone.zone_type}
-                </div>
-              </CardHeader>
-              <CardContent className="text-sm space-y-1">
-                {zone.zone_type === 'circle' && (
-                  <>
-                    <div>
-                      <span className="font-medium">Center:</span>{' '}
-                      {zone.lat1?.toFixed(4)}, {zone.lon1?.toFixed(4)}
+
+        {loading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6, 7].map(i => (
+              <Skeleton key={i} className="h-40 w-full" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {trophyBuckets.map(trophy => (
+              <Card key={trophy.title}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Award className="h-5 w-5 text-yellow-500" />
+                    {trophy.title}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">{trophy.desc}</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {trophy.winner ? (
+                    <>
+                      <div className="text-center py-2">
+                        <div className="text-2xl font-bold text-primary">
+                          {trophy.winner.login}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {(trophy.winner as any)[trophy.metric]} {trophy.metric === 'speciesCount' ? 'species' : trophy.metric === 'needsIdCount' ? 'needs ID' : trophy.metric === 'researchCount' ? 'research' : 'obs'}
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="w-full">
+                        View Details
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      No data yet
                     </div>
-                    <div>
-                      <span className="font-medium">Radius:</span>{' '}
-                      {zone.radius_km} km
-                    </div>
-                  </>
-                )}
-                {zone.zone_type === 'corridor' && (
-                  <>
-                    <div>
-                      <span className="font-medium">Start:</span>{' '}
-                      {zone.lat1?.toFixed(4)}, {zone.lon1?.toFixed(4)}
-                    </div>
-                    <div>
-                      <span className="font-medium">End:</span>{' '}
-                      {zone.lat2?.toFixed(4)}, {zone.lon2?.toFixed(4)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Width:</span>{' '}
-                      {zone.width_km} km
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

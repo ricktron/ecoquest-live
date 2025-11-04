@@ -1,52 +1,35 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
-import Bronze from "@/bronze/Bronze";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Leaderboard from "@/pages/Leaderboard";
+import Trophies from "@/pages/Trophies";
+import Daily from "@/pages/Daily";
+import Map from "@/pages/Map";
 import Debug from "@/pages/Debug";
+import TabNav from "@/components/TabNav";
 import { Toaster } from "@/components/ui/toaster";
-import { FLAGS } from "@/env";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-dvh bg-neutral-50 flex flex-col">
-        <header className="p-3 bg-white shadow-sm border-b">
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="p-4 bg-background border-b sticky top-0 z-50 md:static">
           <h1 className="text-xl font-bold">EcoQuest Live</h1>
-          <div className="text-xs text-neutral-500">Costa Rica BioBlitz</div>
+          <div className="text-xs text-muted-foreground">Costa Rica BioBlitz</div>
         </header>
         
-        <nav className="bg-white border-b">
-          <div className="flex">
-            <NavLink
-              to="/bronze"
-              className={({ isActive }) =>
-                `px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  isActive
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-neutral-600 hover:text-neutral-900"
-                }`
-              }
-            >
-              Bronze
-            </NavLink>
-            <NavLink
-              to="/debug"
-              className={({ isActive }) =>
-                `px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  isActive
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-neutral-600 hover:text-neutral-900"
-                }`
-              }
-            >
-              Debug
-            </NavLink>
-          </div>
-        </nav>
+        {/* Desktop top nav */}
+        <TabNav />
 
-        <main className="flex-1 overflow-hidden">
+        {/* Main content */}
+        <main>
           <Routes>
-            <Route path="/" element={<Navigate to="/bronze" replace />} />
-            <Route path="/bronze" element={<Bronze />} />
+            <Route path="/" element={<Navigate to="/leaderboard" replace />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/trophies" element={<Trophies />} />
+            <Route path="/daily" element={<Daily />} />
+            <Route path="/map" element={<Map />} />
             <Route path="/debug" element={<Debug />} />
+            <Route path="*" element={<Navigate to="/leaderboard" replace />} />
           </Routes>
         </main>
         
