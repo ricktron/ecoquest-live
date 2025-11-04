@@ -58,6 +58,36 @@ export function formatPoints(n: number) {
   return fmtPts.format(n);
 }
 
+export type UserRowWithRank = UserScore & { rank: number };
+
+export type TrendData = {
+  rank: number;  // positive = moved up, negative = moved down
+  pts: number;   // points difference
+};
+
+export type UserRowWithTrend = UserRowWithRank & { trend: TrendData };
+
+export function computeTrends(
+  current: UserRowWithRank[],
+  prior: UserRowWithRank[]
+): UserRowWithTrend[] {
+  const pIdx = new Map(prior.map(r => [r.login, r]));
+  
+  return current.map(r => {
+    const prev = pIdx.get(r.login);
+    if (!prev) {
+      return { ...r, trend: { rank: 0, pts: 0 } };
+    }
+    return {
+      ...r,
+      trend: {
+        rank: prev.rank - r.rank,  // positive means moved up
+        pts: +(r.points - prev.points).toFixed(2),
+      },
+    };
+  });
+}
+
 const firstNWeights = [1.00, 0.75, 0.55, 0.40, 0.30, 0.20];
 
 function firstNFactor(obs: ObservationData, ctx: ScoringContext): number {

@@ -1,44 +1,34 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
 import DateRange from '@/components/DateRange';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import { Map as MapIcon, ExternalLink } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import L from 'leaflet';
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-import dayjs from 'dayjs';
+import { ExternalLink } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
 
-// Fix default marker icon
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
-const TORTUGUERO_CENTER: [number, number] = [10.5533, -83.5170];
-const DEFAULT_ZOOM = 11;
+// Helper component to invalidate map size when container changes
+function MapInvalidator() {
+  const map = useMap();
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [map]);
+  
+  return null;
+}
 
 export default function Map() {
   const navigate = useNavigate();
-  const { observations, initialize } = useAppState();
+  const { loading, observations, initialize } = useAppState();
 
   useEffect(() => {
     initialize();
   }, []);
-
-  const getQgColor = (qg: string): string => {
-    switch (qg) {
-      case 'research': return '#22c55e';
-      case 'needs_id': return '#eab308';
-      case 'casual': return '#6b7280';
-      default: return '#6b7280';
-    }
-  };
 
   return (
     <div className="pb-6">
@@ -47,73 +37,70 @@ export default function Map() {
         
         <DateRange />
 
-        <div className="h-[60vh] md:h-[70vh] rounded-lg overflow-hidden border">
-          <MapContainer
-            center={TORTUGUERO_CENTER}
-            zoom={DEFAULT_ZOOM}
-            className="w-full h-full"
-            scrollWheelZoom={true}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {observations.map(obs => (
-              <CircleMarker
-                key={obs.id}
-                center={[obs.lat, obs.lng]}
-                radius={6}
-                fillColor="#3b82f6"
-                fillOpacity={0.6}
-                stroke={true}
-                color="#1d4ed8"
-                weight={1}
-              >
-                <Popup>
-                  <div className="space-y-2 min-w-[200px]">
-                    <div>
-                      <div className="font-semibold">{obs.taxonName || 'Unknown'}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {obs.userLogin} • {obs.timeObservedAt ? new Date(obs.timeObservedAt).toLocaleString() : obs.observedOn}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => navigate(`/obs/${obs.id}`)}
-                      >
-                        View Details
-                      </Button>
-                      {obs.uri && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          asChild
-                        >
-                          <a
-                            href={obs.uri}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1"
+        {loading ? (
+          <Skeleton className="h-[600px] w-full" />
+        ) : observations.length === 0 ? (
+          <div className="h-[600px] flex items-center justify-center bg-muted/30 rounded-lg">
+            <p className="text-muted-foreground">No observations to display</p>
+          </div>
+        ) : (
+          <div className="map-wrap rounded-lg overflow-hidden border">
+            <MapContainer
+              center={[
+                observations[0]?.lat || 10,
+                observations[0]?.lng || -84
+              ]}
+              zoom={10}
+              style={{ height: '100%', width: '100%' }}
+            >
+              <MapInvalidator />
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {observations
+                .filter(obs => obs.lat && obs.lng)
+                .map(obs => (
+                  <CircleMarker
+                    key={obs.id}
+                    center={[obs.lat!, obs.lng!]}
+                    radius={6}
+                    fillColor="#22c55e"
+                    color="#fff"
+                    weight={2}
+                    fillOpacity={0.7}
+                  >
+                    <Popup>
+                      <div className="text-sm space-y-1">
+                        <div className="font-semibold">{obs.taxonName || 'Unknown'}</div>
+                        <div className="text-muted-foreground">by {obs.userLogin}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {obs.timeObservedAt || obs.observedOn}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(`https://www.inaturalist.org/observations/${obs.id}`, '_blank')}
                           >
-                            iNat <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
-          </MapContainer>
-        </div>
-
-        <div className="text-sm text-muted-foreground">
-          Showing {observations.length} observations
-        </div>
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            iNat
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/obs/${obs.id}`)}
+                          >
+                            Details
+                          </Button>
+                        </div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+            </MapContainer>
+          </div>
+        )}
       </div>
     </div>
   );

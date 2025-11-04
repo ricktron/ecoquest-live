@@ -4,6 +4,7 @@ import Leaderboard from './pages/Leaderboard';
 import Trophies from './pages/Trophies';
 import TrophyDetail from './pages/TrophyDetail';
 import Daily from './pages/Daily';
+import DailyDetail from './pages/DailyDetail';
 import Map from './pages/Map';
 import ObservationDetail from './pages/ObservationDetail';
 import UserPage from './pages/UserPage';
@@ -22,6 +23,7 @@ export default function App() {
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
             <Route path="/daily" element={<Daily />} />
+            <Route path="/daily/:ymd" element={<DailyDetail />} />
             <Route path="/map" element={<Map />} />
             <Route path="/obs/:id" element={<ObservationDetail />} />
             <Route path="/user/:login" element={<UserPage />} />

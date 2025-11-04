@@ -16,12 +16,14 @@ type AppState = {
   rawObservations: INatObservation[];
   observations: ObservationData[];
   aggregated: AggregatedScores | null;
+  lastInatSync: number | null;  // timestamp of last fetch
   
   // Actions
   setDateRange: (start: string, end: string) => void;
   setLogins: (logins: string[]) => void;
   refresh: () => Promise<void>;
   initialize: () => void;
+  fetchPriorPeriod: (windowDays: number) => Promise<AggregatedScores | null>;
 };
 
 export const useAppState = create<AppState>((set, get) => ({
@@ -34,6 +36,7 @@ export const useAppState = create<AppState>((set, get) => ({
   rawObservations: [],
   observations: [],
   aggregated: null,
+  lastInatSync: null,
   
   setDateRange: (start, end) => {
     set({ startDate: start, endDate: end });
@@ -81,10 +84,33 @@ export const useAppState = create<AppState>((set, get) => ({
         observations: obs,
         aggregated,
         loading: false,
+        lastInatSync: Date.now(),
       });
     } catch (error) {
       console.error('[state] Failed to refresh:', error);
       set({ loading: false });
+    }
+  },
+  
+  fetchPriorPeriod: async (windowDays: number) => {
+    const { startDate, endDate, logins } = get();
+    const daysDiff = dayjs(endDate).diff(dayjs(startDate), 'day');
+    
+    const priorEnd = dayjs(startDate).subtract(1, 'day').format('YYYY-MM-DD');
+    const priorStart = dayjs(priorEnd).subtract(daysDiff, 'day').format('YYYY-MM-DD');
+    
+    try {
+      const raw = await fetchObservations({
+        startDate: priorStart,
+        endDate: priorEnd,
+        logins: logins.length > 0 ? logins : undefined,
+      });
+      
+      const obs = raw.map(toObservation);
+      return aggregateScores(obs);
+    } catch (error) {
+      console.error('[state] Failed to fetch prior period:', error);
+      return null;
     }
   },
   
