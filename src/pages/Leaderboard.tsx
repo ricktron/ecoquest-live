@@ -16,7 +16,7 @@ export default function Leaderboard() {
     : [];
 
   return (
-    <div className="min-h-screen pb-20 md:pb-6">
+    <div className="pb-6">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         {/* Header */}
         <div className="space-y-2">

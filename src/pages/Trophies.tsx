@@ -1,21 +1,30 @@
 import { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { FLAGS } from '@/env';
 import { useAppState } from '@/lib/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Award, Crown } from 'lucide-react';
+import { Award, Crown, ArrowLeft } from 'lucide-react';
+import TrophyDetail from './TrophyDetail';
 
 export default function Trophies() {
+  const { slug } = useParams<{ slug?: string }>();
+  const navigate = useNavigate();
   const { loading, aggregated, initialize } = useAppState();
 
   useEffect(() => {
     initialize();
   }, []);
 
+  // If we have a slug, render the detail page
+  if (slug) {
+    return <TrophyDetail />;
+  }
+
   if (!FLAGS.TROPHIES_ENABLED) {
     return (
-      <div className="min-h-screen pb-20 md:pb-6">
+      <div className="pb-6">
         <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-12 text-center">
           <h2 className="text-xl font-semibold mb-2">Trophies</h2>
           <p className="text-muted-foreground">
@@ -27,17 +36,17 @@ export default function Trophies() {
   }
 
   const trophyBuckets = [
-    { title: 'Variety Hero', desc: 'Most unique species', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.speciesCount - a.speciesCount)[0] : null, metric: 'speciesCount' },
-    { title: 'Most Mammals', desc: 'Top mammal observer', winner: aggregated?.byTaxonGroup.mammals[0], metric: 'obsCount' },
-    { title: 'Most Reptiles', desc: 'Top reptile observer', winner: aggregated?.byTaxonGroup.reptiles[0], metric: 'obsCount' },
-    { title: 'Most Birds', desc: 'Top bird observer', winner: aggregated?.byTaxonGroup.birds[0], metric: 'obsCount' },
-    { title: 'Most Amphibians', desc: 'Top amphibian observer', winner: aggregated?.byTaxonGroup.amphibians[0], metric: 'obsCount' },
-    { title: 'Most "Needs ID"', desc: 'Helping identify unknowns', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.needsIdCount - a.needsIdCount)[0] : null, metric: 'needsIdCount' },
-    { title: 'Research Grade Leader', desc: 'Most research-grade obs', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.researchCount - a.researchCount)[0] : null, metric: 'researchCount' },
+    { slug: 'variety', title: 'Variety Hero', desc: 'Most unique species', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.speciesCount - a.speciesCount)[0] : null, metric: 'speciesCount' },
+    { slug: 'mammals', title: 'Most Mammals', desc: 'Top mammal observer', winner: aggregated?.byTaxonGroup.mammals[0], metric: 'obsCount' },
+    { slug: 'reptiles', title: 'Most Reptiles', desc: 'Top reptile observer', winner: aggregated?.byTaxonGroup.reptiles[0], metric: 'obsCount' },
+    { slug: 'birds', title: 'Most Birds', desc: 'Top bird observer', winner: aggregated?.byTaxonGroup.birds[0], metric: 'obsCount' },
+    { slug: 'amphibians', title: 'Most Amphibians', desc: 'Top amphibian observer', winner: aggregated?.byTaxonGroup.amphibians[0], metric: 'obsCount' },
+    { slug: 'needs-id', title: 'Most "Needs ID"', desc: 'Helping identify unknowns', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.needsIdCount - a.needsIdCount)[0] : null, metric: 'needsIdCount' },
+    { slug: 'research', title: 'Research Grade Leader', desc: 'Most research-grade obs', winner: aggregated?.byUser ? Array.from(aggregated.byUser.values()).sort((a, b) => b.researchCount - a.researchCount)[0] : null, metric: 'researchCount' },
   ];
 
   return (
-    <div className="min-h-screen pb-20 md:pb-6">
+    <div className="pb-6">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -77,7 +86,12 @@ export default function Trophies() {
                           {(trophy.winner as any)[trophy.metric]} {trophy.metric === 'speciesCount' ? 'species' : trophy.metric === 'needsIdCount' ? 'needs ID' : trophy.metric === 'researchCount' ? 'research' : 'obs'}
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" className="w-full">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => navigate(`/trophies/${trophy.slug}`)}
+                      >
                         View Details
                       </Button>
                     </>

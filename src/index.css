@@ -2,5 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root { height: 100%; }
+html, body, #root { 
+  height: 100%; 
+  margin: 0;
+  padding: 0;
+}
+
 .min-h-dvh { min-height: 100dvh; }
+
+/* App shell with safe areas */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding-top: env(safe-area-inset-top);
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom)); /* space for bottom nav on mobile */
+}
+
+@media (min-width: 768px) {
+  .app-content {
+    padding-bottom: 1.5rem; /* less padding on desktop */
+  }
+}
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding-bottom: env(safe-area-inset-bottom);
+}

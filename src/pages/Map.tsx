@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { useAppState } from '@/lib/state';
 import DateRange from '@/components/DateRange';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import dayjs from 'dayjs';
 
 // Fix default marker icon
 let DefaultIcon = L.icon({
@@ -36,7 +37,7 @@ export default function Map() {
   };
 
   return (
-    <div className="min-h-screen pb-20 md:pb-6">
+    <div className="pb-6">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-4">
         <h1 className="text-3xl font-bold">Map View</h1>
         
@@ -65,7 +66,32 @@ export default function Map() {
                   fillOpacity: 0.7,
                   weight: 1,
                 }}
-              />
+              >
+                <Popup>
+                  <div className="text-sm space-y-1">
+                    <div className="font-bold">{obs.taxonName || 'Unknown'}</div>
+                    <div className="text-muted-foreground">
+                      Observer: {obs.userLogin}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {obs.timeObservedAt 
+                        ? dayjs(obs.timeObservedAt).format('MMM D, YYYY h:mm A')
+                        : dayjs(obs.observedOn).format('MMM D, YYYY')}
+                    </div>
+                    <div className="text-xs capitalize">{obs.qualityGrade.replace('_', ' ')}</div>
+                    {(obs as any).uri && (
+                      <a 
+                        href={(obs as any).uri} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-xs"
+                      >
+                        View on iNaturalist →
+                      </a>
+                    )}
+                  </div>
+                </Popup>
+              </CircleMarker>
             ))}
           </MapContainer>
         </div>

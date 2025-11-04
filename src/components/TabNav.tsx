@@ -21,10 +21,10 @@ export default function TabNav() {
   return (
     <>
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t md:hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex justify-around">
+      <nav className="tabbar bg-background border-t md:hidden">
+        <div className="flex justify-around py-2">
           {tabs.map(tab => (
-            <NavLink key={tab.to} to={tab.to} className={getNavCls}>
+            <NavLink key={tab.to} to={tab.to} end className={getNavCls}>
               <tab.icon className="h-5 w-5" />
               <span>{tab.label}</span>
             </NavLink>
@@ -36,7 +36,7 @@ export default function TabNav() {
       <nav className="hidden md:flex bg-background border-b sticky top-0 z-40">
         <div className="flex gap-1 px-6">
           {tabs.map(tab => (
-            <NavLink key={tab.to} to={tab.to} className={getNavCls}>
+            <NavLink key={tab.to} to={tab.to} end className={getNavCls}>
               <div className="flex items-center gap-2">
                 <tab.icon className="h-4 w-4" />
                 <span>{tab.label}</span>
