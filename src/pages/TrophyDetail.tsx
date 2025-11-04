@@ -4,6 +4,7 @@ import { useAppState } from '@/lib/state';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatPoints } from '@/lib/scoring';
 
 type TrophyCategory = 'variety' | 'mammals' | 'reptiles' | 'birds' | 'amphibians' | 'needs-id' | 'research';
 
@@ -76,7 +77,11 @@ export default function TrophyDetail() {
         ) : (
           <div className="space-y-3">
             {leaderboard.map((entry, idx) => (
-              <Card key={entry.login}>
+              <Card 
+                key={entry.login}
+                className="cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => navigate(`/user/${entry.login}`)}
+              >
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-bold text-muted-foreground w-8">#{idx + 1}</span>
@@ -88,7 +93,7 @@ export default function TrophyDetail() {
                     </div>
                   </div>
                   <div className="text-lg font-bold text-primary">
-                    {entry.points} pts
+                    {formatPoints(entry.points)} pts
                   </div>
                 </CardContent>
               </Card>

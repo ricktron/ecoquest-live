@@ -1,8 +1,12 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Trophy, BarChart3, Calendar, Map as MapIcon, Bug } from 'lucide-react';
 import { FLAGS } from '@/env';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function TabNav() {
+  const location = useLocation();
+  const isMobile = useIsMobile();
+
   const tabs = [
     { to: '/leaderboard', label: 'Leaderboard', icon: BarChart3, show: true },
     { to: '/trophies', label: 'Trophies', icon: Trophy, show: FLAGS.TROPHIES_ENABLED },
@@ -11,40 +15,51 @@ export default function TabNav() {
     { to: '/debug', label: 'Debug', icon: Bug, show: FLAGS.ADMIN_ENABLED },
   ].filter(t => t.show);
 
-  const getNavCls = ({ isActive }: { isActive: boolean }) =>
-    `flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium transition-colors ${
-      isActive
-        ? 'text-primary border-b-2 md:border-b-2 border-primary'
-        : 'text-muted-foreground hover:text-foreground'
-    }`;
-
   return (
     <>
-      {/* Mobile bottom nav */}
-      <nav className="tabbar bg-background border-t md:hidden">
-        <div className="flex justify-around py-2">
-          {tabs.map(tab => (
-            <NavLink key={tab.to} to={tab.to} end className={getNavCls}>
-              <tab.icon className="h-5 w-5" />
-              <span>{tab.label}</span>
-            </NavLink>
-          ))}
+      {/* Desktop: horizontal tabs at top */}
+      <div className="hidden md:block app-header">
+        <div className="max-w-screen-lg mx-auto px-6 h-full flex items-center">
+          <nav className="flex gap-6">
+            {tabs.map(tab => (
+              <NavLink
+                key={tab.to}
+                to={tab.to}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`
+                }
+              >
+                <tab.icon className="h-5 w-5" />
+                <span className="font-medium">{tab.label}</span>
+              </NavLink>
+            ))}
+          </nav>
         </div>
-      </nav>
+      </div>
 
-      {/* Desktop top nav */}
-      <nav className="hidden md:flex bg-background border-b sticky top-0 z-40">
-        <div className="flex gap-1 px-6">
+      {/* Mobile: bottom tab bar */}
+      <div className="md:hidden tabbar">
+        <nav className="flex justify-around h-14 items-center">
           {tabs.map(tab => (
-            <NavLink key={tab.to} to={tab.to} end className={getNavCls}>
-              <div className="flex items-center gap-2">
-                <tab.icon className="h-4 w-4" />
-                <span>{tab.label}</span>
-              </div>
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center flex-1 gap-1 transition-colors ${
+                  isActive ? 'text-primary' : 'text-muted-foreground'
+                }`
+              }
+            >
+              <tab.icon className="h-6 w-6" />
+              <span className="text-xs font-medium">{tab.label}</span>
             </NavLink>
           ))}
-        </div>
-      </nav>
+        </nav>
+      </div>
     </>
   );
 }

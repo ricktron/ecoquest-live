@@ -78,7 +78,10 @@ export default function Trophies() {
                 <CardContent className="space-y-3">
                   {trophy.winner ? (
                     <>
-                      <div className="text-center py-2">
+                      <div 
+                        className="text-center py-2 cursor-pointer hover:bg-muted/50 rounded transition-colors"
+                        onClick={() => navigate(`/user/${trophy.winner.login}`)}
+                      >
                         <div className="text-2xl font-bold text-primary">
                           {trophy.winner.login}
                         </div>

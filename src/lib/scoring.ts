@@ -44,42 +44,152 @@ export type TaxonGroupScores = {
   insects: UserScore[];
 };
 
-/**
- * Scoring with diminishing returns based on time observed.
- * Later observations in a window get progressively less points.
- */
-export function scoreObservation(
-  obs: ObservationData,
-  allObsByUser: ObservationData[]
-): number {
-  let basePoints = 1;
+export type ScoringContext = {
+  byTaxon: Map<number, ObservationData[]>;
+  tripFirstByTaxon: Map<number, number>;
+  dayFirstByTaxon: Map<string, number>;
+  rarityByTaxon: Map<number, number>;
+  userDayCounts: Map<string, number>;
+  userTrailingPercentile: Map<string, number>;
+};
 
-  // Quality grade bonuses
-  if (obs.qualityGrade === 'needs_id') basePoints += 1;
-  if (obs.qualityGrade === 'research') basePoints += 2;
+const fmtPts = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+export function formatPoints(n: number) {
+  return fmtPts.format(n);
+}
 
-  // Species-level bonus
-  if (obs.taxonRank && ['species', 'subspecies', 'variety'].includes(obs.taxonRank)) {
-    basePoints += 1;
+const firstNWeights = [1.00, 0.75, 0.55, 0.40, 0.30, 0.20];
+
+function firstNFactor(obs: ObservationData, ctx: ScoringContext): number {
+  if (!obs.taxonId) return 1;
+  const arr = ctx.byTaxon.get(obs.taxonId) || [];
+  const idx = arr.findIndex(o => o.id === obs.id);
+  if (idx < 0) return 1;
+  return firstNWeights[idx] ?? 0.15;
+}
+
+function noveltyTrip(obs: ObservationData, ctx: ScoringContext): number {
+  if (!obs.taxonId) return 1;
+  return ctx.tripFirstByTaxon.get(obs.taxonId) === obs.id ? 3 :
+    (firstNFactor(obs, ctx) >= 0.75 ? 2 : 1);
+}
+
+function noveltyDay(obs: ObservationData, ctx: ScoringContext): number {
+  if (!obs.taxonId) return 0.3;
+  const day = obs.observedOn;
+  return ctx.dayFirstByTaxon.get(`${obs.taxonId}|${day}`) === obs.id ? 1.5 :
+    (firstNFactor(obs, ctx) >= 0.75 ? 0.75 : 0.3);
+}
+
+function rarity(obs: ObservationData, ctx: ScoringContext): number {
+  if (!obs.taxonId) return 0;
+  return Math.max(0, Math.min(3, ctx.rarityByTaxon.get(obs.taxonId) ?? 0));
+}
+
+function researchBonus(q: ObservationData['qualityGrade']): number {
+  return q === 'research' ? 1 : q === 'needs_id' ? 0.5 : 0;
+}
+
+function fatigue(obs: ObservationData, ctx: ScoringContext): number {
+  const day = obs.observedOn;
+  const key = `${obs.userLogin}|${day}`;
+  const n = ctx.userDayCounts.get(key) ?? 0;
+  if (n <= 20) return 1.0;
+  if (n <= 50) return 0.6;
+  return 0.3;
+}
+
+function rubberBand(obs: ObservationData, ctx: ScoringContext): number {
+  const p = ctx.userTrailingPercentile.get(obs.userLogin) ?? 1;
+  if (p < 0.30) return 1.20;
+  if (p < 0.60) return 1.10;
+  return 1.00;
+}
+
+export function scoreObservation(obs: ObservationData, ctx: ScoringContext): number {
+  const base = 1;
+  const fN = firstNFactor(obs, ctx);
+  const points =
+    (base
+      + noveltyTrip(obs, ctx)
+      + noveltyDay(obs, ctx)
+      + rarity(obs, ctx)
+      + researchBonus(obs.qualityGrade)
+    ) * fN * fatigue(obs, ctx) * rubberBand(obs, ctx);
+
+  return Number(points.toFixed(2));
+}
+
+export function buildScoringContext(observations: ObservationData[]): ScoringContext {
+  const byTaxon = new Map<number, ObservationData[]>();
+  const tripFirstByTaxon = new Map<number, number>();
+  const dayFirstByTaxon = new Map<string, number>();
+  const rarityByTaxon = new Map<number, number>();
+  const userDayCounts = new Map<string, number>();
+  
+  // Sort by observed time
+  const sorted = [...observations].sort((a, b) => {
+    const aTime = a.timeObservedAt || a.observedOn;
+    const bTime = b.timeObservedAt || b.observedOn;
+    return dayjs(aTime).isBefore(dayjs(bTime)) ? -1 : 1;
+  });
+
+  // Build byTaxon and first-observed maps
+  for (const obs of sorted) {
+    if (obs.taxonId) {
+      if (!byTaxon.has(obs.taxonId)) {
+        byTaxon.set(obs.taxonId, []);
+      }
+      byTaxon.get(obs.taxonId)!.push(obs);
+
+      if (!tripFirstByTaxon.has(obs.taxonId)) {
+        tripFirstByTaxon.set(obs.taxonId, obs.id);
+      }
+
+      const dayKey = `${obs.taxonId}|${obs.observedOn}`;
+      if (!dayFirstByTaxon.has(dayKey)) {
+        dayFirstByTaxon.set(dayKey, obs.id);
+      }
+    }
+
+    // Count per user per day for fatigue
+    const userDayKey = `${obs.userLogin}|${obs.observedOn}`;
+    userDayCounts.set(userDayKey, (userDayCounts.get(userDayKey) || 0) + 1);
   }
 
-  // Diminishing returns: sort user's observations by time_observed_at (or observed_on)
-  // and apply a decay factor based on observation order
-  const userObs = allObsByUser
-    .filter((o) => o.userLogin === obs.userLogin)
-    .sort((a, b) => {
-      const aTime = a.timeObservedAt || a.observedOn;
-      const bTime = b.timeObservedAt || b.observedOn;
-      return dayjs(aTime).isBefore(dayjs(bTime)) ? -1 : 1;
-    });
+  // Calculate rarity (inverse of observation count)
+  for (const [taxonId, obs] of byTaxon.entries()) {
+    const count = obs.length;
+    if (count === 1) rarityByTaxon.set(taxonId, 3);
+    else if (count <= 3) rarityByTaxon.set(taxonId, 2);
+    else if (count <= 10) rarityByTaxon.set(taxonId, 1);
+    else rarityByTaxon.set(taxonId, 0);
+  }
 
-  const index = userObs.findIndex((o) => o.id === obs.id);
-  if (index === -1) return basePoints; // fallback
+  // Calculate trailing percentile (users with fewer points in last 24h get boost)
+  const last24h = dayjs().subtract(24, 'hour');
+  const recentPoints = new Map<string, number>();
+  for (const obs of sorted) {
+    const obsTime = dayjs(obs.timeObservedAt || obs.observedOn);
+    if (obsTime.isAfter(last24h)) {
+      recentPoints.set(obs.userLogin, (recentPoints.get(obs.userLogin) || 0) + 1);
+    }
+  }
+  
+  const sortedUsers = Array.from(recentPoints.entries()).sort((a, b) => a[1] - b[1]);
+  const userTrailingPercentile = new Map<string, number>();
+  sortedUsers.forEach(([login], idx) => {
+    userTrailingPercentile.set(login, idx / Math.max(1, sortedUsers.length - 1));
+  });
 
-  // Apply diminishing returns: decay = 1 / (1 + index * 0.01)
-  // First obs gets full points, 10th gets ~90%, 100th gets ~50%, etc.
-  const decay = 1 / (1 + index * 0.01);
-  return Math.round(basePoints * decay * 100) / 100;
+  return {
+    byTaxon,
+    tripFirstByTaxon,
+    dayFirstByTaxon,
+    rarityByTaxon,
+    userDayCounts,
+    userTrailingPercentile,
+  };
 }
 
 export type AggregatedScores = {
@@ -89,6 +199,7 @@ export type AggregatedScores = {
 };
 
 export function aggregateScores(observations: ObservationData[]): AggregatedScores {
+  const ctx = buildScoringContext(observations);
   const byUser = new Map<string, UserScore>();
   const byDay = new Map<string, DayScore>();
   const byTaxonGroup: TaxonGroupScores = {
@@ -100,12 +211,10 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
     insects: [],
   };
 
-  // Track unique species per user
   const userSpecies = new Map<string, Set<number>>();
 
-  // Aggregate by user with diminishing returns
   for (const obs of observations) {
-    const points = scoreObservation(obs, observations);
+    const points = scoreObservation(obs, ctx);
 
     if (!byUser.has(obs.userLogin)) {
       byUser.set(obs.userLogin, {
@@ -122,19 +231,17 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
 
     const userScore = byUser.get(obs.userLogin)!;
     userScore.obsCount += 1;
-    userScore.points += points;
+    userScore.points = Number((userScore.points + points).toFixed(2));
 
     if (obs.qualityGrade === 'needs_id') userScore.needsIdCount += 1;
     if (obs.qualityGrade === 'research') userScore.researchCount += 1;
     if (obs.qualityGrade === 'casual') userScore.casualCount += 1;
 
-    // Track unique species
     if (obs.taxonId) {
       userSpecies.get(obs.userLogin)!.add(obs.taxonId);
     }
   }
 
-  // Update species counts
   for (const [login, species] of userSpecies.entries()) {
     const userScore = byUser.get(login)!;
     userScore.speciesCount = species.size;
@@ -144,7 +251,7 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
   const daySpecies = new Map<string, Set<number>>();
   for (const obs of observations) {
     const date = obs.observedOn;
-    const points = scoreObservation(obs, observations);
+    const points = scoreObservation(obs, ctx);
 
     if (!byDay.has(date)) {
       byDay.set(date, {
@@ -159,7 +266,7 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
 
     const dayScore = byDay.get(date)!;
     dayScore.obsCount += 1;
-    dayScore.points += points;
+    dayScore.points = Number((dayScore.points + points).toFixed(2));
     dayScore.participants.add(obs.userLogin);
 
     if (obs.taxonId) {
@@ -167,7 +274,6 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
     }
   }
 
-  // Update day species counts
   for (const [date, species] of daySpecies.entries()) {
     const dayScore = byDay.get(date)!;
     dayScore.speciesCount = species.size;
@@ -206,7 +312,7 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
       }
       const score = targetMap.get(obs.userLogin)!;
       score.obsCount += 1;
-      score.points += scoreObservation(obs, observations);
+      score.points = Number((score.points + scoreObservation(obs, ctx)).toFixed(2));
     }
   }
 

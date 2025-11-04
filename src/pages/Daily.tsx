@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppState } from '@/lib/state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { formatPoints } from '@/lib/scoring';
 
 export default function Daily() {
   const { loading, aggregated, initialize } = useAppState();
@@ -87,7 +88,7 @@ export default function Daily() {
                         <span className="text-muted-foreground">Participants: </span>
                         <span className="font-medium">{day.participants.size}</span>
                       </div>
-                      <div className="font-bold text-primary">{day.points} pts</div>
+                      <div className="font-bold text-primary">{formatPoints(day.points)} pts</div>
                     </div>
                   </button>
 

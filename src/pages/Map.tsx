@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
 import DateRange from '@/components/DateRange';
-import L from 'leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Map as MapIcon, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import dayjs from 'dayjs';
@@ -21,6 +24,7 @@ const TORTUGUERO_CENTER: [number, number] = [10.5533, -83.5170];
 const DEFAULT_ZOOM = 11;
 
 export default function Map() {
+  const navigate = useNavigate();
   const { observations, initialize } = useAppState();
 
   useEffect(() => {
@@ -59,36 +63,47 @@ export default function Map() {
               <CircleMarker
                 key={obs.id}
                 center={[obs.lat, obs.lng]}
-                radius={5}
-                pathOptions={{
-                  color: getQgColor(obs.qualityGrade),
-                  fillColor: getQgColor(obs.qualityGrade),
-                  fillOpacity: 0.7,
-                  weight: 1,
-                }}
+                radius={6}
+                fillColor="#3b82f6"
+                fillOpacity={0.6}
+                stroke={true}
+                color="#1d4ed8"
+                weight={1}
               >
                 <Popup>
-                  <div className="text-sm space-y-1">
-                    <div className="font-bold">{obs.taxonName || 'Unknown'}</div>
-                    <div className="text-muted-foreground">
-                      Observer: {obs.userLogin}
+                  <div className="space-y-2 min-w-[200px]">
+                    <div>
+                      <div className="font-semibold">{obs.taxonName || 'Unknown'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {obs.userLogin} • {obs.timeObservedAt ? new Date(obs.timeObservedAt).toLocaleString() : obs.observedOn}
+                      </div>
                     </div>
-                    <div className="text-muted-foreground">
-                      {obs.timeObservedAt 
-                        ? dayjs(obs.timeObservedAt).format('MMM D, YYYY h:mm A')
-                        : dayjs(obs.observedOn).format('MMM D, YYYY')}
-                    </div>
-                    <div className="text-xs capitalize">{obs.qualityGrade.replace('_', ' ')}</div>
-                    {(obs as any).uri && (
-                      <a 
-                        href={(obs as any).uri} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline text-xs"
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => navigate(`/obs/${obs.id}`)}
                       >
-                        View on iNaturalist →
-                      </a>
-                    )}
+                        View Details
+                      </Button>
+                      {obs.uri && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          asChild
+                        >
+                          <a
+                            href={obs.uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1"
+                          >
+                            iNat <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </Popup>
               </CircleMarker>

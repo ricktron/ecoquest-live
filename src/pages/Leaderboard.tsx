@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
 import DateRange from '@/components/DateRange';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy } from 'lucide-react';
+import { formatPoints } from '@/lib/scoring';
+import DeltaBadge from '@/components/DeltaBadge';
 
 export default function Leaderboard() {
+  const navigate = useNavigate();
   const { loading, aggregated, startDate, endDate, initialize } = useAppState();
 
   useEffect(() => {
@@ -60,7 +64,11 @@ export default function Leaderboard() {
                 </thead>
                 <tbody>
                   {userScores.map((score, idx) => (
-                    <tr key={score.login} className="border-b hover:bg-muted/50 transition-colors">
+                    <tr 
+                      key={score.login} 
+                      className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/user/${score.login}`)}
+                    >
                       <td className="p-3">
                         <span className="font-bold text-lg">{idx + 1}</span>
                       </td>
@@ -68,7 +76,7 @@ export default function Leaderboard() {
                       <td className="p-3 text-right">{score.obsCount}</td>
                       <td className="p-3 text-right">{score.speciesCount}</td>
                       <td className="p-3 text-right">{score.researchCount}</td>
-                      <td className="p-3 text-right font-bold text-primary">{score.points}</td>
+                      <td className="p-3 text-right font-bold text-primary">{formatPoints(score.points)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -78,13 +86,17 @@ export default function Leaderboard() {
             {/* Mobile cards */}
             <div className="md:hidden space-y-3">
               {userScores.map((score, idx) => (
-                <div key={score.login} className="p-4 bg-card border rounded-lg space-y-2">
+                <div 
+                  key={score.login} 
+                  className="p-4 bg-card border rounded-lg space-y-2 cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => navigate(`/user/${score.login}`)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl font-bold text-muted-foreground">#{idx + 1}</span>
                       <span className="font-semibold text-lg">{score.login}</span>
                     </div>
-                    <span className="text-xl font-bold text-primary">{score.points} pts</span>
+                    <span className="text-xl font-bold text-primary">{formatPoints(score.points)} pts</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
