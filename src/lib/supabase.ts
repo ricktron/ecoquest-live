@@ -9,3 +9,4 @@ export const supa = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_K
 export const supabase = supa;
 
 export const DEFAULT_AID = env.VITE_DEFAULT_ASSIGNMENT_ID;
+export const DEFAULT_ASSIGNMENT_ID = env.VITE_DEFAULT_ASSIGNMENT_ID;

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TROPHIES_ENABLED } from "@/env";
+import { FLAGS } from "@/env";
 
 type EnvVar = {
   name: string;
@@ -11,6 +11,7 @@ type EnvVar = {
 
 export default function Debug() {
   const rawTrophyFlag = import.meta.env.VITE_FEATURE_TROPHIES;
+  const rawAdminFlag = import.meta.env.VITE_ENABLE_ADMIN;
   
   const envVars: EnvVar[] = [
     {
@@ -38,6 +39,7 @@ export default function Debug() {
       name: "VITE_ENABLE_ADMIN",
       present: !!import.meta.env.VITE_ENABLE_ADMIN,
       description: "Admin features flag",
+      rawValue: rawAdminFlag,
     },
   ];
 
@@ -87,18 +89,35 @@ export default function Debug() {
         <CardHeader>
           <CardTitle>Feature Flag Parsing</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="text-sm">
-            <span className="font-medium">Raw VITE_FEATURE_TROPHIES:</span>
-            <code className="ml-2 px-2 py-1 bg-muted rounded text-xs">
-              {rawTrophyFlag === undefined ? "undefined" : `"${rawTrophyFlag}"`}
-            </code>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <div className="text-sm">
+              <span className="font-medium">Raw VITE_FEATURE_TROPHIES:</span>
+              <code className="ml-2 px-2 py-1 bg-muted rounded text-xs">
+                {rawTrophyFlag === undefined ? "undefined" : `"${rawTrophyFlag}"`}
+              </code>
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">Parsed FLAGS.TROPHIES_ENABLED:</span>
+              <Badge variant={FLAGS.TROPHIES_ENABLED ? "default" : "secondary"} className="ml-2">
+                {FLAGS.TROPHIES_ENABLED ? "true" : "false"}
+              </Badge>
+            </div>
           </div>
-          <div className="text-sm">
-            <span className="font-medium">Parsed TROPHIES_ENABLED:</span>
-            <Badge variant={TROPHIES_ENABLED ? "default" : "secondary"} className="ml-2">
-              {TROPHIES_ENABLED ? "true" : "false"}
-            </Badge>
+
+          <div className="space-y-2 pt-2 border-t">
+            <div className="text-sm">
+              <span className="font-medium">Raw VITE_ENABLE_ADMIN:</span>
+              <code className="ml-2 px-2 py-1 bg-muted rounded text-xs">
+                {rawAdminFlag === undefined ? "undefined" : `"${rawAdminFlag}"`}
+              </code>
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">Parsed FLAGS.ADMIN_ENABLED:</span>
+              <Badge variant={FLAGS.ADMIN_ENABLED ? "default" : "secondary"} className="ml-2">
+                {FLAGS.ADMIN_ENABLED ? "true" : "false"}
+              </Badge>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,0 @@
-import { TROPHIES_ENABLED, ADMIN_ENABLED } from '../env';
-
-export const FLAGS = {
-  TROPHIES: TROPHIES_ENABLED,
-  ADMIN: ADMIN_ENABLED,
-};

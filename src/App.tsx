@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-do
 import Bronze from "@/bronze/Bronze";
 import Debug from "@/pages/Debug";
 import { Toaster } from "@/components/ui/toaster";
-import { FLAGS } from "@/lib/flags";
+import { FLAGS } from "@/env";
 
 export default function App() {
   return (
