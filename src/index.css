@@ -33,12 +33,12 @@ html, body, #root {
 .app-content {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom)); /* space for bottom nav on mobile */
+  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
 }
 
 @media (min-width: 768px) {
   .app-content {
-    padding-bottom: 1.5rem; /* less padding on desktop */
+    padding-bottom: 1.5rem;
   }
 }
 
@@ -52,6 +52,14 @@ html, body, #root {
   padding-bottom: env(safe-area-inset-bottom);
   background: hsl(var(--background));
   border-top: 1px solid hsl(var(--border));
+}
+
+.page {
+  width: 100%;
+  box-sizing: border-box;
+  padding: clamp(12px, 4vw, 24px);
+  max-width: 720px;
+  margin: 0 auto;
 }
 
 @layer base {
@@ -128,6 +136,8 @@ html, body, #root {
 
 .map-wrap {
   height: calc(100dvh - var(--header-h) - var(--tabbar-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  width: 100%;
+  position: relative;
 }
 
 @media (min-width: 768px) {
@@ -136,13 +146,11 @@ html, body, #root {
   }
   
   .tabbar {
-    position: static;
-    height: auto;
-    padding-bottom: 0;
-    border-top: none;
+    position: fixed;
+    bottom: 0;
   }
   
   .map-wrap {
-    height: calc(100dvh - var(--header-h) - env(safe-area-inset-top) - 120px);
+    height: calc(100dvh - var(--header-h) - var(--tabbar-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 }

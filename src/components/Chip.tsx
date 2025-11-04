@@ -4,9 +4,10 @@ type ChipProps = {
   children: React.ReactNode;
   className?: string;
   variant?: 'default' | 'primary' | 'secondary';
+  title?: string;
 };
 
-export default function Chip({ children, className, variant = 'default' }: ChipProps) {
+export default function Chip({ children, className, variant = 'default', title }: ChipProps) {
   return (
     <span
       className={cn(
@@ -16,6 +17,7 @@ export default function Chip({ children, className, variant = 'default' }: ChipP
         variant === 'default' && 'bg-muted text-muted-foreground',
         className
       )}
+      title={title}
     >
       {children}
     </span>

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
 import DateRange from '@/components/DateRange';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trophy, TrendingUp, TrendingDown, Minus, AlertCircle } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Minus, AlertCircle, Info } from 'lucide-react';
 import { formatPoints, computeTrends, type UserRowWithTrend } from '@/lib/scoring';
 import { findCloseBattles } from '@/lib/closeBattles';
 import { UI } from '@/uiConfig';
 import Chip from '@/components/Chip';
+import Legend from '@/components/Legend';
 import { Card, CardContent } from '@/components/ui/card';
 import dayjs from 'dayjs';
 
@@ -66,10 +67,19 @@ export default function Leaderboard() {
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         {/* Header */}
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Trophy className="h-8 w-8 text-primary" />
-            Leaderboard
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Trophy className="h-8 w-8 text-primary" />
+              Leaderboard
+            </h1>
+            <Link 
+              to="/about/scoring" 
+              className="flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              <Info className="h-4 w-4" />
+              How scoring works
+            </Link>
+          </div>
           <p className="text-sm text-muted-foreground">
             Showing results from {startDate} to {endDate}
           </p>
@@ -242,9 +252,15 @@ export default function Leaderboard() {
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    <Chip variant="primary">🐾 {score.speciesCount}</Chip>
-                    <Chip variant="default">{score.obsCount} obs</Chip>
-                    <Chip variant="default">✓ {score.researchCount}</Chip>
+                    <Chip variant="primary" title={`${score.speciesCount} unique species`}>
+                      🐾 {score.speciesCount}
+                    </Chip>
+                    <Chip variant="default" title={`${score.obsCount} total observations`}>
+                      {score.obsCount} obs
+                    </Chip>
+                    <Chip variant="default" title={`${score.researchCount} research grade`}>
+                      ✓ {score.researchCount}
+                    </Chip>
                   </div>
                 </div>
               ))}
