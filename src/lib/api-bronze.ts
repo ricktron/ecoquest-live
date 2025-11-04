@@ -121,12 +121,12 @@ export async function fetchObsByBbox(params: FetchObsParams): Promise<Obs[]> {
     .lte('longitude', neLon)
     .limit(5000);
 
-  // Apply date filters
+  // Apply date filters - check both possible timestamp columns
   if (dFrom) {
-    query = query.gte('observed_at_utc', dFrom).or(`time_observed_at.gte.${dFrom}`);
+    query = query.or(`observed_at_utc.gte.${dFrom},time_observed_at.gte.${dFrom}`);
   }
   if (dTo) {
-    query = query.lte('observed_at_utc', dTo).or(`time_observed_at.lte.${dTo}`);
+    query = query.or(`observed_at_utc.lte.${dTo},time_observed_at.lte.${dTo}`);
   }
 
   // Apply quality grade filter
@@ -150,19 +150,7 @@ export async function fetchObsByBbox(params: FetchObsParams): Promise<Obs[]> {
 }
 
 function normalizeObs(data: Record<string, unknown>[]): Obs[] {
-  return data.map(obs => ({
-    ...obs,
-    inat_obs_id: obs.inat_obs_id,
-    user_login: obs.user_login,
-    latitude: obs.latitude,
-    longitude: obs.longitude,
-    quality_grade: obs.quality_grade,
-    observed_at_utc: obs.observed_at_utc,
-    time_observed_at: obs.time_observed_at,
-    taxon_name: obs.taxon_name,
-    species_guess: obs.species_guess,
-    photo_url: obs.photo_url
-  }));
+  return data as Obs[];
 }
 
 export function formatObsForPopup(obs: Obs): {

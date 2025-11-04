@@ -4,7 +4,7 @@ export const ASSIGNMENT_ID = (import.meta.env.VITE_DEFAULT_ASSIGNMENT_ID as stri
 export const REFRESH_MS = Number(import.meta.env.VITE_REFRESH_MS ?? 45000);
 
 if (!SUPA_URL || !SUPA_KEY || !ASSIGNMENT_ID) {
-  // eslint-disable-next-line no-console
+   
   console.warn("Missing env: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_DEFAULT_ASSIGNMENT_ID");
 }
 

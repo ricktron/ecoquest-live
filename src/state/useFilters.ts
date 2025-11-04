@@ -40,14 +40,14 @@ export const useFilters = create<FiltersStore>((set) => ({
   logins: [],
   version: 0,
   setBbox: (bbox) => set({ bbox }),
-  setDateRange: (dateRange) => set({ dateRange, version: (state) => state.version + 1 }),
-  setQg: (qg) => set({ qg, version: (state) => state.version + 1 }),
-  setLogins: (logins) => set({ logins, version: (state) => state.version + 1 }),
-  reset: () => set({
+  setDateRange: (dateRange) => set((state) => ({ dateRange, version: state.version + 1 })),
+  setQg: (qg) => set((state) => ({ qg, version: state.version + 1 })),
+  setLogins: (logins) => set((state) => ({ logins, version: state.version + 1 })),
+  reset: () => set((state) => ({
     dateRange: defaultDateRange(),
     qg: ['research', 'needs_id', 'casual'],
     logins: [],
-    version: (state) => state.version + 1
-  }),
+    version: state.version + 1
+  })),
   bumpVersion: () => set((state) => ({ version: state.version + 1 }))
 }));
