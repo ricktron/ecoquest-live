@@ -1,5 +1,5 @@
 export const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
-export const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+export const SUPA_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string;
 export const ASSIGNMENT_ID = (import.meta.env.VITE_DEFAULT_ASSIGNMENT_ID as string) ?? "";
 export const REFRESH_MS = Number(import.meta.env.VITE_REFRESH_MS ?? 45000);
 
@@ -10,7 +10,8 @@ if (!SUPA_URL || !SUPA_KEY || !ASSIGNMENT_ID) {
 
 type Opts = { signal?: AbortSignal };
 export async function sfetch<T=unknown>(path: string, opts: Opts = {}): Promise<T> {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
+  const url = SUPA_URL ? `${SUPA_URL}/rest/v1/${path}` : `/rest/v1/${path}`;
+  const res = await fetch(url, {
     headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
     signal: opts.signal
   });

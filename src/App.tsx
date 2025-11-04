@@ -2,12 +2,16 @@ import { useState } from "react";
 import Leaderboard from "@/pages/Leaderboard";
 import Today from "@/pages/Today";
 import Trophies from "@/pages/Trophies";
+import Bronze from "@/pages/Bronze";
 import Admin from "@/pages/Admin";
 import Ticker from "@/components/Ticker";
 import { Toaster } from "@/components/ui/toaster";
 import { TrophyResults, RosterRow } from "@/types/trophies";
+import { TROPHIES_ON } from "@/lib/flags";
 
-const TABS = ["Leaderboard","Today","Trophies","Admin"] as const;
+const TABS = TROPHIES_ON 
+  ? ["Leaderboard","Today","Trophies","Bronze","Admin"] as const
+  : ["Leaderboard","Today","Admin"] as const;
 type Tab = typeof TABS[number];
 
 export type INatParams = {
@@ -35,10 +39,11 @@ export default function App() {
         {tab==="Leaderboard" && <Leaderboard/>}
         {tab==="Today" && <Today/>}
         {tab==="Trophies" && <Trophies />}
+        {tab==="Bronze" && <Bronze />}
         {tab==="Admin" && <Admin setTrophies={setTrophies} setRoster={setRoster} setInatResults={setInatResults} setInatParams={setInatParams} />}
       </main>
       <nav className="sticky bottom-0 bg-white border-t">
-        <div className="grid grid-cols-4">
+        <div className={`grid ${TROPHIES_ON ? 'grid-cols-5' : 'grid-cols-3'}`}>
           {TABS.map(t=>(
             <button key={t} onClick={()=>setTab(t)} className={`py-3 text-xs ${tab===t?"font-semibold text-blue-600":"text-neutral-500"}`}>{t}</button>
           ))}
