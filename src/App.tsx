@@ -2,17 +2,21 @@ import { useState } from "react";
 import Leaderboard from "@/pages/Leaderboard";
 import Today from "@/pages/Today";
 import Trophies from "@/pages/Trophies";
-import Bronze from "@/pages/Bronze";
+import Bronze from "@/bronze/Bronze";
 import Admin from "@/pages/Admin";
-import Ticker from "@/components/Ticker";
 import { Toaster } from "@/components/ui/toaster";
 import { TrophyResults, RosterRow } from "@/types/trophies";
-import { TROPHIES_ON } from "@/lib/flags";
+import { TROPHIES_ON, ENABLE_ADMIN } from "@/lib/flags";
 
-const TABS = TROPHIES_ON 
-  ? ["Leaderboard","Today","Trophies","Bronze","Admin"] as const
-  : ["Leaderboard","Today","Admin"] as const;
-type Tab = typeof TABS[number];
+const TABS = [
+  { id: "Bronze", label: "Bronze", show: true },
+  { id: "Trophies", label: "Trophies", show: TROPHIES_ON },
+  { id: "Leaderboard", label: "Leaderboard", show: ENABLE_ADMIN },
+  { id: "Today", label: "Today", show: ENABLE_ADMIN },
+  { id: "Admin", label: "Admin", show: ENABLE_ADMIN },
+].filter(t => t.show);
+
+type Tab = typeof TABS[number]["id"];
 
 export type INatParams = {
   user_id: string;
@@ -22,7 +26,7 @@ export type INatParams = {
 };
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("Leaderboard");
+  const [tab, setTab] = useState<Tab>("Bronze");
   const [trophies, setTrophies] = useState<TrophyResults | null>(null);
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [inatResults, setInatResults] = useState<any[]>([]);
@@ -30,25 +34,44 @@ export default function App() {
   
   return (
     <div className="min-h-dvh bg-neutral-50 flex flex-col">
-      <Ticker />
-      <header className="p-3 bg-white shadow-sm">
+      <header className="p-3 bg-white shadow-sm border-b">
         <h1 className="text-xl font-bold">EcoQuest Live</h1>
         <div className="text-xs text-neutral-500">Costa Rica BioBlitz</div>
       </header>
-      <main className="flex-1">
-        {tab==="Leaderboard" && <Leaderboard/>}
-        {tab==="Today" && <Today/>}
-        {tab==="Trophies" && <Trophies />}
-        {tab==="Bronze" && <Bronze />}
-        {tab==="Admin" && <Admin setTrophies={setTrophies} setRoster={setRoster} setInatResults={setInatResults} setInatParams={setInatParams} />}
-      </main>
-      <nav className="sticky bottom-0 bg-white border-t">
-        <div className={`grid ${TROPHIES_ON ? 'grid-cols-5' : 'grid-cols-3'}`}>
-          {TABS.map(t=>(
-            <button key={t} onClick={()=>setTab(t)} className={`py-3 text-xs ${tab===t?"font-semibold text-blue-600":"text-neutral-500"}`}>{t}</button>
+      
+      <nav className="bg-white border-b">
+        <div className="flex">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id as Tab)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === t.id
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-neutral-600 hover:text-neutral-900"
+              }`}
+            >
+              {t.label}
+            </button>
           ))}
         </div>
       </nav>
+
+      <main className="flex-1 overflow-hidden">
+        {tab === "Bronze" && <Bronze />}
+        {tab === "Trophies" && TROPHIES_ON && <Trophies />}
+        {tab === "Leaderboard" && ENABLE_ADMIN && <Leaderboard />}
+        {tab === "Today" && ENABLE_ADMIN && <Today />}
+        {tab === "Admin" && ENABLE_ADMIN && (
+          <Admin
+            setTrophies={setTrophies}
+            setRoster={setRoster}
+            setInatResults={setInatResults}
+            setInatParams={setInatParams}
+          />
+        )}
+      </main>
+      
       <Toaster />
     </div>
   );
