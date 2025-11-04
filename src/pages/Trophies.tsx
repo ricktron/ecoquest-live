@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FLAGS } from '@/env';
+import { FLAGS } from '../env';
 import { getZones, type ZoneRow } from '@/lib/api-bronze';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 

@@ -1,147 +1,60 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { FLAGS } from "@/env";
-
-type EnvVar = {
-  name: string;
-  present: boolean;
-  description: string;
-  rawValue?: string;
-};
+import { ENV, FLAGS } from "../env";
 
 export default function Debug() {
-  const rawTrophyFlag = import.meta.env.VITE_FEATURE_TROPHIES;
-  const rawAdminFlag = import.meta.env.VITE_ENABLE_ADMIN;
-  
-  const envVars: EnvVar[] = [
-    {
-      name: "VITE_SUPABASE_URL",
-      present: !!import.meta.env.VITE_SUPABASE_URL,
-      description: "Supabase project URL",
-    },
-    {
-      name: "VITE_SUPABASE_ANON_KEY",
-      present: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-      description: "Supabase anonymous key",
-    },
-    {
-      name: "VITE_DEFAULT_ASSIGNMENT_ID",
-      present: !!import.meta.env.VITE_DEFAULT_ASSIGNMENT_ID,
-      description: "Default assignment ID",
-    },
-    {
-      name: "VITE_FEATURE_TROPHIES",
-      present: !!import.meta.env.VITE_FEATURE_TROPHIES,
-      description: "Trophies feature flag",
-      rawValue: rawTrophyFlag,
-    },
-    {
-      name: "VITE_ENABLE_ADMIN",
-      present: !!import.meta.env.VITE_ENABLE_ADMIN,
-      description: "Admin features flag",
-      rawValue: rawAdminFlag,
-    },
+  const items: { key: string; label: string; present: boolean; raw?: string }[] = [
+    { key: "VITE_SUPABASE_URL", label: "Supabase project URL", present: !!ENV.SUPABASE_URL },
+    { key: "VITE_SUPABASE_ANON_KEY", label: "Supabase anonymous key", present: !!ENV.SUPABASE_ANON_KEY },
+    { key: "VITE_DEFAULT_ASSIGNMENT_ID", label: "Default assignment ID", present: !!ENV.DEFAULT_ASSIGNMENT_ID },
+    { key: "VITE_FEATURE_TROPHIES", label: "Trophies feature flag", present: ENV.RAW.VITE_FEATURE_TROPHIES != null, raw: String(ENV.RAW.VITE_FEATURE_TROPHIES) },
+    { key: "VITE_ENABLE_ADMIN", label: "Admin features flag", present: ENV.RAW.VITE_ENABLE_ADMIN != null, raw: String(ENV.RAW.VITE_ENABLE_ADMIN) },
   ];
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Debug & Configuration</h1>
-        <p className="text-muted-foreground">
-          Environment variable health check
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Environment Variables</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {envVars.map((env) => (
-              <div
-                key={env.name}
-                className="flex items-center justify-between py-2 px-3 border rounded-md"
-              >
-                <div className="flex-1">
-                  <div className="font-mono text-sm font-medium">
-                    {env.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {env.description}
-                  </div>
-                  {env.rawValue !== undefined && (
-                    <div className="text-xs mt-1 font-mono text-blue-600">
-                      Raw: "{env.rawValue}"
-                    </div>
-                  )}
-                </div>
-                <Badge variant={env.present ? "default" : "destructive"}>
-                  {env.present ? "Present" : "Missing"}
-                </Badge>
+      <h1 className="text-3xl font-bold">Debug &amp; Configuration</h1>
+      <section>
+        <h2 className="text-2xl font-semibold mb-4">Environment Variables</h2>
+        <div className="space-y-3">
+          {items.map((it) => (
+            <div key={it.key} className="rounded border p-3 bg-card">
+              <div className="font-mono text-sm font-medium">{it.key}</div>
+              <div className="text-sm text-muted-foreground">{it.label}</div>
+              <div className="text-sm mt-1">
+                <span className={it.present ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                  {it.present ? "Present" : "Missing"}
+                </span>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              {it.raw !== undefined && (
+                <div className="text-xs mt-1">
+                  Raw: <span className="font-mono text-blue-600 dark:text-blue-400">{it.raw}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Feature Flag Parsing</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <div className="text-sm">
-              <span className="font-medium">Raw VITE_FEATURE_TROPHIES:</span>
-              <code className="ml-2 px-2 py-1 bg-muted rounded text-xs">
-                {rawTrophyFlag === undefined ? "undefined" : `"${rawTrophyFlag}"`}
-              </code>
-            </div>
-            <div className="text-sm">
-              <span className="font-medium">Parsed FLAGS.TROPHIES_ENABLED:</span>
-              <Badge variant={FLAGS.TROPHIES_ENABLED ? "default" : "secondary"} className="ml-2">
-                {FLAGS.TROPHIES_ENABLED ? "true" : "false"}
-              </Badge>
-            </div>
+      <section>
+        <h2 className="text-2xl font-semibold mb-4">Feature Flag Parsing</h2>
+        <div className="rounded border p-3 bg-card text-sm space-y-1">
+          <div>
+            Raw VITE_FEATURE_TROPHIES:{" "}
+            <span className="font-mono text-blue-600 dark:text-blue-400">{String(ENV.RAW.VITE_FEATURE_TROPHIES)}</span>
           </div>
-
-          <div className="space-y-2 pt-2 border-t">
-            <div className="text-sm">
-              <span className="font-medium">Raw VITE_ENABLE_ADMIN:</span>
-              <code className="ml-2 px-2 py-1 bg-muted rounded text-xs">
-                {rawAdminFlag === undefined ? "undefined" : `"${rawAdminFlag}"`}
-              </code>
-            </div>
-            <div className="text-sm">
-              <span className="font-medium">Parsed FLAGS.ADMIN_ENABLED:</span>
-              <Badge variant={FLAGS.ADMIN_ENABLED ? "default" : "secondary"} className="ml-2">
-                {FLAGS.ADMIN_ENABLED ? "true" : "false"}
-              </Badge>
-            </div>
+          <div>
+            Parsed TROPHIES_ENABLED:{" "}
+            <span className="font-mono text-green-600 dark:text-green-400">{String(FLAGS.TROPHIES_ENABLED)}</span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            • Secrets are managed in Lovable → Project → Settings → Secrets
-          </p>
-          <p>
-            • Values are never exposed to the browser console for security
-          </p>
-          <p>
-            • VITE_ prefixed variables are safe to use in client code
-          </p>
-          <p>
-            • Server-only secrets (without VITE_ prefix) should only be used in
-            edge functions
-          </p>
-        </CardContent>
-      </Card>
+          <div className="pt-2">
+            Raw VITE_ENABLE_ADMIN:{" "}
+            <span className="font-mono text-blue-600 dark:text-blue-400">{String(ENV.RAW.VITE_ENABLE_ADMIN)}</span>
+          </div>
+          <div>
+            Parsed ADMIN_ENABLED:{" "}
+            <span className="font-mono text-green-600 dark:text-green-400">{String(FLAGS.ADMIN_ENABLED)}</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

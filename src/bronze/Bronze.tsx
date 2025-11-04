@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Map from './Map';
 import Feed from './Feed';
-import { FLAGS } from '@/env';
+import { ENV, FLAGS } from '../env';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -26,7 +26,7 @@ export default function Bronze() {
     );
   }
 
-  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+  if (!ENV.SUPABASE_URL || !ENV.SUPABASE_ANON_KEY) {
     return (
       <div className="p-4">
         <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-lg">
