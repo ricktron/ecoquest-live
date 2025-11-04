@@ -6,8 +6,9 @@ import Admin from "@/pages/Admin";
 import Ticker from "@/components/Ticker";
 import { Toaster } from "@/components/ui/toaster";
 import { TrophyResults, RosterRow } from "@/types/trophies";
+import AppBronze from "@/components/AppBronze";
 
-const TABS = ["Leaderboard","Today","Trophies","Admin"] as const;
+const TABS = ["Leaderboard","Today","Trophies","Admin","Bronze"] as const;
 type Tab = typeof TABS[number];
 
 export type INatParams = {
@@ -18,12 +19,17 @@ export type INatParams = {
 };
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("Leaderboard");
+  const [tab, setTab] = useState<Tab>("Bronze");
   const [trophies, setTrophies] = useState<TrophyResults | null>(null);
   const [roster, setRoster] = useState<RosterRow[]>([]);
-  const [inatResults, setInatResults] = useState<any[]>([]);
+  const [inatResults, setInatResults] = useState<Record<string, any>[]>([]);
   const [inatParams, setInatParams] = useState<INatParams | null>(null);
   
+  // Show Bronze view in full screen
+  if (tab === "Bronze") {
+    return <AppBronze />;
+  }
+
   return (
     <div className="min-h-dvh bg-neutral-50 flex flex-col">
       <Ticker />
@@ -38,7 +44,7 @@ export default function App() {
         {tab==="Admin" && <Admin setTrophies={setTrophies} setRoster={setRoster} setInatResults={setInatResults} setInatParams={setInatParams} />}
       </main>
       <nav className="sticky bottom-0 bg-white border-t">
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-5">
           {TABS.map(t=>(
             <button key={t} onClick={()=>setTab(t)} className={`py-3 text-xs ${tab===t?"font-semibold text-blue-600":"text-neutral-500"}`}>{t}</button>
           ))}
