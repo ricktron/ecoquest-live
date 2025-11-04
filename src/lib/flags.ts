@@ -1,5 +1,4 @@
-export const TROPHIES_ON =
-  String(import.meta.env.VITE_FEATURE_TROPHIES ?? '').toLowerCase() === 'true';
+import { env } from '../env';
 
-export const ENABLE_ADMIN =
-  String(import.meta.env.VITE_ENABLE_ADMIN ?? '').toLowerCase() === 'true';
+export const TROPHIES_ON = env.VITE_FEATURE_TROPHIES === 'true';
+export const ENABLE_ADMIN = env.VITE_ENABLE_ADMIN === 'true';

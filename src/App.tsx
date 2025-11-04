@@ -2,6 +2,7 @@ import { useState } from "react";
 import Leaderboard from "@/pages/Leaderboard";
 import Today from "@/pages/Today";
 import Trophies from "@/pages/Trophies";
+import Debug from "@/pages/Debug";
 import Bronze from "@/bronze/Bronze";
 import Admin from "@/pages/Admin";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,6 +15,7 @@ const TABS = [
   { id: "Leaderboard", label: "Leaderboard", show: ENABLE_ADMIN },
   { id: "Today", label: "Today", show: ENABLE_ADMIN },
   { id: "Admin", label: "Admin", show: ENABLE_ADMIN },
+  { id: "Debug", label: "Debug", show: true },
 ].filter(t => t.show);
 
 type Tab = typeof TABS[number]["id"];
@@ -70,6 +72,7 @@ export default function App() {
             setInatParams={setInatParams}
           />
         )}
+        {tab === "Debug" && <Debug />}
       </main>
       
       <Toaster />
