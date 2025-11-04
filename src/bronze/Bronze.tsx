@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Map from './Map';
 import Feed from './Feed';
-import { TROPHIES_ON } from '@/lib/flags';
+import { FLAGS } from '@/lib/flags';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -13,7 +13,7 @@ export default function Bronze() {
   const [overlayStats, setOverlayStats] = useState({ circles: 0, corridors: 0 });
   const [fetchMethod, setFetchMethod] = useState<'rpc' | 'direct' | null>(null);
 
-  if (!TROPHIES_ON) {
+  if (!FLAGS.TROPHIES) {
     return (
       <div className="p-4">
         <div className="text-center py-12">

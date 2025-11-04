@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TROPHIES_ON } from '@/lib/flags';
+import { FLAGS } from '@/lib/flags';
 import { getZones, type ZoneRow } from '@/lib/api-bronze';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -8,7 +8,7 @@ export default function Trophies() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!TROPHIES_ON) return;
+    if (!FLAGS.TROPHIES) return;
 
     getZones()
       .then(z => setZones(z))
@@ -16,7 +16,7 @@ export default function Trophies() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (!TROPHIES_ON) {
+  if (!FLAGS.TROPHIES) {
     return (
       <div className="p-4">
         <div className="text-center py-12">

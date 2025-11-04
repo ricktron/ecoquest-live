@@ -1,4 +1,6 @@
-import { env } from '../env';
+import { TROPHIES_ENABLED, ADMIN_ENABLED } from '../env';
 
-export const TROPHIES_ON = env.VITE_FEATURE_TROPHIES === 'true';
-export const ENABLE_ADMIN = env.VITE_ENABLE_ADMIN === 'true';
+export const FLAGS = {
+  TROPHIES: TROPHIES_ENABLED,
+  ADMIN: ADMIN_ENABLED,
+};

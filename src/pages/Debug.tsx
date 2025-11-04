@@ -1,13 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TROPHIES_ENABLED } from "@/env";
 
 type EnvVar = {
   name: string;
   present: boolean;
   description: string;
+  rawValue?: string;
 };
 
 export default function Debug() {
+  const rawTrophyFlag = import.meta.env.VITE_FEATURE_TROPHIES;
+  
   const envVars: EnvVar[] = [
     {
       name: "VITE_SUPABASE_URL",
@@ -28,6 +32,7 @@ export default function Debug() {
       name: "VITE_FEATURE_TROPHIES",
       present: !!import.meta.env.VITE_FEATURE_TROPHIES,
       description: "Trophies feature flag",
+      rawValue: rawTrophyFlag,
     },
     {
       name: "VITE_ENABLE_ADMIN",
@@ -56,19 +61,44 @@ export default function Debug() {
                 key={env.name}
                 className="flex items-center justify-between py-2 px-3 border rounded-md"
               >
-                <div>
+                <div className="flex-1">
                   <div className="font-mono text-sm font-medium">
                     {env.name}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {env.description}
                   </div>
+                  {env.rawValue !== undefined && (
+                    <div className="text-xs mt-1 font-mono text-blue-600">
+                      Raw: "{env.rawValue}"
+                    </div>
+                  )}
                 </div>
                 <Badge variant={env.present ? "default" : "destructive"}>
                   {env.present ? "Present" : "Missing"}
                 </Badge>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Feature Flag Parsing</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="text-sm">
+            <span className="font-medium">Raw VITE_FEATURE_TROPHIES:</span>
+            <code className="ml-2 px-2 py-1 bg-muted rounded text-xs">
+              {rawTrophyFlag === undefined ? "undefined" : `"${rawTrophyFlag}"`}
+            </code>
+          </div>
+          <div className="text-sm">
+            <span className="font-medium">Parsed TROPHIES_ENABLED:</span>
+            <Badge variant={TROPHIES_ENABLED ? "default" : "secondary"} className="ml-2">
+              {TROPHIES_ENABLED ? "true" : "false"}
+            </Badge>
           </div>
         </CardContent>
       </Card>
