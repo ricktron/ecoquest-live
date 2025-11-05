@@ -19,6 +19,27 @@ export default function ScoringInfo() {
         <p className="text-muted-foreground">
           EcoQuest Live rewards careful observation, species diversity, and timeliness.
         </p>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quality Grades</CardTitle>
+            <CardDescription>Observation quality affects scoring</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <div className="font-medium">Research Grade</div>
+              <p className="text-sm text-muted-foreground">Identified to species level with community agreement. Earns bonus points and counts toward research milestones.</p>
+            </div>
+            <div>
+              <div className="font-medium">Needs ID</div>
+              <p className="text-sm text-muted-foreground">Partially identified, awaiting community input. Earns smaller bonus.</p>
+            </div>
+            <div>
+              <div className="font-medium">Casual</div>
+              <p className="text-sm text-muted-foreground">Cannot be identified further (captive, cultivated, or unclear). Counts but with reduced impact.</p>
+            </div>
+          </CardContent>
+        </Card>
         
         <Card>
           <CardHeader>

@@ -131,6 +131,9 @@ export default function Trophies() {
                       <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        {trophy.minThreshold && `Min: ${trophy.minThreshold}`}
+                      </p>
                       {isEmpty ? (
                         <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
                       ) : (
@@ -186,6 +189,9 @@ export default function Trophies() {
                       <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        {trophy.minThreshold && `Min: ${trophy.minThreshold}`}
+                      </p>
                       {isEmpty ? (
                         <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
                       ) : (

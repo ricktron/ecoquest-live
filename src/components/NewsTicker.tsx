@@ -98,11 +98,11 @@ function deriveAnnouncements(aggregated: AggregatedScores | null, observations: 
 
   if (!aggregated) return announcements;
 
-  // Close battles
   const userArray = Array.from(aggregated.byUser.values())
     .sort((a, b) => b.points - a.points)
     .map((u, i) => ({ ...u, rank: i + 1 }));
 
+  // Close battles
   const battles = findCloseBattles(userArray);
   battles.forEach((b, i) => {
     announcements.push({
@@ -111,10 +111,31 @@ function deriveAnnouncements(aggregated: AggregatedScores | null, observations: 
     });
   });
 
+  // Lead changes (detect rank swaps)
+  if (userArray.length >= 2) {
+    const topTwo = userArray.slice(0, 2);
+    if (topTwo[0].points - topTwo[1].points < 5) {
+      announcements.push({
+        id: 'lead-change',
+        text: `🔄 Tight lead: ${topTwo[0].login} ahead by ${(topTwo[0].points - topTwo[1].points).toFixed(1)} pts`,
+      });
+    }
+  }
+
+  // Research milestones
+  userArray.forEach(u => {
+    if (u.researchCount === 10 || u.researchCount === 25 || u.researchCount === 50) {
+      announcements.push({
+        id: `research-milestone-${u.login}`,
+        text: `🔬 ${u.login} reached ${u.researchCount} research-grade observations!`,
+      });
+    }
+  });
+
   // Rare finds (top rarity from today)
   const today = new Date().toISOString().slice(0, 10);
   const todayObs = observations.filter(o => o.observedOn === today);
-  if (todayObs.length > 0 && aggregated.byUser) {
+  if (todayObs.length > 0) {
     const rareTaxons = todayObs
       .filter(o => o.taxonName)
       .slice(0, 3);
@@ -127,23 +148,39 @@ function deriveAnnouncements(aggregated: AggregatedScores | null, observations: 
     });
   }
 
+  // First finders of the day
+  const firstFinderMap = new Map<number, { login: string; taxonName: string }>();
+  for (const obs of todayObs) {
+    if (obs.taxonId && obs.taxonName && !firstFinderMap.has(obs.taxonId)) {
+      firstFinderMap.set(obs.taxonId, { login: obs.userLogin, taxonName: obs.taxonName });
+    }
+  }
+  const firstFinders = Array.from(firstFinderMap.values()).slice(0, 2);
+  firstFinders.forEach((ff, i) => {
+    announcements.push({
+      id: `first-finder-${i}`,
+      text: `🥇 ${ff.login} was first to find ${ff.taxonName} today!`,
+    });
+  });
+
   // Daily winners
   const byDay = aggregated.byDay;
   if (byDay && byDay.size > 0) {
     const latestDay = Array.from(byDay.keys()).sort().pop();
     if (latestDay) {
       const dayData = byDay.get(latestDay);
-      const topUsers = Array.from(aggregated.byUser.values())
-        .filter(u => Array.from(dayData.participants).includes(u.login))
-        .sort((a, b) => b.points - a.points)
-        .slice(0, 3)
-        .map(u => u.login);
-      
-      if (topUsers.length > 0) {
-        announcements.push({
-          id: 'daily-winners',
-          text: `🏆 ${latestDay} leaders: ${topUsers.join(', ')}`,
-        });
+      if (dayData) {
+        const topUsers = userArray
+          .filter(u => Array.from(dayData.participants).includes(u.login))
+          .slice(0, 3)
+          .map(u => u.login);
+        
+        if (topUsers.length > 0) {
+          announcements.push({
+            id: 'daily-winners',
+            text: `🏆 ${latestDay} leaders: ${topUsers.join(', ')}`,
+          });
+        }
       }
     }
   }

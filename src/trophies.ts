@@ -306,7 +306,320 @@ export const TROPHIES: Record<string, TrophyDef> = {
         .sort((a, b) => b.value - a.value);
     },
   },
+  'peer-reviewed-pro': {
+    slug: 'peer-reviewed-pro',
+    scope: 'daily',
+    title: 'Peer-Reviewed Pro',
+    subtitle: 'Most research-grade observations (min 3)',
+    minThreshold: 3,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      const userResearch = new Map<string, number>();
+      dayObs.forEach(o => {
+        if (o.qualityGrade === 'research') {
+          userResearch.set(o.userLogin, (userResearch.get(o.userLogin) || 0) + 1);
+        }
+      });
+      return Array.from(userResearch.entries())
+        .filter(([_, count]) => count >= 3)
+        .map(([login, count]) => ({
+          login,
+          value: count,
+          evidence: `${count} research-grade observations`,
+        }))
+        .sort((a, b) => b.value - a.value);
+    },
+  },
+  'peer-reviewed-pro-trip': {
+    slug: 'peer-reviewed-pro-trip',
+    scope: 'trip',
+    title: 'Peer-Reviewed Pro',
+    subtitle: 'Most research-grade observations (min 10)',
+    minThreshold: 10,
+    compute: async (obs, ctx) => {
+      const userResearch = new Map<string, number>();
+      obs.forEach(o => {
+        if (o.qualityGrade === 'research') {
+          userResearch.set(o.userLogin, (userResearch.get(o.userLogin) || 0) + 1);
+        }
+      });
+      return Array.from(userResearch.entries())
+        .filter(([_, count]) => count >= 10)
+        .map(([login, count]) => ({
+          login,
+          value: count,
+          evidence: `${count} research-grade observations`,
+        }))
+        .sort((a, b) => b.value - a.value);
+    },
+  },
+  'first-finder': {
+    slug: 'first-finder',
+    scope: 'daily',
+    title: 'First Finder',
+    subtitle: 'Most first-of-day species (earliest time wins)',
+    minThreshold: 1,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      const taxonFirstFinder = new Map<number, { login: string; time: string }>();
+      
+      // Sort by time to identify first finder per species
+      const sorted = [...dayObs].sort((a, b) => {
+        const aTime = a.timeObservedAt || a.observedOn;
+        const bTime = b.timeObservedAt || b.observedOn;
+        return aTime.localeCompare(bTime);
+      });
+      
+      sorted.forEach(o => {
+        if (o.taxonId && !taxonFirstFinder.has(o.taxonId)) {
+          taxonFirstFinder.set(o.taxonId, {
+            login: o.userLogin,
+            time: o.timeObservedAt || o.observedOn,
+          });
+        }
+      });
+      
+      const userFirsts = new Map<string, { count: number; earliestTime: string }>();
+      taxonFirstFinder.forEach(({ login, time }) => {
+        const current = userFirsts.get(login);
+        if (!current) {
+          userFirsts.set(login, { count: 1, earliestTime: time });
+        } else {
+          userFirsts.set(login, {
+            count: current.count + 1,
+            earliestTime: time < current.earliestTime ? time : current.earliestTime,
+          });
+        }
+      });
+      
+      return Array.from(userFirsts.entries())
+        .map(([login, { count, earliestTime }]) => ({
+          login,
+          value: count,
+          evidence: `First to find ${count} species`,
+        }))
+        .sort((a, b) => {
+          if (b.value !== a.value) return b.value - a.value;
+          const aTime = userFirsts.get(a.login)?.earliestTime || '';
+          const bTime = userFirsts.get(b.login)?.earliestTime || '';
+          return aTime.localeCompare(bTime);
+        });
+    },
+  },
+  // Taxon-specific trophies (daily)
+  'birds-daily': {
+    slug: 'birds-daily',
+    scope: 'daily',
+    title: 'Bird Watcher',
+    subtitle: 'Most bird observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['aves', 'bird'], 2);
+    },
+  },
+  'mammals-daily': {
+    slug: 'mammals-daily',
+    scope: 'daily',
+    title: 'Mammal Tracker',
+    subtitle: 'Most mammal observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['mammal'], 2);
+    },
+  },
+  'reptiles-daily': {
+    slug: 'reptiles-daily',
+    scope: 'daily',
+    title: 'Reptile Hunter',
+    subtitle: 'Most reptile observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['reptil'], 2);
+    },
+  },
+  'amphibians-daily': {
+    slug: 'amphibians-daily',
+    scope: 'daily',
+    title: 'Amphibian Spotter',
+    subtitle: 'Most amphibian observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['amphib'], 2);
+    },
+  },
+  'insects-daily': {
+    slug: 'insects-daily',
+    scope: 'daily',
+    title: 'Insect Collector',
+    subtitle: 'Most insect observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['insect'], 2);
+    },
+  },
+  'spiders-daily': {
+    slug: 'spiders-daily',
+    scope: 'daily',
+    title: 'Spider Finder',
+    subtitle: 'Most spider/arachnid observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['arach'], 2);
+    },
+  },
+  'plants-daily': {
+    slug: 'plants-daily',
+    scope: 'daily',
+    title: 'Botanist',
+    subtitle: 'Most plant observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['plant'], 2);
+    },
+  },
+  'fungi-daily': {
+    slug: 'fungi-daily',
+    scope: 'daily',
+    title: 'Mycologist',
+    subtitle: 'Most fungi observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['fung'], 2);
+    },
+  },
+  'mollusks-daily': {
+    slug: 'mollusks-daily',
+    scope: 'daily',
+    title: 'Mollusk Maven',
+    subtitle: 'Most mollusk observations (min 2)',
+    minThreshold: 2,
+    compute: async (obs, ctx, date) => {
+      const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
+      return computeTaxonTrophy(dayObs, ['mollus'], 2);
+    },
+  },
+  // Taxon-specific trophies (trip)
+  'birds-trip': {
+    slug: 'birds-trip',
+    scope: 'trip',
+    title: 'Bird Watcher',
+    subtitle: 'Most bird observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['aves', 'bird'], 6);
+    },
+  },
+  'mammals-trip': {
+    slug: 'mammals-trip',
+    scope: 'trip',
+    title: 'Mammal Tracker',
+    subtitle: 'Most mammal observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['mammal'], 6);
+    },
+  },
+  'reptiles-trip': {
+    slug: 'reptiles-trip',
+    scope: 'trip',
+    title: 'Reptile Hunter',
+    subtitle: 'Most reptile observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['reptil'], 6);
+    },
+  },
+  'amphibians-trip': {
+    slug: 'amphibians-trip',
+    scope: 'trip',
+    title: 'Amphibian Spotter',
+    subtitle: 'Most amphibian observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['amphib'], 6);
+    },
+  },
+  'insects-trip': {
+    slug: 'insects-trip',
+    scope: 'trip',
+    title: 'Insect Collector',
+    subtitle: 'Most insect observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['insect'], 6);
+    },
+  },
+  'spiders-trip': {
+    slug: 'spiders-trip',
+    scope: 'trip',
+    title: 'Spider Finder',
+    subtitle: 'Most spider/arachnid observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['arach'], 6);
+    },
+  },
+  'plants-trip': {
+    slug: 'plants-trip',
+    scope: 'trip',
+    title: 'Botanist',
+    subtitle: 'Most plant observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['plant'], 6);
+    },
+  },
+  'fungi-trip': {
+    slug: 'fungi-trip',
+    scope: 'trip',
+    title: 'Mycologist',
+    subtitle: 'Most fungi observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['fung'], 6);
+    },
+  },
+  'mollusks-trip': {
+    slug: 'mollusks-trip',
+    scope: 'trip',
+    title: 'Mollusk Maven',
+    subtitle: 'Most mollusk observations (min 6)',
+    minThreshold: 6,
+    compute: async (obs, ctx) => {
+      return computeTaxonTrophy(obs, ['mollus'], 6);
+    },
+  },
 };
+
+// Helper for taxon-specific trophies
+function computeTaxonTrophy(obs: ObservationData[], keywords: string[], minCount: number): Promise<TrophyResult[]> {
+  const userCounts = new Map<string, number>();
+  obs.forEach(o => {
+    const iconic = o.iconicTaxon?.toLowerCase() || '';
+    if (keywords.some(k => iconic.includes(k))) {
+      userCounts.set(o.userLogin, (userCounts.get(o.userLogin) || 0) + 1);
+    }
+  });
+  
+  return Promise.resolve(
+    Array.from(userCounts.entries())
+      .filter(([_, count]) => count >= minCount)
+      .map(([login, count]) => ({
+        login,
+        value: count,
+        evidence: `${count} observations`,
+      }))
+      .sort((a, b) => b.value - a.value)
+  );
+}
 
 export function getTrophyBySlug(slug: string): TrophyDef | undefined {
   return TROPHIES[slug];

@@ -2,6 +2,13 @@
 
 import dayjs from 'dayjs';
 
+// Quality grade bonuses (exported for easy tuning)
+export const RESEARCH_BONUS = 0.30;
+export const RESEARCH_DAILY_CAP = 3.0;
+export const RESEARCH_TRIP_CAP = 12.0;
+export const CASUAL_PENALTY = -0.10;
+export const CASUAL_DAILY_CAP = -2.0;
+
 export type ObservationData = {
   id: number;
   observedOn: string;
@@ -285,6 +292,13 @@ export function aggregateScores(observations: ObservationData[]): AggregatedScor
   for (const [login, species] of userSpecies.entries()) {
     const userScore = byUser.get(login)!;
     userScore.speciesCount = species.size;
+  }
+
+  // Apply research-grade bonuses and casual penalties per user
+  for (const [login, userScore] of byUser.entries()) {
+    const researchBonus = Math.min(RESEARCH_TRIP_CAP, userScore.researchCount * RESEARCH_BONUS);
+    const casualPenalty = Math.max(CASUAL_DAILY_CAP, userScore.casualCount * CASUAL_PENALTY);
+    userScore.points = Number((userScore.points + researchBonus + casualPenalty).toFixed(2));
   }
 
   // Aggregate by day
