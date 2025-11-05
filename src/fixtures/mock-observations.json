@@ -1,0 +1,122 @@
+[
+  {
+    "id": 10001,
+    "observed_on": "2025-01-15",
+    "time_observed_at": "2025-01-15T04:30:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "alice" },
+    "location": [10.55, -83.52],
+    "taxon": { "id": 101, "name": "Morpho peleides", "rank": "species", "iconic_taxon_name": "Insecta" },
+    "uri": "https://www.inaturalist.org/observations/10001"
+  },
+  {
+    "id": 10002,
+    "observed_on": "2025-01-15",
+    "time_observed_at": "2025-01-15T06:15:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "alice" },
+    "location": [10.56, -83.51],
+    "taxon": { "id": 102, "name": "Ara macao", "rank": "species", "iconic_taxon_name": "Aves" },
+    "uri": "https://www.inaturalist.org/observations/10002"
+  },
+  {
+    "id": 10003,
+    "observed_on": "2025-01-15",
+    "time_observed_at": "2025-01-15T05:45:00-06:00",
+    "quality_grade": "needs_id",
+    "user": { "login": "bob" },
+    "location": [10.54, -83.53],
+    "taxon": { "id": 103, "name": "Basiliscus plumifrons", "rank": "species", "iconic_taxon_name": "Reptilia" },
+    "uri": "https://www.inaturalist.org/observations/10003"
+  },
+  {
+    "id": 10004,
+    "observed_on": "2025-01-15",
+    "time_observed_at": "2025-01-15T14:30:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "charlie" },
+    "location": [10.57, -83.50],
+    "taxon": { "id": 104, "name": "Panthera onca", "rank": "species", "iconic_taxon_name": "Mammalia" },
+    "uri": "https://www.inaturalist.org/observations/10004"
+  },
+  {
+    "id": 10005,
+    "observed_on": "2025-01-15",
+    "time_observed_at": "2025-01-15T19:30:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "alice" },
+    "location": [10.55, -83.52],
+    "taxon": { "id": 105, "name": "Bufo marinus", "rank": "species", "iconic_taxon_name": "Amphibia" },
+    "uri": "https://www.inaturalist.org/observations/10005"
+  },
+  {
+    "id": 10006,
+    "observed_on": "2025-01-15",
+    "time_observed_at": "2025-01-15T20:15:00-06:00",
+    "quality_grade": "needs_id",
+    "user": { "login": "bob" },
+    "location": [10.56, -83.51],
+    "taxon": { "id": 106, "name": "Dendrobates auratus", "rank": "species", "iconic_taxon_name": "Amphibia" },
+    "uri": "https://www.inaturalist.org/observations/10006"
+  },
+  {
+    "id": 10007,
+    "observed_on": "2025-01-14",
+    "time_observed_at": "2025-01-14T07:00:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "charlie" },
+    "location": [10.54, -83.53],
+    "taxon": { "id": 107, "name": "Cebus capucinus", "rank": "species", "iconic_taxon_name": "Mammalia" },
+    "uri": "https://www.inaturalist.org/observations/10007"
+  },
+  {
+    "id": 10008,
+    "observed_on": "2025-01-14",
+    "time_observed_at": "2025-01-14T11:20:00-06:00",
+    "quality_grade": "casual",
+    "user": { "login": "alice" },
+    "location": [10.57, -83.50],
+    "taxon": { "id": 108, "name": "Heliconia rostrata", "rank": "species", "iconic_taxon_name": "Plantae" },
+    "uri": "https://www.inaturalist.org/observations/10008"
+  },
+  {
+    "id": 10009,
+    "observed_on": "2025-01-13",
+    "time_observed_at": "2025-01-13T06:30:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "bob" },
+    "location": [10.55, -83.52],
+    "taxon": { "id": 109, "name": "Coereba flaveola", "rank": "species", "iconic_taxon_name": "Aves" },
+    "uri": "https://www.inaturalist.org/observations/10009"
+  },
+  {
+    "id": 10010,
+    "observed_on": "2025-01-13",
+    "time_observed_at": "2025-01-13T18:45:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "charlie" },
+    "location": [10.56, -83.51],
+    "taxon": { "id": 110, "name": "Crotalus durissus", "rank": "species", "iconic_taxon_name": "Reptilia" },
+    "uri": "https://www.inaturalist.org/observations/10010"
+  },
+  {
+    "id": 10011,
+    "observed_on": "2025-01-12",
+    "time_observed_at": "2025-01-12T05:00:00-06:00",
+    "quality_grade": "needs_id",
+    "user": { "login": "alice" },
+    "location": [10.54, -83.53],
+    "taxon": { "id": 111, "name": "Iguana iguana", "rank": "species", "iconic_taxon_name": "Reptilia" },
+    "uri": "https://www.inaturalist.org/observations/10011"
+  },
+  {
+    "id": 10012,
+    "observed_on": "2025-01-11",
+    "time_observed_at": "2025-01-11T21:30:00-06:00",
+    "quality_grade": "research",
+    "user": { "login": "bob" },
+    "location": [10.57, -83.50],
+    "taxon": { "id": 112, "name": "Atta cephalotes", "rank": "species", "iconic_taxon_name": "Insecta" },
+    "uri": "https://www.inaturalist.org/observations/10012"
+  }
+]

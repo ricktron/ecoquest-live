@@ -35,7 +35,7 @@ export default function App() {
               <Route path="/obs/:id" element={<ObservationDetail />} />
               <Route path="/user/:login" element={<UserPage />} />
               <Route path="/about/scoring" element={<ScoringInfo />} />
-              {FLAGS.ADMIN_ENABLED && <Route path="/debug" element={<Debug />} />}
+              <Route path="/debug" element={<Debug />} />
               <Route path="*" element={<Navigate to="/leaderboard" replace />} />
             </Routes>
           </main>

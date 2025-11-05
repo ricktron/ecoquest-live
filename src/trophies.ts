@@ -15,6 +15,7 @@ export type TrophyDef = {
   subtitle: string;
   icon?: string;
   imageUrl?: string; // optional custom image from Supabase Storage
+  minThreshold?: number; // minimum value required to show winner
   compute: (obs: ObservationData[], ctx: ScoringContext, date?: string) => Promise<TrophyResult[]>;
 };
 
@@ -41,6 +42,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'daily',
     title: 'Daily Variety Hero',
     subtitle: 'Most biodiverse set in a day',
+    minThreshold: 1,
     compute: async (obs, ctx, date) => {
       const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
       const userSpecies = new Map<string, Set<number>>();
@@ -81,6 +83,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'trip',
     title: 'Variety Hero',
     subtitle: 'Most biodiverse set (trip)',
+    minThreshold: 1,
     compute: async (obs, ctx) => {
       const userSpecies = new Map<string, Set<number>>();
       obs.forEach(o => {
@@ -101,6 +104,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'daily',
     title: 'Daily Rare Find',
     subtitle: 'Single rarest observation of the day',
+    minThreshold: 1,
     compute: async (obs, ctx, date) => {
       const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
       const userRarity = new Map<string, { maxRarity: number; maxObs?: ObservationData; time?: string }>();
@@ -133,6 +137,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'trip',
     title: 'Rarest Observation',
     subtitle: 'Single rarest observation (trip)',
+    minThreshold: 1,
     compute: async (obs, ctx) => {
       const userRarity = new Map<string, { maxRarity: number; maxObs?: ObservationData }>();
       obs.forEach(o => {
@@ -158,6 +163,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'daily',
     title: 'Early Bird',
     subtitle: 'Most 4–7am observations (daily)',
+    minThreshold: 1,
     compute: async (obs, ctx, date) => {
       const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
       const userEarly = new Map<string, { count: number; earliestTime?: string; obs: ObservationData[] }>();
@@ -194,6 +200,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'daily',
     title: 'Night Owl',
     subtitle: 'Most evening observations (sunset–midnight)',
+    minThreshold: 1,
     compute: async (obs, ctx, date) => {
       const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
       const userNight = new Map<string, { count: number; obs: ObservationData[] }>();
@@ -232,6 +239,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'trip',
     title: 'Trailblazer',
     subtitle: 'First to observe species during trip',
+    minThreshold: 1,
     compute: async (obs, ctx) => {
       const userFirsts = new Map<string, number>();
       ctx.tripFirstByTaxon.forEach((obsId) => {
@@ -254,6 +262,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'daily',
     title: 'Steady Eddie',
     subtitle: 'Most distinct clock-hours with ≥1 obs',
+    minThreshold: 1,
     compute: async (obs, ctx, date) => {
       const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
       const userHours = new Map<string, Set<number>>();
@@ -279,6 +288,7 @@ export const TROPHIES: Record<string, TrophyDef> = {
     scope: 'trip',
     title: 'Biodiversity Champion',
     subtitle: 'Highest Shannon diversity (min 6 obs)',
+    minThreshold: 4,
     compute: async (obs, ctx) => {
       const userObs = new Map<string, ObservationData[]>();
       obs.forEach(o => {

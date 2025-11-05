@@ -1,4 +1,6 @@
 // iNaturalist public API client with CORS-safe fetch and fallback to mock data
+import mockObservations from '../fixtures/mock-observations.json';
+import { ACTIVE_TRIP } from '../trips';
 
 export type INatObservation = {
   id: number;
@@ -24,69 +26,19 @@ type FetchParams = {
   projectId?: string;
 };
 
-const MOCK_DATA: INatObservation[] = [
-  {
-    id: 1,
-    observed_on: '2025-01-15',
-    time_observed_at: '2025-01-15T08:30:00Z',
-    quality_grade: 'research',
-    user: { login: 'alice' },
-    location: [10.55, -83.52],
-    taxon: { id: 1, name: 'Bufo marinus', rank: 'species', iconic_taxon_name: 'Amphibia' },
-    uri: 'https://www.inaturalist.org/observations/1',
-  },
-  {
-    id: 2,
-    observed_on: '2025-01-14',
-    time_observed_at: '2025-01-14T14:20:00Z',
-    quality_grade: 'needs_id',
-    user: { login: 'bob' },
-    location: [10.56, -83.51],
-    taxon: { id: 2, name: 'Panthera onca', rank: 'species', iconic_taxon_name: 'Mammalia' },
-    uri: 'https://www.inaturalist.org/observations/2',
-  },
-  {
-    id: 3,
-    observed_on: '2025-01-13',
-    time_observed_at: '2025-01-13T10:45:00Z',
-    quality_grade: 'research',
-    user: { login: 'alice' },
-    location: [10.54, -83.53],
-    taxon: { id: 3, name: 'Ara macao', rank: 'species', iconic_taxon_name: 'Aves' },
-    uri: 'https://www.inaturalist.org/observations/3',
-  },
-  {
-    id: 4,
-    observed_on: '2025-01-12',
-    time_observed_at: '2025-01-12T16:00:00Z',
-    quality_grade: 'casual',
-    user: { login: 'charlie' },
-    location: [10.57, -83.50],
-    taxon: { id: 4, name: 'Basiliscus plumifrons', rank: 'species', iconic_taxon_name: 'Reptilia' },
-    uri: 'https://www.inaturalist.org/observations/4',
-  },
-  {
-    id: 5,
-    observed_on: '2025-01-11',
-    time_observed_at: '2025-01-11T09:15:00Z',
-    quality_grade: 'research',
-    user: { login: 'bob' },
-    location: [10.55, -83.52],
-    taxon: { id: 5, name: 'Morpho peleides', rank: 'species', iconic_taxon_name: 'Insecta' },
-    uri: 'https://www.inaturalist.org/observations/5',
-  },
-];
-
 export async function fetchObservations(params: FetchParams): Promise<INatObservation[]> {
+  // In TEST mode, use fixture data
+  if (ACTIVE_TRIP === 'TEST') {
+    console.log('[inat] Using mock fixture data for TEST profile', params);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return mockObservations as INatObservation[];
+  }
+  
   // TODO: Implement real iNaturalist API call when CORS is resolved
-  // For now, return mock data to keep UI functional
-  
-  console.log('[inat] Using mock data (CORS/network not yet implemented)', params);
-  
-  // Simulate network delay
+  // For now, return empty array for non-TEST profiles
+  console.log('[inat] Network fetch not yet implemented, returning empty data', params);
   await new Promise(resolve => setTimeout(resolve, 500));
-  
-  return MOCK_DATA;
+  return [];
   
   /* FUTURE: Real API implementation
   try {

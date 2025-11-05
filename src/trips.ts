@@ -23,9 +23,9 @@ export const TRIPS: Record<TripProfile, TripConfig> = {
     id: 'TEST',
     title: 'Test Trip',
     timezone: 'America/Chicago',
-    dayRanges: [{ start: '2025-01-10', end: '2025-01-20' }],
-    memberLogins: ['testuser1', 'testuser2'],
-    bbox: { minLat: 40.0, minLng: -90.0, maxLat: 42.0, maxLng: -87.0 },
+    dayRanges: [{ start: '2025-01-11', end: '2025-01-15' }],
+    memberLogins: ['alice', 'bob', 'charlie'],
+    bbox: undefined, // No place filter for TEST
     fallbackSunsetHHMM: '17:30',
     locations: [],
   },
@@ -86,7 +86,7 @@ export function getTripFilters() {
       return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
     },
     eligibleForAwards: (login: string) => {
-      // Default: all logins eligible (may flip adults later)
+      // All users eligible for awards
       return true;
     },
   };
