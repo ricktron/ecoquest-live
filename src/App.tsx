@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import TabNav from './components/TabNav';
 import NewsTicker from './components/NewsTicker';
 import Leaderboard from './pages/Leaderboard';
@@ -15,27 +16,29 @@ import { FLAGS } from './env';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <div className="app-shell">
-        <TabNav />
-        <NewsTicker />
-        <main className="app-main">
-          <Routes>
-            <Route path="/" element={<Navigate to="/leaderboard" replace />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
-            {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
-            <Route path="/daily" element={<Daily />} />
-            <Route path="/daily/:ymd" element={<DailyDetail />} />
-            <Route path="/map" element={<Map />} />
-            <Route path="/obs/:id" element={<ObservationDetail />} />
-            <Route path="/user/:login" element={<UserPage />} />
-            <Route path="/about/scoring" element={<ScoringInfo />} />
-            {FLAGS.ADMIN_ENABLED && <Route path="/debug" element={<Debug />} />}
-            <Route path="*" element={<Navigate to="/leaderboard" replace />} />
-          </Routes>
-        </main>
-      </div>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <div className="app-shell">
+          <TabNav />
+          <NewsTicker />
+          <main className="app-main">
+            <Routes>
+              <Route path="/" element={<Navigate to="/leaderboard" replace />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
+              {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
+              <Route path="/daily" element={<Daily />} />
+              <Route path="/daily/:ymd" element={<DailyDetail />} />
+              <Route path="/map" element={<Map />} />
+              <Route path="/obs/:id" element={<ObservationDetail />} />
+              <Route path="/user/:login" element={<UserPage />} />
+              <Route path="/about/scoring" element={<ScoringInfo />} />
+              {FLAGS.ADMIN_ENABLED && <Route path="/debug" element={<Debug />} />}
+              <Route path="*" element={<Navigate to="/leaderboard" replace />} />
+            </Routes>
+          </main>
+        </div>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

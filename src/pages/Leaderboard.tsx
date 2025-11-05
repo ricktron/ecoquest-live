@@ -12,27 +12,54 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export default function Leaderboard() {
   const navigate = useNavigate();
-  const { loading, aggregated, initialize } = useAppState();
+  const { loading, aggregated, observations, initialize } = useAppState();
+  const [yesterdayScores, setYesterdayScores] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     initialize();
   }, []);
 
-  const current = useMemo<UserRowWithRank[]>(() => {
+  useEffect(() => {
+    if (!observations.length) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    const yesterdayObs = observations.filter(o => o.observedOn === yesterday);
+    const userPoints = new Map<string, number>();
+    
+    yesterdayObs.forEach(obs => {
+      const login = obs.userLogin;
+      userPoints.set(login, (userPoints.get(login) || 0) + 1);
+    });
+    
+    setYesterdayScores(userPoints);
+  }, [observations]);
+
+  const current = useMemo(() => {
     if (!aggregated) return [];
+    
+    const today = new Date().toISOString().split('T')[0];
+    const todayObs = observations.filter(o => o.observedOn === today);
+    const todayPoints = new Map<string, number>();
+    
+    todayObs.forEach(obs => {
+      todayPoints.set(obs.userLogin, (todayPoints.get(obs.userLogin) || 0) + 1);
+    });
+    
     return Array.from(aggregated.byUser.values())
       .sort((a, b) => b.points - a.points)
-      .map((u, i) => ({ ...u, rank: i + 1 }));
-  }, [aggregated]);
+      .map((u, i) => ({ 
+        ...u, 
+        rank: i + 1,
+        trend: (todayPoints.get(u.login) || 0) - (yesterdayScores.get(u.login) || 0),
+      }));
+  }, [aggregated, observations, yesterdayScores]);
 
-  // TODO: Fetch prior period for trends (24h ago or yesterday)
-  const prior = useMemo<UserRowWithRank[]>(() => {
-    return [];
-  }, []);
-
-  const rows = useMemo(() => computeTrends(current, prior), [current, prior]);
+  const rows = current;
 
   const closeBattles = useMemo(() => {
+    if (!current.length) return [];
     return findCloseBattles(current);
   }, [current]);
 
@@ -109,9 +136,13 @@ export default function Leaderboard() {
                 </div>
                 <div className="flex items-center gap-3">
                   {/* Trend column */}
-                  {row.trend.pts !== 0 && (
-                    <div className={`text-sm font-medium ${row.trend.pts > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {row.trend.pts > 0 ? '+' : ''}{row.trend.pts}
+                  {row.trend !== undefined && row.trend !== 0 && (
+                    <div className={`text-sm font-semibold ${
+                      row.trend > 0 ? 'text-green-600 dark:text-green-400' : 
+                      row.trend < 0 ? 'text-red-600 dark:text-red-400' : 
+                      'text-muted-foreground'
+                    }`}>
+                      {row.trend > 0 ? '+' : ''}{row.trend.toFixed(1)}
                     </div>
                   )}
                   <div className="text-2xl font-bold text-primary">

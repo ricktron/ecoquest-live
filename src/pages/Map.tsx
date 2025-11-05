@@ -1,8 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
-import DateRange from '@/components/DateRange';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
@@ -39,7 +38,10 @@ export default function Map() {
           <Skeleton className="h-[600px] w-full" />
         ) : observations.length === 0 ? (
           <div className="h-[600px] flex items-center justify-center bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground">No observations to display</p>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-muted-foreground mb-2">No observations to display</p>
+              <p className="text-sm text-muted-foreground">Observations will appear here as they're recorded</p>
+            </div>
           </div>
         ) : (
           <div className="map-wrap rounded-lg overflow-hidden border">

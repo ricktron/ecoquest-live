@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { ENV, FLAGS } from '@/env';
 import { useAppState } from '@/lib/state';
+import { getActiveTrip } from '@/trips';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function Debug() {
   const [showAppState, setShowAppState] = useState(false);
   const appState = useAppState();
+  const trip = getActiveTrip();
 
   const items: { key: string; label: string; present: boolean; raw?: string }[] = [
+    { key: "VITE_TRIP_PROFILE", label: "Active trip profile", present: true, raw: trip.id },
     { key: "VITE_SUPABASE_URL", label: "Supabase project URL", present: !!ENV.SUPABASE_URL },
     { key: "VITE_SUPABASE_ANON_KEY", label: "Supabase anonymous key", present: !!ENV.SUPABASE_ANON_KEY },
     { key: "VITE_DEFAULT_ASSIGNMENT_ID", label: "Default assignment ID", present: !!ENV.DEFAULT_ASSIGNMENT_ID },
     { key: "VITE_FEATURE_TROPHIES", label: "Trophies feature flag", present: ENV.RAW.VITE_FEATURE_TROPHIES != null, raw: String(ENV.RAW.VITE_FEATURE_TROPHIES) },
     { key: "VITE_ENABLE_ADMIN", label: "Admin features flag", present: ENV.RAW.VITE_ENABLE_ADMIN != null, raw: String(ENV.RAW.VITE_ENABLE_ADMIN) },
+    { key: "VITE_TZ", label: "Timezone", present: true, raw: trip.timezone },
   ];
 
   return (
@@ -66,6 +70,43 @@ export default function Debug() {
         </section>
 
         <section>
+          <h2 className="text-2xl font-semibold mb-4">Active Trip Configuration</h2>
+          <div className="rounded border p-4 bg-card space-y-3 text-sm">
+            <div>
+              <span className="font-semibold">Trip ID:</span> <span className="font-mono ml-2">{trip.id}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Title:</span> <span className="ml-2">{trip.title}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Timezone:</span> <span className="font-mono ml-2">{trip.timezone}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Day Ranges:</span>
+              <ul className="ml-6 mt-1 space-y-1">
+                {trip.dayRanges.map((range, i) => (
+                  <li key={i} className="font-mono">{range.start} to {range.end}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <span className="font-semibold">Members:</span> 
+              <span className="ml-2">{trip.memberLogins.length === 0 ? 'All (no filter)' : trip.memberLogins.length}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Place Filter:</span> 
+              <span className="ml-2">
+                {trip.placeId ? `iNat Place ID ${trip.placeId}` : trip.bbox ? 'BBox defined' : 'None'}
+              </span>
+            </div>
+            <div>
+              <span className="font-semibold">Sunset Fallback:</span> 
+              <span className="font-mono ml-2">{trip.fallbackSunsetHHMM || '17:30'}</span>
+            </div>
+          </div>
+        </section>
+
+        <section>
           <Button
             onClick={() => setShowAppState(!showAppState)}
             variant="outline"
@@ -80,6 +121,11 @@ export default function Debug() {
               <pre className="text-xs overflow-x-auto">
                 {JSON.stringify(
                   {
+                    trip: {
+                      id: trip.id,
+                      memberCount: trip.memberLogins.length,
+                      dayRanges: trip.dayRanges,
+                    },
                     filters: {
                       startDate: appState.startDate,
                       endDate: appState.endDate,

@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { fetchObservations, toObservation, type INatObservation } from './inat';
 import { aggregateScores, type ObservationData, type AggregatedScores } from './scoring';
+import { getActiveTrip, getTripFilters } from '@/trips';
 import dayjs from 'dayjs';
 
 type AppState = {
@@ -26,11 +27,15 @@ type AppState = {
   fetchPriorPeriod: (windowDays: number) => Promise<AggregatedScores | null>;
 };
 
-export const useAppState = create<AppState>((set, get) => ({
-  // Default to last 5 years
-  startDate: dayjs().subtract(5, 'year').format('YYYY-MM-DD'),
-  endDate: dayjs().format('YYYY-MM-DD'),
-  logins: [],
+export const useAppState = create<AppState>((set, get) => {
+  const trip = getActiveTrip();
+  const defaultStart = trip.dayRanges[0]?.start || dayjs().subtract(5, 'year').format('YYYY-MM-DD');
+  const defaultEnd = trip.dayRanges[trip.dayRanges.length - 1]?.end || dayjs().format('YYYY-MM-DD');
+  
+  return {
+  startDate: defaultStart,
+  endDate: defaultEnd,
+  logins: trip.memberLogins,
   
   loading: false,
   rawObservations: [],
@@ -76,11 +81,23 @@ export const useAppState = create<AppState>((set, get) => ({
         logins: logins.length > 0 ? logins : undefined,
       });
       
-      const obs = raw.map(toObservation);
+      const filters = getTripFilters();
+      const filteredRaw = raw.filter(r => {
+        const takenAt = r.time_observed_at || r.observed_on;
+        const login = r.user?.login || '';
+        const lat = r.location?.[0] || 0;
+        const lng = r.location?.[1] || 0;
+        
+        return filters.dayPredicate(takenAt) && 
+               filters.memberPredicate(login) && 
+               filters.placePredicate(lat, lng);
+      });
+      
+      const obs = filteredRaw.map(toObservation);
       const aggregated = aggregateScores(obs);
       
       set({
-        rawObservations: raw,
+        rawObservations: filteredRaw,
         observations: obs,
         aggregated,
         loading: false,
@@ -115,21 +132,8 @@ export const useAppState = create<AppState>((set, get) => ({
   },
   
   initialize: () => {
-    // Read from URL params if present
-    const url = new URL(window.location.href);
-    const start = url.searchParams.get('start');
-    const end = url.searchParams.get('end');
-    const logins = url.searchParams.get('logins');
-    
-    if (start && end) {
-      set({ startDate: start, endDate: end });
-    }
-    
-    if (logins) {
-      set({ logins: logins.split(',').filter(Boolean) });
-    }
-    
+    // Trip filters already set in initial state
     // Initial load
     get().refresh();
   },
-}));
+}});

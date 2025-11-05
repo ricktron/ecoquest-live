@@ -1,23 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
-import DateRange from '@/components/DateRange';
+import { getActiveTrip } from '@/trips';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { formatPoints } from '@/lib/scoring';
 
 export default function Daily() {
   const navigate = useNavigate();
-  const { loading, aggregated, startDate, endDate, initialize } = useAppState();
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { loading, aggregated, initialize } = useAppState();
+  const trip = getActiveTrip();
 
   useEffect(() => {
     initialize();
   }, []);
 
-  const dayScores = aggregated
-    ? Array.from(aggregated.byDay.values()).sort((a, b) => b.date.localeCompare(a.date))
-    : [];
+  const dayScores = useMemo(() => {
+    if (!aggregated) return [];
+    
+    const allDays = new Set<string>();
+    trip.dayRanges.forEach(range => {
+      let current = new Date(range.start);
+      const end = new Date(range.end);
+      while (current <= end) {
+        allDays.add(current.toISOString().split('T')[0]);
+        current = new Date(current.getTime() + 86400000);
+      }
+    });
+    
+    const scores = Array.from(aggregated.byDay.values())
+      .filter(day => allDays.has(day.date))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    
+    return scores;
+  }, [aggregated, trip]);
 
   return (
     <div className="pb-6">
@@ -28,7 +44,7 @@ export default function Daily() {
             Daily Rollup
           </h1>
           <p className="text-sm text-muted-foreground">
-            Showing results from {startDate} to {endDate}
+            Trip days from {trip.dayRanges[0]?.start} to {trip.dayRanges[trip.dayRanges.length - 1]?.end}
           </p>
         </div>
 
@@ -41,7 +57,8 @@ export default function Daily() {
           </div>
         ) : dayScores.length === 0 ? (
           <div className="text-center py-12 bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground">No observations found in this date range.</p>
+            <p className="text-lg font-semibold text-muted-foreground mb-2">No observations yet</p>
+            <p className="text-sm text-muted-foreground">Start exploring and documenting species!</p>
           </div>
         ) : (
           <div className="space-y-3">

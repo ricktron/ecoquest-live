@@ -7,9 +7,15 @@ export default function ScoringInfo() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
-    <div className="page">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="pb-6">
+      <div className="max-w-3xl mx-auto px-3 md:px-6 py-6 space-y-6">
         <h1 className="text-3xl font-bold">How Scoring Works</h1>
+        <div className="p-4 bg-primary/10 border-l-4 border-primary rounded mb-4">
+          <p className="font-semibold text-foreground">⏰ Important: Scores use observation TAKEN time, not upload time!</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            The time you photograph matters for daily trophies and diminishing returns.
+          </p>
+        </div>
         <p className="text-muted-foreground">
           EcoQuest Live rewards careful observation, species diversity, and timeliness.
         </p>

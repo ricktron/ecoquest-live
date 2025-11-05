@@ -1,54 +1,89 @@
-export type TripProfile = 'testing' | 'costa_rica' | 'big_bend' | 'campus';
+export type TripProfile = 'CR_TRIP_2025' | 'TEST';
+
+export type TripLocation = {
+  slug: string;
+  name: string;
+  bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number };
+};
 
 export type TripConfig = {
-  name: string;
-  start: string;
-  end: string;
-  tz: string;
-  bbox?: [number, number, number, number];
+  id: TripProfile;
+  title: string;
+  timezone: string;
+  dayRanges: Array<{ start: string; end: string }>;
+  memberLogins: string[];
+  placeId?: number; // iNat place ID if known
+  bbox?: { minLat: number; minLng: number; maxLat: number; maxLng: number };
   fallbackSunsetHHMM?: string;
-  dayRanges: { start: string; end: string }[];
+  locations: TripLocation[];
 };
 
 export const TRIPS: Record<TripProfile, TripConfig> = {
-  testing: { 
-    name: 'Testing', 
-    start: '2025-01-10', 
-    end: '2025-01-20', 
-    tz: 'America/Chicago',
-    fallbackSunsetHHMM: '17:30',
+  TEST: {
+    id: 'TEST',
+    title: 'Test Trip',
+    timezone: 'America/Chicago',
     dayRanges: [{ start: '2025-01-10', end: '2025-01-20' }],
-  },
-  costa_rica: { 
-    name: 'Costa Rica BioBlitz', 
-    start: '2025-11-08', 
-    end: '2025-11-15', 
-    tz: 'America/Costa_Rica', 
-    bbox: [-83.6, 10.2, -83.4, 10.6],
+    memberLogins: ['testuser1', 'testuser2'],
+    bbox: { minLat: 40.0, minLng: -90.0, maxLat: 42.0, maxLng: -87.0 },
     fallbackSunsetHHMM: '17:30',
+    locations: [],
+  },
+  CR_TRIP_2025: {
+    id: 'CR_TRIP_2025',
+    title: 'Costa Rica BioBlitz 2025',
+    timezone: 'America/Costa_Rica',
     dayRanges: [{ start: '2025-11-08', end: '2025-11-15' }],
-  },
-  big_bend: { 
-    name: 'Big Bend', 
-    start: '2026-03-10', 
-    end: '2026-03-16', 
-    tz: 'America/Chicago',
-    fallbackSunsetHHMM: '18:00',
-    dayRanges: [{ start: '2026-03-10', end: '2026-03-16' }],
-  },
-  campus: { 
-    name: 'Campus BioBlitz', 
-    start: '2025-04-01', 
-    end: '2025-04-30', 
-    tz: 'America/Chicago',
-    fallbackSunsetHHMM: '19:00',
-    dayRanges: [{ start: '2025-04-01', end: '2025-04-30' }],
+    memberLogins: [], // Add actual member logins here
+    placeId: 6792, // Costa Rica iNat place ID
+    bbox: { minLat: 8.0, minLng: -86.0, maxLat: 11.5, maxLng: -82.5 },
+    fallbackSunsetHHMM: '17:30',
+    locations: [
+      { 
+        slug: 'monteverde',
+        name: 'Monteverde Cloud Forest',
+        bbox: { minLat: 10.25, minLng: -84.85, maxLat: 10.35, maxLng: -84.75 }
+      },
+      {
+        slug: 'arenal',
+        name: 'Arenal Volcano Area',
+        bbox: { minLat: 10.40, minLng: -84.75, maxLat: 10.50, maxLng: -84.65 }
+      },
+    ],
   },
 };
 
-export const ACTIVE_TRIP = (import.meta.env.VITE_TRIP_PROFILE as TripProfile) ?? 'testing';
+export const ACTIVE_TRIP = (import.meta.env.VITE_TRIP_PROFILE as TripProfile) ?? 'TEST';
 export const TRIP = TRIPS[ACTIVE_TRIP];
 
 export function getActiveTrip(): TripConfig {
   return TRIP;
+}
+
+export type TripFilters = {
+  dayPredicate: (takenAt: string) => boolean;
+  memberPredicate: (login: string) => boolean;
+  placePredicate: (lat: number, lng: number) => boolean;
+  tz: string;
+};
+
+export function getTripFilters(): TripFilters {
+  const trip = getActiveTrip();
+  
+  return {
+    dayPredicate: (takenAt: string) => {
+      const date = takenAt.split('T')[0];
+      return trip.dayRanges.some(range => date >= range.start && date <= range.end);
+    },
+    memberPredicate: (login: string) => {
+      if (trip.memberLogins.length === 0) return true; // No filter if empty
+      return trip.memberLogins.includes(login);
+    },
+    placePredicate: (lat: number, lng: number) => {
+      if (!trip.bbox) return true;
+      const { minLat, minLng, maxLat, maxLng } = trip.bbox;
+      return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+    },
+    tz: trip.timezone,
+  };
 }
