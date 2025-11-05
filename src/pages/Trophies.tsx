@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Award, Crown } from 'lucide-react';
 import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
-import { getTripTrophies, getDayTrophies } from '@/trophies/registry';
+import { getTripTrophies, getDailyTrophies } from '@/trophies';
 
 export default function Trophies() {
   const { slug } = useParams<{ slug?: string }>();
@@ -27,20 +27,13 @@ export default function Trophies() {
 
   const tripTrophies = useMemo(() => {
     if (!ctx) return [];
-    return getTripTrophies().map(spec => ({
-      ...spec,
-      results: spec.evaluate(observations, ctx),
-    }));
-  }, [observations, ctx]);
+    return getTripTrophies();
+  }, [ctx]);
 
   const dayTrophies = useMemo(() => {
     if (!ctx) return [];
-    const today = new Date().toISOString().slice(0, 10);
-    return getDayTrophies().map(spec => ({
-      ...spec,
-      results: spec.evaluate(observations, ctx, today),
-    }));
-  }, [observations, ctx]);
+    return getDailyTrophies();
+  }, [ctx]);
 
   // If we have a slug, render the detail page
   if (slug) {
@@ -85,49 +78,27 @@ export default function Trophies() {
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {dayTrophies.map(trophy => {
-                  const winner = trophy.results[0];
-                  return (
-                    <Card key={trophy.slug}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <Award className="h-5 w-5 text-yellow-500" />
-                          {trophy.title}
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">{trophy.description}</p>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {winner ? (
-                          <>
-                            <div 
-                              className="text-center py-2 cursor-pointer hover:bg-muted/50 rounded transition-colors"
-                              onClick={() => navigate(`/user/${winner.login}`)}
-                            >
-                              <div className="text-2xl font-bold text-primary">
-                                {winner.login}
-                              </div>
-                              <div className="text-sm text-muted-foreground mt-1">
-                                {winner.evidence}
-                              </div>
-                            </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="w-full"
-                              onClick={() => navigate(`/trophies/${trophy.slug}`)}
-                            >
-                              View Details
-                            </Button>
-                          </>
-                        ) : (
-                          <div className="text-center py-4 text-sm text-muted-foreground">
-                            No data yet
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                {dayTrophies.map(trophy => (
+                  <Card key={trophy.slug}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Award className="h-5 w-5 text-yellow-500" />
+                        {trophy.title}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => navigate(`/trophies/${trophy.slug}`)}
+                      >
+                        View Details
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
           </>
@@ -143,49 +114,27 @@ export default function Trophies() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tripTrophies.map(trophy => {
-              const winner = trophy.results[0];
-              return (
-                <Card key={trophy.slug}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Award className="h-5 w-5 text-yellow-500" />
-                      {trophy.title}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">{trophy.description}</p>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {winner ? (
-                      <>
-                        <div 
-                          className="text-center py-2 cursor-pointer hover:bg-muted/50 rounded transition-colors"
-                          onClick={() => navigate(`/user/${winner.login}`)}
-                        >
-                          <div className="text-2xl font-bold text-primary">
-                            {winner.login}
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {winner.evidence}
-                          </div>
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full"
-                          onClick={() => navigate(`/trophies/${trophy.slug}`)}
-                        >
-                          View Details
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="text-center py-4 text-sm text-muted-foreground">
-                        No data yet
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {tripTrophies.map(trophy => (
+              <Card key={trophy.slug}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Award className="h-5 w-5 text-yellow-500" />
+                    {trophy.title}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={() => navigate(`/trophies/${trophy.slug}`)}
+                  >
+                    View Details
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
         

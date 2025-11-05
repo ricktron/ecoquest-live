@@ -228,6 +228,16 @@ export type AggregatedScores = {
   byTaxonGroup: TaxonGroupScores;
 };
 
+export function getNightWindow(date: string, trip: any): { start: string; end: string } {
+  // TODO: Integrate trip.solar?.sunset when available
+  const fallbackSunset = trip.fallbackSunsetHHMM || '17:30';
+  const [hh, mm] = fallbackSunset.split(':').map(Number);
+  return {
+    start: `${date}T${fallbackSunset}:00`,
+    end: `${date}T23:59:59`,
+  };
+}
+
 export function aggregateScores(observations: ObservationData[]): AggregatedScores {
   const ctx = buildScoringContext(observations);
   const byUser = new Map<string, UserScore>();

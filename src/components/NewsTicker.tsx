@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useAppState } from '@/lib/state';
 import { findCloseBattles } from '@/lib/closeBattles';
-import { FLAGS } from '@/env';
+import { FLAGS, ENV } from '@/env';
 import type { AggregatedScores, ObservationData } from '@/lib/scoring';
 
 type Announcement = {
@@ -11,57 +11,64 @@ type Announcement = {
 };
 
 export default function NewsTicker() {
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [visible, setVisible] = useState(true);
+  const [snapshot, setSnapshot] = useState<Announcement[]>([]);
   const { aggregated, observations } = useAppState();
+  const animRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const hidden = localStorage.getItem('ticker-hidden');
     if (hidden === 'true') setVisible(false);
   }, []);
 
-  const announcements = deriveAnnouncements(aggregated, observations);
+  const latestAnnouncements = useMemo(() => {
+    return deriveAnnouncements(aggregated, observations);
+  }, [aggregated, observations]);
 
+  // Freeze snapshot at the start of each loop
   useEffect(() => {
-    if (announcements.length === 0) return;
-    const interval = setInterval(() => {
-      setCurrentIndex((i) => (i + 1) % announcements.length);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [announcements.length]);
+    if (latestAnnouncements.length > 0 && snapshot.length === 0) {
+      setSnapshot(latestAnnouncements);
+    }
+  }, [latestAnnouncements, snapshot]);
+
+  const handleAnimationIteration = () => {
+    // Update snapshot for next lap
+    setSnapshot(latestAnnouncements);
+  };
 
   const handleClose = () => {
     setVisible(false);
     localStorage.setItem('ticker-hidden', 'true');
   };
 
-  if (!FLAGS.TICKER_ENABLED || !visible || announcements.length === 0) return null;
+  if (!FLAGS.TICKER_ENABLED || !visible || snapshot.length === 0) return null;
+
+  const displayItems = [...snapshot, ...snapshot]; // Double for seamless loop
+  const speedMs = ENV.TICKER_SPEED_MS;
 
   return (
     <div 
       className="w-full bg-primary text-primary-foreground py-2 px-4 flex items-center gap-3 relative overflow-hidden sticky top-[52px] z-40"
       aria-live="polite"
       aria-atomic="true"
-      onMouseEnter={(e) => {
-        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
-        if (ticker) ticker.style.animationPlayState = 'paused';
-      }}
-      onMouseLeave={(e) => {
-        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
-        if (ticker) ticker.style.animationPlayState = 'running';
-      }}
-      onFocus={(e) => {
-        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
-        if (ticker) ticker.style.animationPlayState = 'paused';
-      }}
-      onBlur={(e) => {
-        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
-        if (ticker) ticker.style.animationPlayState = 'running';
-      }}
     >
-      <div className="flex-1 min-w-0">
-        <div className="ticker-content animate-[ticker_20s_linear_infinite] whitespace-nowrap">
-          {announcements[currentIndex]?.text}
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <div
+          ref={animRef}
+          className="ticker-tape flex gap-8"
+          style={{
+            animation: `scroll ${speedMs}ms linear infinite`,
+          }}
+          onAnimationIteration={handleAnimationIteration}
+          onMouseEnter={(e) => { e.currentTarget.style.animationPlayState = 'paused'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.animationPlayState = 'running'; }}
+        >
+          {displayItems.map((ann, i) => (
+            <span key={`${ann.id}-${i}`} className="whitespace-nowrap">
+              {ann.text}
+            </span>
+          ))}
         </div>
       </div>
       <button
@@ -72,9 +79,14 @@ export default function NewsTicker() {
         <X className="w-4 h-4" />
       </button>
       <style>{`
-        @keyframes ticker {
-          0% { transform: translateX(100%); }
-          100% { transform: translateX(-100%); }
+        @keyframes scroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ticker-tape {
+            animation: none !important;
+          }
         }
       `}</style>
     </div>

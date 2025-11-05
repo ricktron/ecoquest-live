@@ -24,6 +24,11 @@ const RawEnv = {
   VITE_LOCK_DATES: import.meta.env.VITE_LOCK_DATES,
   VITE_FEATURE_TICKER: import.meta.env.VITE_FEATURE_TICKER,
   VITE_FEATURE_DAILY_TROPHIES: import.meta.env.VITE_FEATURE_DAILY_TROPHIES,
+  VITE_TICKER_SPEED_MS: import.meta.env.VITE_TICKER_SPEED_MS,
+  VITE_TZ: import.meta.env.VITE_TZ,
+  VITE_EMAIL_FROM: import.meta.env.VITE_EMAIL_FROM,
+  VITE_ENABLE_EMAIL_DIGEST: import.meta.env.VITE_ENABLE_EMAIL_DIGEST,
+  VITE_DIGEST_TO: import.meta.env.VITE_DIGEST_TO,
 };
 
 const EnvSchema = z.object({
@@ -39,6 +44,11 @@ const EnvSchema = z.object({
   VITE_LOCK_DATES: z.any().optional(),
   VITE_FEATURE_TICKER: z.any().optional(),
   VITE_FEATURE_DAILY_TROPHIES: z.any().optional(),
+  VITE_TICKER_SPEED_MS: z.string().optional(),
+  VITE_TZ: z.string().optional(),
+  VITE_EMAIL_FROM: z.string().optional(),
+  VITE_ENABLE_EMAIL_DIGEST: z.any().optional(),
+  VITE_DIGEST_TO: z.string().optional(),
 });
 
 const parsed = EnvSchema.parse(RawEnv);
@@ -50,6 +60,10 @@ export const ENV = {
   TRIP_MODE: parsed.VITE_TRIP_MODE || "testing",
   TRIP_START: parsed.VITE_TRIP_START,
   TRIP_END: parsed.VITE_TRIP_END,
+  TICKER_SPEED_MS: parseInt(parsed.VITE_TICKER_SPEED_MS || "30000", 10),
+  TZ: parsed.VITE_TZ || "America/Chicago",
+  EMAIL_FROM: parsed.VITE_EMAIL_FROM,
+  DIGEST_TO: parsed.VITE_DIGEST_TO,
   RAW: RawEnv,
 } as const;
 
@@ -59,4 +73,5 @@ export const FLAGS = {
   LOCK_DATES: toBool(RawEnv.VITE_LOCK_DATES, parsed.VITE_TRIP_MODE !== "testing"),
   TICKER_ENABLED: toBool(RawEnv.VITE_FEATURE_TICKER, true),
   DAILY_TROPHIES_ENABLED: toBool(RawEnv.VITE_FEATURE_DAILY_TROPHIES, true),
+  EMAIL_DIGEST_ENABLED: toBool(RawEnv.VITE_ENABLE_EMAIL_DIGEST, false),
 } as const;
