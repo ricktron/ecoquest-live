@@ -87,3 +87,68 @@ export function toObservation(o: INatObservation) {
     uri: o.uri,
   };
 }
+
+/**
+ * Fetch local baseline observations for rarity scoring
+ * @param locations Array of location bboxes to search
+ * @param baselineYears Number of years back to search (default 5)
+ * @param baselineMonths Comma-separated month numbers (e.g., "10,11,12")
+ */
+export async function fetchLocalBaseline(
+  locations: Array<{ bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number } }>,
+  baselineYears: number = 5,
+  baselineMonths: string = "10,11,12"
+): Promise<INatObservation[]> {
+  // In TEST mode, return empty baseline (or could use a subset of mock data)
+  if (ACTIVE_TRIP === 'TEST') {
+    console.log('[inat] Using empty baseline for TEST profile');
+    return [];
+  }
+  
+  // TODO: Implement real iNaturalist API call for baseline data
+  // For now, return empty array for non-TEST profiles
+  console.log('[inat] Baseline fetch not yet implemented', { locations, baselineYears, baselineMonths });
+  return [];
+  
+  /* FUTURE: Real API implementation
+  try {
+    const results: INatObservation[] = [];
+    const months = baselineMonths.split(',').map(m => parseInt(m.trim()));
+    const endYear = new Date().getFullYear();
+    const startYear = endYear - baselineYears;
+    
+    // Fetch observations for each location bbox
+    for (const loc of locations) {
+      const { minLat, minLng, maxLat, maxLng } = loc.bbox;
+      
+      const url = new URL('https://api.inaturalist.org/v1/observations');
+      url.searchParams.set('nelat', maxLat.toString());
+      url.searchParams.set('nelng', maxLng.toString());
+      url.searchParams.set('swlat', minLat.toString());
+      url.searchParams.set('swlng', minLng.toString());
+      url.searchParams.set('verifiable', 'true');
+      url.searchParams.set('has', 'photos');
+      url.searchParams.set('month', months.join(','));
+      url.searchParams.set('year', `${startYear},${endYear}`);
+      url.searchParams.set('per_page', '200');
+      
+      const response = await fetch(url.toString(), {
+        headers: { 'Accept': 'application/json' },
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
+      const json = await response.json();
+      results.push(...(json.results || []));
+    }
+    
+    // Dedupe by observation ID
+    const uniqueObs = new Map<number, INatObservation>();
+    results.forEach(obs => uniqueObs.set(obs.id, obs));
+    return Array.from(uniqueObs.values());
+  } catch (error) {
+    console.error('[inat] Baseline fetch failed:', error);
+    return [];
+  }
+  */
+}

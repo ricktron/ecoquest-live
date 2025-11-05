@@ -29,6 +29,7 @@ export default function Trophies() {
 
   const [tripTrophies, setTripTrophies] = useState<TrophyWithResults[]>([]);
   const [dayTrophies, setDayTrophies] = useState<TrophyWithResults[]>([]);
+  const [showRare, setShowRare] = useState(true); // Toggle for rare vs common
 
   useEffect(() => {
     if (!ctx || !observations.length) return;
@@ -53,8 +54,24 @@ export default function Trophies() {
         })
       );
 
-      setTripTrophies(tripResults);
-      setDayTrophies(dayResults);
+      // Sort trophies: winners first by value DESC, then empty by title ASC
+      const sortTrophies = (trophies: TrophyWithResults[]) => {
+        const withWinners = trophies.filter(t => t.results && t.results.length > 0);
+        const withoutWinners = trophies.filter(t => !t.results || t.results.length === 0);
+        
+        withWinners.sort((a, b) => {
+          const aMax = Math.max(...(a.results?.map(r => r.value) || [0]));
+          const bMax = Math.max(...(b.results?.map(r => r.value) || [0]));
+          return bMax - aMax;
+        });
+        
+        withoutWinners.sort((a, b) => a.title.localeCompare(b.title));
+        
+        return [...withWinners, ...withoutWinners];
+      };
+
+      setTripTrophies(sortTrophies(tripResults));
+      setDayTrophies(sortTrophies(dayResults));
     }
 
     computeTrophies();
@@ -99,6 +116,27 @@ export default function Trophies() {
           </div>
         </div>
 
+        {/* Rarity Posters */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold">Wanted: Locally {showRare ? 'Rare' : 'Common'} Species</h2>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowRare(!showRare)}
+            >
+              Show {showRare ? 'Common' : 'Rare'}
+            </Button>
+          </div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Species {showRare ? 'rarely' : 'commonly'} seen in this area compared to our group observations
+          </div>
+          {/* TODO: Implement rarity grid with top 10 thumbs, taxon names, counts */}
+          <div className="text-center py-8 bg-muted/30 rounded-lg">
+            <p className="text-muted-foreground text-sm">Rarity data will be computed from local baseline observations</p>
+          </div>
+        </div>
+
         {/* Daily Trophies */}
         <div className="space-y-4">
           <h2 className="text-2xl font-bold">Daily Trophies</h2>
@@ -125,14 +163,14 @@ export default function Trophies() {
                   >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-lg">
-                        <Award className="h-5 w-5 text-yellow-500" />
+                        <Award className={`h-5 w-5 ${isEmpty ? 'text-muted-foreground' : 'text-yellow-500'}`} />
                         {trophy.title}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <p className="text-xs text-muted-foreground">
-                        {trophy.minThreshold && `Min: ${trophy.minThreshold}`}
+                        {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum'}
                       </p>
                       {isEmpty ? (
                         <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
@@ -183,14 +221,14 @@ export default function Trophies() {
                   >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-lg">
-                        <Award className="h-5 w-5 text-yellow-500" />
+                        <Award className={`h-5 w-5 ${isEmpty ? 'text-muted-foreground' : 'text-yellow-500'}`} />
                         {trophy.title}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <p className="text-xs text-muted-foreground">
-                        {trophy.minThreshold && `Min: ${trophy.minThreshold}`}
+                        {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum'}
                       </p>
                       {isEmpty ? (
                         <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
