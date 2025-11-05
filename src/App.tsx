@@ -5,6 +5,7 @@ import NewsTicker from './components/NewsTicker';
 import Leaderboard from './pages/Leaderboard';
 import Trophies from './pages/Trophies';
 import TrophyDetail from './pages/TrophyDetail';
+import Gallery from './pages/Gallery';
 import Daily from './pages/Daily';
 import DailyDetail from './pages/DailyDetail';
 import Map from './pages/Map';
@@ -27,6 +28,7 @@ export default function App() {
               <Route path="/leaderboard" element={<Leaderboard />} />
               {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
               {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
+              {FLAGS.TROPHIES_ENABLED && <Route path="/gallery" element={<Gallery />} />}
               <Route path="/daily" element={<Daily />} />
               <Route path="/daily/:ymd" element={<DailyDetail />} />
               <Route path="/map" element={<Map />} />

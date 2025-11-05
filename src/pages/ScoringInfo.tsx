@@ -11,7 +11,7 @@ export default function ScoringInfo() {
       <div className="max-w-3xl mx-auto px-3 md:px-6 py-6 space-y-6">
         <h1 className="text-3xl font-bold">How Scoring Works</h1>
         <div className="p-4 bg-primary/10 border-l-4 border-primary rounded mb-4">
-          <p className="font-semibold text-foreground">⏰ Important: Scores use observation TAKEN time, not upload time!</p>
+          <p className="font-semibold text-foreground">⏰ Important: Scores use the observation's <strong>taken time</strong>, not the upload time!</p>
           <p className="text-sm text-muted-foreground mt-1">
             The time you photograph matters for daily trophies and diminishing returns.
           </p>
@@ -19,6 +19,56 @@ export default function ScoringInfo() {
         <p className="text-muted-foreground">
           EcoQuest Live rewards careful observation, species diversity, and timeliness.
         </p>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Daily Windows & Trophies</CardTitle>
+            <CardDescription>Time-based achievements</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <div className="font-medium">Early Bird</div>
+              <p className="text-sm text-muted-foreground">04:00–07:00 local time, most observations (min 2)</p>
+            </div>
+            <div>
+              <div className="font-medium">Night Owl</div>
+              <p className="text-sm text-muted-foreground">Sunset–23:59 local time, most observations (min 2). Falls back to 17:30 if sunset unavailable.</p>
+            </div>
+            <div>
+              <div className="font-medium">Steady Eddie</div>
+              <p className="text-sm text-muted-foreground">Most distinct clock-hours with ≥1 observation each</p>
+            </div>
+            <div>
+              <div className="font-medium">Daily Variety Hero</div>
+              <p className="text-sm text-muted-foreground">Most unique species in a single day (min 2)</p>
+            </div>
+            <div>
+              <div className="font-medium">Daily Rare Find</div>
+              <p className="text-sm text-muted-foreground">Highest rarity score for a single observation today</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Trip-Wide Trophies</CardTitle>
+            <CardDescription>Cumulative achievements</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <div className="font-medium">Variety Hero</div>
+              <p className="text-sm text-muted-foreground">Most unique species trip-to-date</p>
+            </div>
+            <div>
+              <div className="font-medium">Trailblazer</div>
+              <p className="text-sm text-muted-foreground">Most first-to-trip species (earliest observation per species wins)</p>
+            </div>
+            <div>
+              <div className="font-medium">Biodiversity Champion</div>
+              <p className="text-sm text-muted-foreground">Highest Shannon diversity H′ (min 6 observations)</p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

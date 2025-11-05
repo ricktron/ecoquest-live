@@ -66,77 +66,101 @@ export default function Trophies() {
           </p>
         </div>
 
-        {/* Today's Trophies */}
-        {FLAGS.DAILY_TROPHIES_ENABLED && dayTrophies.length > 0 && (
-          <>
-            <h2 className="text-2xl font-bold">Today's Trophies</h2>
-            {loading ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-40 w-full" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {dayTrophies.map(trophy => (
-                  <Card key={trophy.slug}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Award className="h-5 w-5 text-yellow-500" />
-                        {trophy.title}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full"
-                        onClick={() => navigate(`/trophies/${trophy.slug}`)}
-                      >
-                        View Details
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        {/* Daily Trophies */}
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold">Daily Trophies</h2>
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map(i => (
+                <Skeleton key={i} className="h-40 w-full" />
+              ))}
+            </div>
+          ) : dayTrophies.length === 0 ? (
+            <div className="text-center py-8 bg-muted/30 rounded-lg">
+              <p className="text-muted-foreground">No data yet for daily trophies.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {dayTrophies.map(trophy => (
+                <Card key={trophy.slug} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/trophies/${trophy.slug}`)}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Award className="h-5 w-5 text-yellow-500" />
+                      {trophy.title}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/trophies/${trophy.slug}`);
+                      }}
+                    >
+                      View Details
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Trip Trophies */}
-        <h2 className="text-2xl font-bold">Trip Trophies</h2>
-        {loading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <Skeleton key={i} className="h-40 w-full" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tripTrophies.map(trophy => (
-              <Card key={trophy.slug}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Award className="h-5 w-5 text-yellow-500" />
-                    {trophy.title}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full"
-                    onClick={() => navigate(`/trophies/${trophy.slug}`)}
-                  >
-                    View Details
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold">Trip Trophies</h2>
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Skeleton key={i} className="h-40 w-full" />
+              ))}
+            </div>
+          ) : tripTrophies.length === 0 ? (
+            <div className="text-center py-8 bg-muted/30 rounded-lg">
+              <p className="text-muted-foreground">No data yet for trip trophies.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {tripTrophies.map(trophy => (
+                <Card key={trophy.slug} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/trophies/${trophy.slug}`)}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Award className="h-5 w-5 text-yellow-500" />
+                      {trophy.title}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/trophies/${trophy.slug}`);
+                      }}
+                    >
+                      View Details
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Link to Gallery */}
+        <div className="pt-4 border-t">
+          <button
+            onClick={() => navigate('/gallery')}
+            className="text-primary hover:underline font-semibold"
+          >
+            View Trophy Gallery →
+          </button>
+        </div>
         
         <Legend />
       </div>

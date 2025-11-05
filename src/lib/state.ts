@@ -88,9 +88,9 @@ export const useAppState = create<AppState>((set, get) => {
         const lat = r.location?.[0] || 0;
         const lng = r.location?.[1] || 0;
         
-        return filters.dayPredicate(takenAt) && 
-               filters.memberPredicate(login) && 
-               filters.placePredicate(lat, lng);
+        return filters.dayInRange(takenAt) && 
+               filters.userAllowed(login) && 
+               filters.inPlace(lat, lng);
       });
       
       const obs = filteredRaw.map(toObservation);

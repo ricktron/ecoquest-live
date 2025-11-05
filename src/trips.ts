@@ -67,23 +67,27 @@ export type TripFilters = {
   tz: string;
 };
 
-export function getTripFilters(): TripFilters {
+export function getTripFilters() {
   const trip = getActiveTrip();
   
   return {
-    dayPredicate: (takenAt: string) => {
+    tz: trip.timezone,
+    dayInRange: (takenAt: string) => {
       const date = takenAt.split('T')[0];
       return trip.dayRanges.some(range => date >= range.start && date <= range.end);
     },
-    memberPredicate: (login: string) => {
+    userAllowed: (login: string) => {
       if (trip.memberLogins.length === 0) return true; // No filter if empty
       return trip.memberLogins.includes(login);
     },
-    placePredicate: (lat: number, lng: number) => {
+    inPlace: (lat: number, lng: number) => {
       if (!trip.bbox) return true;
       const { minLat, minLng, maxLat, maxLng } = trip.bbox;
       return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
     },
-    tz: trip.timezone,
+    eligibleForAwards: (login: string) => {
+      // Default: all logins eligible (may flip adults later)
+      return true;
+    },
   };
 }

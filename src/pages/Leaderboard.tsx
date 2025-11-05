@@ -135,16 +135,14 @@ export default function Leaderboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* Trend column */}
-                  {row.trend !== undefined && row.trend !== 0 && (
-                    <div className={`text-sm font-semibold ${
-                      row.trend > 0 ? 'text-green-600 dark:text-green-400' : 
-                      row.trend < 0 ? 'text-red-600 dark:text-red-400' : 
-                      'text-muted-foreground'
-                    }`}>
-                      {row.trend > 0 ? '+' : ''}{row.trend.toFixed(1)}
-                    </div>
-                  )}
+                  {/* Trend column - always visible */}
+                  <div className={`text-sm font-semibold min-w-[3rem] text-right ${
+                    row.trend > 0 ? 'text-green-600 dark:text-green-400' : 
+                    row.trend < 0 ? 'text-red-600 dark:text-red-400' : 
+                    'text-muted-foreground'
+                  }`}>
+                    {row.trend > 0 ? '+' : ''}{row.trend === 0 ? '—' : row.trend.toFixed(1)}
+                  </div>
                   <div className="text-2xl font-bold text-primary">
                     {formatPoints(row.points)}
                   </div>

@@ -253,33 +253,23 @@ export const TROPHIES: Record<string, TrophyDef> = {
     slug: 'steady-eddie',
     scope: 'daily',
     title: 'Steady Eddie',
-    subtitle: 'Most distinct time blocks (≥45m gap)',
+    subtitle: 'Most distinct clock-hours with ≥1 obs',
     compute: async (obs, ctx, date) => {
       const dayObs = date ? obs.filter(o => o.observedOn === date) : obs;
-      const userTimes = new Map<string, string[]>();
+      const userHours = new Map<string, Set<number>>();
       
       dayObs.forEach(o => {
         const timeStr = o.timeObservedAt || o.observedOn;
-        if (!userTimes.has(o.userLogin)) userTimes.set(o.userLogin, []);
-        userTimes.get(o.userLogin)!.push(timeStr);
+        const hour = new Date(timeStr).getHours();
+        if (!userHours.has(o.userLogin)) userHours.set(o.userLogin, new Set());
+        userHours.get(o.userLogin)!.add(hour);
       });
       
-      const userBlocks = new Map<string, number>();
-      for (const [login, times] of userTimes.entries()) {
-        const sorted = times.map(t => new Date(t).getTime()).sort((a, b) => a - b);
-        let blocks = 1;
-        for (let i = 1; i < sorted.length; i++) {
-          const gap = (sorted[i] - sorted[i - 1]) / (1000 * 60); // minutes
-          if (gap >= 45) blocks++;
-        }
-        userBlocks.set(login, blocks);
-      }
-      
-      return Array.from(userBlocks.entries())
-        .map(([login, blocks]) => ({
+      return Array.from(userHours.entries())
+        .map(([login, hours]) => ({
           login,
-          value: blocks,
-          evidence: `${blocks} distinct time blocks`,
+          value: hours.size,
+          evidence: `${hours.size} distinct hours`,
         }))
         .sort((a, b) => b.value - a.value);
     },
