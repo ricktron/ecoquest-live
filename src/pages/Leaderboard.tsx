@@ -85,8 +85,6 @@ export default function Leaderboard() {
           </p>
         </div>
 
-        {/* Date controls */}
-        <DateRange />
 
         {/* Offline hint */}
         {showOfflineHint && (

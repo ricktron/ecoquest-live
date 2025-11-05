@@ -38,9 +38,29 @@ export default function NewsTicker() {
   if (!FLAGS.TICKER_ENABLED || !visible || announcements.length === 0) return null;
 
   return (
-    <div className="w-full bg-primary text-primary-foreground py-2 px-4 flex items-center gap-3 relative overflow-hidden">
+    <div 
+      className="w-full bg-primary text-primary-foreground py-2 px-4 flex items-center gap-3 relative overflow-hidden sticky top-[52px] z-40"
+      aria-live="polite"
+      aria-atomic="true"
+      onMouseEnter={(e) => {
+        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
+        if (ticker) ticker.style.animationPlayState = 'paused';
+      }}
+      onMouseLeave={(e) => {
+        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
+        if (ticker) ticker.style.animationPlayState = 'running';
+      }}
+      onFocus={(e) => {
+        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
+        if (ticker) ticker.style.animationPlayState = 'paused';
+      }}
+      onBlur={(e) => {
+        const ticker = e.currentTarget.querySelector('.ticker-content') as HTMLElement;
+        if (ticker) ticker.style.animationPlayState = 'running';
+      }}
+    >
       <div className="flex-1 min-w-0">
-        <div className="animate-[ticker_20s_linear_infinite] whitespace-nowrap hover:pause">
+        <div className="ticker-content animate-[ticker_20s_linear_infinite] whitespace-nowrap">
           {announcements[currentIndex]?.text}
         </div>
       </div>
@@ -55,9 +75,6 @@ export default function NewsTicker() {
         @keyframes ticker {
           0% { transform: translateX(100%); }
           100% { transform: translateX(-100%); }
-        }
-        .hover\\:pause:hover {
-          animation-play-state: paused;
         }
       `}</style>
     </div>

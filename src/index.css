@@ -4,6 +4,7 @@
 
 :root {
   --header-h: 52px;
+  --ticker-h: 36px;
   --tabbar-h: 56px;
 }
 
@@ -36,6 +37,14 @@ html, body, #root {
   padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
 }
 
+/* On mobile, add padding for bottom tabs */
+@media (max-width: 767px) {
+  .app-content {
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
+  }
+}
+
+/* On desktop, no bottom tabs so less padding */
 @media (min-width: 768px) {
   .app-content {
     padding-bottom: 1.5rem;
@@ -54,12 +63,26 @@ html, body, #root {
   border-top: 1px solid hsl(var(--border));
 }
 
+@media (min-width: 768px) {
+  .tabbar {
+    display: none;
+  }
+}
+
 .page {
   width: 100%;
   box-sizing: border-box;
   padding: clamp(12px, 4vw, 24px);
   max-width: 720px;
   margin: 0 auto;
+  min-height: 100dvh;
+}
+
+/* On mobile, ensure content doesn't hide under bottom tabs */
+@media (max-width: 767px) {
+  .page {
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 24px);
+  }
 }
 
 @layer base {
@@ -129,28 +152,38 @@ html, body, #root {
 
 .app-main {
   flex: 1;
-  padding: 12px;
-  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
   overflow-y: auto;
 }
 
-.map-wrap {
-  height: calc(100dvh - var(--header-h) - var(--tabbar-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  width: 100%;
-  position: relative;
+/* On mobile, add padding for bottom tabs */
+@media (max-width: 767px) {
+  .app-main {
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
+  }
 }
 
+/* On desktop, no bottom tabs */
 @media (min-width: 768px) {
   .app-main {
     padding-bottom: 12px;
   }
-  
-  .tabbar {
-    position: fixed;
-    bottom: 0;
-  }
-  
+}
+
+.map-wrap {
+  width: 100%;
+  position: relative;
+}
+
+/* On mobile with bottom tabs */
+@media (max-width: 767px) {
   .map-wrap {
-    height: calc(100dvh - var(--header-h) - var(--tabbar-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height: calc(100dvh - var(--header-h) - var(--ticker-h) - var(--tabbar-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+/* On desktop without bottom tabs */
+@media (min-width: 768px) {
+  .map-wrap {
+    height: calc(100dvh - var(--header-h) - var(--ticker-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 100px);
   }
 }

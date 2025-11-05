@@ -17,49 +17,48 @@ export default function TabNav() {
 
   return (
     <>
-      {/* Desktop: horizontal tabs at top */}
-      <div className="hidden md:block app-header">
-        <div className="max-w-screen-lg mx-auto px-6 h-full flex items-center">
-          <nav className="flex gap-6">
-            {tabs.map(tab => (
-              <NavLink
-                key={tab.to}
-                to={tab.to}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`
-                }
-              >
-                <tab.icon className="h-5 w-5" />
-                <span className="font-medium">{tab.label}</span>
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      {/* Mobile: bottom tab bar */}
-      <div className="md:hidden tabbar">
-        <nav className="flex justify-around h-14 items-center">
+      {/* Top pill tabs - visible on all screens */}
+      <nav className="border-b bg-background sticky top-0 z-50 px-4 py-2 app-header">
+        <div className="max-w-screen-lg mx-auto flex items-center gap-2 overflow-x-auto">
           {tabs.map(tab => (
             <NavLink
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center flex-1 gap-1 transition-colors ${
-                  isActive ? 'text-primary' : 'text-muted-foreground'
+                `px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
                 }`
               }
             >
-              <tab.icon className="h-6 w-6" />
+              {tab.label}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
+
+      {/* Mobile bottom tabs - icons only */}
+      <nav className="md:hidden tabbar">
+        <div className="h-14 flex items-center justify-around px-2">
+          {tabs.map(tab => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                }`
+              }
+            >
+              <tab.icon className="h-5 w-5" />
               <span className="text-xs font-medium">{tab.label}</span>
             </NavLink>
           ))}
-        </nav>
-      </div>
+        </div>
+      </nav>
     </>
   );
 }

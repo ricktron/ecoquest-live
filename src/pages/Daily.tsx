@@ -32,8 +32,6 @@ export default function Daily() {
           </p>
         </div>
 
-        {/* Date controls */}
-        <DateRange />
 
         {loading ? (
           <div className="space-y-3">
