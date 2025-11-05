@@ -28,16 +28,16 @@ export const Hero = () => {
 
           {/* Headline */}
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-foreground">
-            Turn Daily Actions Into{" "}
+            EcoQuest Live:{" "}
             <span className="bg-gradient-to-r from-primary via-accent to-primary-glow bg-clip-text text-transparent">
-              Global Impact
+              Spot it. Snap it. Score it.
             </span>
           </h1>
 
           {/* Subheadline */}
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Join challenges, track your carbon footprint, and connect with a
-            community committed to creating a sustainable future.
+            Turn every nature observation into points. Compete in real-time challenges, 
+            discover rare species, and help document biodiversity.
           </p>
 
           {/* CTA Buttons */}

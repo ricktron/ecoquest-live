@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import TabNav from './components/TabNav';
+import HeaderStack from './components/HeaderStack';
 import Leaderboard from './pages/Leaderboard';
 import Trophies from './pages/Trophies';
 import TrophyDetail from './pages/TrophyDetail';
@@ -14,6 +14,7 @@ import Profile from './pages/Profile';
 import ScoringInfo from './pages/ScoringInfo';
 import Guide from './pages/Guide';
 import Compare from './pages/Compare';
+import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
 import { FLAGS } from './env';
 
@@ -22,7 +23,7 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <div className="app-shell">
-          <TabNav />
+          <HeaderStack />
           <main className="app-main">
             <Routes>
               <Route path="/" element={<Navigate to="/leaderboard" replace />} />
@@ -30,6 +31,7 @@ export default function App() {
               {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
               {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
               {FLAGS.TROPHIES_ENABLED && <Route path="/gallery" element={<Gallery />} />}
+              {FLAGS.TROPHIES_ENABLED && <Route path="/rarity" element={<Rarity />} />}
               <Route path="/daily" element={<Daily />} />
               <Route path="/daily/:ymd" element={<DailyDetail />} />
               <Route path="/map" element={<Map />} />

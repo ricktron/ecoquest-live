@@ -2,7 +2,6 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Trophy, BarChart3, Calendar, Map as MapIcon, Bug, GitCompare } from 'lucide-react';
 import { FLAGS } from '@/env';
 import { useIsMobile } from '@/hooks/use-mobile';
-import NewsTicker from './NewsTicker';
 
 export default function TabNav() {
   const location = useLocation();
@@ -20,7 +19,7 @@ export default function TabNav() {
   return (
     <>
       {/* Top pill tabs - visible on all screens */}
-      <nav className="border-b bg-background sticky top-0 z-50 px-4 py-2 app-header">
+      <nav className="border-b bg-background px-4 py-2 app-header">
         <div className="max-w-screen-lg mx-auto flex items-center gap-2 overflow-x-auto">
           {tabs.map(tab => (
             <NavLink
@@ -39,9 +38,6 @@ export default function TabNav() {
           ))}
         </div>
       </nav>
-
-      {/* News Ticker - sticky under tabs */}
-      <NewsTicker />
 
       {/* Mobile bottom tabs - icons only */}
       <nav className="md:hidden tabbar">

@@ -171,20 +171,32 @@ html, body, #root {
   padding: 0 24px;
 }
 
-/* Trophy empty state */
+/* Trophy card styles */
+.trophy-card {
+  position: relative;
+  border-left-width: 4px;
+}
+
 .trophy-card.empty {
   filter: saturate(50%);
   opacity: 0.65;
-  cursor: default;
+  cursor: not-allowed;
 }
 
-.trophy-card.empty:hover {
-  box-shadow: none;
+.trophy-card.daily {
+  border-left-color: hsl(217, 91%, 60%);
 }
 
-.trophy-card.empty a,
-.trophy-card.empty button {
-  pointer-events: none;
+.trophy-card.trip {
+  border-left-color: hsl(142, 76%, 36%);
+}
+
+.trophy-card.taxon {
+  border-left-color: hsl(271, 91%, 65%);
+}
+
+.trophy-card.hazard {
+  border-left-color: hsl(25, 95%, 53%);
 }
 
 .app-main {

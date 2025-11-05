@@ -106,10 +106,16 @@ export default function Trophies() {
           <p className="text-sm text-muted-foreground">
             Achievement awards for outstanding contributions
           </p>
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col gap-2">
+            <button
+              onClick={() => navigate('/rarity')}
+              className="text-primary hover:underline font-semibold text-sm text-left"
+            >
+              Wanted: Locally Rare Species →
+            </button>
             <button
               onClick={() => navigate('/gallery')}
-              className="text-primary hover:underline font-semibold text-sm"
+              className="text-primary hover:underline font-semibold text-sm text-left"
             >
               View Trophy Gallery →
             </button>
@@ -154,10 +160,16 @@ export default function Trophies() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {dayTrophies.map(trophy => {
                 const isEmpty = !trophy.results || trophy.results.length === 0;
+                const categoryClass = trophy.slug.includes('hazard') ? 'hazard' : 
+                                     trophy.slug.includes('bird') || trophy.slug.includes('mammal') || 
+                                     trophy.slug.includes('reptile') || trophy.slug.includes('amphibian') ||
+                                     trophy.slug.includes('spider') || trophy.slug.includes('insect') ||
+                                     trophy.slug.includes('plant') || trophy.slug.includes('fungi') ||
+                                     trophy.slug.includes('mollusk') ? 'taxon' : 'daily';
                 return (
                   <Card 
                     key={trophy.slug} 
-                    className={`transition-shadow ${isEmpty ? 'trophy-card empty' : 'hover:shadow-lg cursor-pointer trophy-card'}`}
+                    className={`transition-shadow trophy-card ${categoryClass} ${isEmpty ? 'empty' : 'hover:shadow-lg cursor-pointer'}`}
                     onClick={() => !isEmpty && navigate(`/trophies/${trophy.slug}`)}
                     aria-disabled={isEmpty}
                   >
@@ -212,10 +224,16 @@ export default function Trophies() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {tripTrophies.map(trophy => {
                 const isEmpty = !trophy.results || trophy.results.length === 0;
+                const categoryClass = trophy.slug.includes('hazard') ? 'hazard' : 
+                                     trophy.slug.includes('bird') || trophy.slug.includes('mammal') || 
+                                     trophy.slug.includes('reptile') || trophy.slug.includes('amphibian') ||
+                                     trophy.slug.includes('spider') || trophy.slug.includes('insect') ||
+                                     trophy.slug.includes('plant') || trophy.slug.includes('fungi') ||
+                                     trophy.slug.includes('mollusk') ? 'taxon' : 'trip';
                 return (
                   <Card 
                     key={trophy.slug} 
-                    className={`transition-shadow ${isEmpty ? 'trophy-card empty' : 'hover:shadow-lg cursor-pointer trophy-card'}`}
+                    className={`transition-shadow trophy-card ${categoryClass} ${isEmpty ? 'empty' : 'hover:shadow-lg cursor-pointer'}`}
                     onClick={() => !isEmpty && navigate(`/trophies/${trophy.slug}`)}
                     aria-disabled={isEmpty}
                   >
