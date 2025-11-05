@@ -49,7 +49,7 @@ export default function NewsTicker() {
 
   return (
     <div 
-      className="w-full bg-primary text-primary-foreground py-2 px-4 flex items-center gap-3 relative overflow-hidden sticky top-[52px] z-40"
+      className="ticker-bar w-full bg-primary text-primary-foreground py-2 px-4 flex items-center gap-3 relative overflow-hidden"
       aria-live="polite"
       aria-atomic="true"
     >

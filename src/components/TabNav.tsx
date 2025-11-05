@@ -1,7 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Trophy, BarChart3, Calendar, Map as MapIcon, Bug } from 'lucide-react';
+import { Trophy, BarChart3, Calendar, Map as MapIcon, Bug, GitCompare } from 'lucide-react';
 import { FLAGS } from '@/env';
 import { useIsMobile } from '@/hooks/use-mobile';
+import NewsTicker from './NewsTicker';
 
 export default function TabNav() {
   const location = useLocation();
@@ -12,6 +13,7 @@ export default function TabNav() {
     { to: '/trophies', label: 'Trophies', icon: Trophy, show: FLAGS.TROPHIES_ENABLED },
     { to: '/daily', label: 'Daily', icon: Calendar, show: true },
     { to: '/map', label: 'Map', icon: MapIcon, show: true },
+    { to: '/compare', label: 'Compare', icon: GitCompare, show: FLAGS.ENABLE_COMPARE },
     { to: '/debug', label: 'Debug', icon: Bug, show: FLAGS.ADMIN_ENABLED },
   ].filter(t => t.show);
 
@@ -37,6 +39,9 @@ export default function TabNav() {
           ))}
         </div>
       </nav>
+
+      {/* News Ticker - sticky under tabs */}
+      <NewsTicker />
 
       {/* Mobile bottom tabs - icons only */}
       <nav className="md:hidden tabbar">

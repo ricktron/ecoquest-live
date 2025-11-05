@@ -1,10 +1,12 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppState } from '@/lib/state';
 import { getActiveTrip, getTripFilters } from '@/trips';
 import { TROPHIES } from '@/trophies';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { CheckCircle2, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { ENV, FLAGS } from '@/env';
 
 type SelfCheckResult = {
   name: string;
@@ -235,6 +237,56 @@ export default function Debug() {
                 </div>
               </>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Environment Variables */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Environment Variables (Parsed)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs font-mono">
+            <div className="grid grid-cols-2 gap-2">
+              <span className="text-muted-foreground">TRIP_PROFILE</span>
+              <span>{trip.id}</span>
+              <span className="text-muted-foreground">TZ</span>
+              <span>{ENV.TZ}</span>
+              <span className="text-muted-foreground">TICKER_SPEED_MS</span>
+              <span>{ENV.TICKER_SPEED_MS}</span>
+              <span className="text-muted-foreground">RARITY_GROUP_WEIGHT</span>
+              <span>{ENV.RARITY_GROUP_WEIGHT}</span>
+              <span className="text-muted-foreground">RARITY_LOCAL_WEIGHT</span>
+              <span>{ENV.RARITY_LOCAL_WEIGHT}</span>
+              <span className="text-muted-foreground">BASELINE_YEARS</span>
+              <span>{ENV.BASELINE_YEARS}</span>
+              <span className="text-muted-foreground">BASELINE_MONTHS</span>
+              <span>{ENV.BASELINE_MONTHS}</span>
+              <span className="text-muted-foreground">ENABLE_COMPARE</span>
+              <span>{FLAGS.ENABLE_COMPARE ? 'true' : 'false'}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Preview */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Data Preview</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Our Observations</span>
+              <span className="font-mono">{observations.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Unique Species</span>
+              <span className="font-mono">
+                {new Set(observations.map(o => o.taxonId).filter(Boolean)).size}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Baseline Local Obs</span>
+              <span className="font-mono text-muted-foreground">Not loaded (stub)</span>
+            </div>
           </CardContent>
         </Card>
       </div>

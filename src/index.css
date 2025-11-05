@@ -155,14 +155,14 @@ html, body, #root {
   position: sticky;
   top: var(--header-h, 52px);
   z-index: 30;
-  background: hsl(var(--background));
-  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--primary));
+  border-bottom: 1px solid rgba(0,0,0,.06);
 }
 
 .ticker-track {
   white-space: nowrap;
   overflow: hidden;
-  height: var(--ticker-h, 36px);
+  height: 32px;
   display: flex;
   align-items: center;
 }

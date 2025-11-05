@@ -29,6 +29,11 @@ const RawEnv = {
   VITE_EMAIL_FROM: import.meta.env.VITE_EMAIL_FROM,
   VITE_ENABLE_EMAIL_DIGEST: import.meta.env.VITE_ENABLE_EMAIL_DIGEST,
   VITE_DIGEST_TO: import.meta.env.VITE_DIGEST_TO,
+  VITE_RARITY_GROUP_WEIGHT: import.meta.env.VITE_RARITY_GROUP_WEIGHT,
+  VITE_RARITY_LOCAL_WEIGHT: import.meta.env.VITE_RARITY_LOCAL_WEIGHT,
+  VITE_BASELINE_YEARS: import.meta.env.VITE_BASELINE_YEARS,
+  VITE_BASELINE_MONTHS: import.meta.env.VITE_BASELINE_MONTHS,
+  VITE_ENABLE_COMPARE: import.meta.env.VITE_ENABLE_COMPARE,
 };
 
 const EnvSchema = z.object({
@@ -49,6 +54,11 @@ const EnvSchema = z.object({
   VITE_EMAIL_FROM: z.string().optional(),
   VITE_ENABLE_EMAIL_DIGEST: z.any().optional(),
   VITE_DIGEST_TO: z.string().optional(),
+  VITE_RARITY_GROUP_WEIGHT: z.string().optional(),
+  VITE_RARITY_LOCAL_WEIGHT: z.string().optional(),
+  VITE_BASELINE_YEARS: z.string().optional(),
+  VITE_BASELINE_MONTHS: z.string().optional(),
+  VITE_ENABLE_COMPARE: z.any().optional(),
 });
 
 const parsed = EnvSchema.parse(RawEnv);
@@ -61,9 +71,13 @@ export const ENV = {
   TRIP_START: parsed.VITE_TRIP_START,
   TRIP_END: parsed.VITE_TRIP_END,
   TICKER_SPEED_MS: parseInt(parsed.VITE_TICKER_SPEED_MS || "30000", 10),
-  TZ: parsed.VITE_TZ || "America/Chicago",
+  TZ: parsed.VITE_TZ || "America/Costa_Rica",
   EMAIL_FROM: parsed.VITE_EMAIL_FROM,
   DIGEST_TO: parsed.VITE_DIGEST_TO,
+  RARITY_GROUP_WEIGHT: parseFloat(parsed.VITE_RARITY_GROUP_WEIGHT || "0.7"),
+  RARITY_LOCAL_WEIGHT: parseFloat(parsed.VITE_RARITY_LOCAL_WEIGHT || "0.3"),
+  BASELINE_YEARS: parseInt(parsed.VITE_BASELINE_YEARS || "5", 10),
+  BASELINE_MONTHS: parsed.VITE_BASELINE_MONTHS || "10,11,12",
   RAW: RawEnv,
 } as const;
 
@@ -74,4 +88,5 @@ export const FLAGS = {
   TICKER_ENABLED: toBool(RawEnv.VITE_FEATURE_TICKER, true),
   DAILY_TROPHIES_ENABLED: toBool(RawEnv.VITE_FEATURE_DAILY_TROPHIES, true),
   EMAIL_DIGEST_ENABLED: toBool(RawEnv.VITE_ENABLE_EMAIL_DIGEST, false),
+  ENABLE_COMPARE: toBool(RawEnv.VITE_ENABLE_COMPARE, false),
 } as const;

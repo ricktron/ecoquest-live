@@ -9,6 +9,12 @@ export const RESEARCH_TRIP_CAP = 12.0;
 export const CASUAL_PENALTY = -0.10;
 export const CASUAL_DAILY_CAP = -2.0;
 
+// Hazard scoring helper
+export function getHazardLevel(taxonId: number | undefined): number {
+  // TODO: Hook up to hazards map from state when ready
+  return 0;
+}
+
 export type ObservationData = {
   id: number;
   observedOn: string;

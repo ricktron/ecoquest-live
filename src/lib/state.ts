@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { fetchObservations, toObservation, type INatObservation } from './inat';
 import { aggregateScores, type ObservationData, type AggregatedScores } from './scoring';
 import { getActiveTrip, getTripFilters } from '@/trips';
+import { loadHazardsFromSupabase, type HazardDef } from './hazards';
 import dayjs from 'dayjs';
 
 type AppState = {
@@ -18,6 +19,7 @@ type AppState = {
   observations: ObservationData[];
   aggregated: AggregatedScores | null;
   lastInatSync: number | null;  // timestamp of last fetch
+  hazardsByTaxon: Map<number, HazardDef>;
   
   // Actions
   setDateRange: (start: string, end: string) => void;
@@ -42,6 +44,7 @@ export const useAppState = create<AppState>((set, get) => {
   observations: [],
   aggregated: null,
   lastInatSync: null,
+  hazardsByTaxon: new Map(),
   
   setDateRange: (start, end) => {
     set({ startDate: start, endDate: end });
@@ -131,9 +134,13 @@ export const useAppState = create<AppState>((set, get) => {
     }
   },
   
-  initialize: () => {
-    // Trip filters already set in initial state
-    // Initial load
+  initialize: async () => {
+    // Load hazards cache
+    const hazards = await loadHazardsFromSupabase();
+    const hazardsMap = new Map(hazards.map(h => [h.taxon_id, h]));
+    set({ hazardsByTaxon: hazardsMap });
+    
+    // Initial data load
     get().refresh();
   },
 }});
