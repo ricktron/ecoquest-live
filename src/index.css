@@ -150,6 +150,43 @@ html, body, #root {
   }
 }
 
+/* Ticker styling */
+.ticker-bar {
+  position: sticky;
+  top: var(--header-h, 52px);
+  z-index: 30;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+}
+
+.ticker-track {
+  white-space: nowrap;
+  overflow: hidden;
+  height: var(--ticker-h, 36px);
+  display: flex;
+  align-items: center;
+}
+
+.ticker-item {
+  padding: 0 24px;
+}
+
+/* Trophy empty state */
+.trophy-card.empty {
+  filter: grayscale(100%);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.trophy-card.empty:hover {
+  box-shadow: none;
+}
+
+.trophy-card.empty a,
+.trophy-card.empty button {
+  pointer-events: none;
+}
+
 .app-main {
   flex: 1;
   overflow-y: auto;

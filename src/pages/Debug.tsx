@@ -139,9 +139,22 @@ export default function Debug() {
                 <p className="text-sm text-muted-foreground">Timezone</p>
                 <p className="text-lg font-mono">{trip.timezone}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Members</p>
-                <p className="text-lg font-bold">{trip.memberLogins.length || 'All users'}</p>
+              <div className="col-span-2">
+                <p className="text-sm text-muted-foreground mb-1">Members</p>
+                {trip.memberLogins.length > 0 ? (
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-foreground hover:text-primary font-medium">
+                      {trip.memberLogins.length} members configured
+                    </summary>
+                    <ul className="mt-2 ml-4 space-y-1 list-disc">
+                      {trip.memberLogins.map(login => (
+                        <li key={login} className="text-muted-foreground">{login}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : (
+                  <p className="text-lg font-bold">All users</p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Place Filter</p>

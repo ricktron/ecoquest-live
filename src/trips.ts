@@ -31,12 +31,12 @@ export const TRIPS: Record<TripProfile, TripConfig> = {
   },
   CR_TRIP_2025: {
     id: 'CR_TRIP_2025',
-    title: 'Costa Rica BioBlitz 2025',
+    title: 'Costa Rica 2025',
     timezone: 'America/Costa_Rica',
-    dayRanges: [{ start: '2025-11-08', end: '2025-11-15' }],
-    memberLogins: [], // Add actual member logins here
+    dayRanges: [{ start: '2025-11-09', end: '2025-11-15' }],
+    memberLogins: [], // Add actual member logins later
     placeId: 6792, // Costa Rica iNat place ID
-    bbox: { minLat: 8.0, minLng: -86.0, maxLat: 11.5, maxLng: -82.5 },
+    bbox: undefined, // Use placeId instead
     fallbackSunsetHHMM: '17:30',
     locations: [
       { 

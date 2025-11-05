@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FLAGS } from '@/env';
 import { useAppState } from '@/lib/state';
@@ -9,7 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Award, Crown } from 'lucide-react';
 import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
-import { getTripTrophies, getDailyTrophies } from '@/trophies';
+import { getTripTrophies, getDailyTrophies, TrophyDef, TrophyResult } from '@/trophies';
+
+type TrophyWithResults = TrophyDef & { results?: TrophyResult[] };
 
 export default function Trophies() {
   const { slug } = useParams<{ slug?: string }>();
@@ -25,15 +27,38 @@ export default function Trophies() {
     return buildScoringContext(observations);
   }, [observations]);
 
-  const tripTrophies = useMemo(() => {
-    if (!ctx) return [];
-    return getTripTrophies();
-  }, [ctx]);
+  const [tripTrophies, setTripTrophies] = useState<TrophyWithResults[]>([]);
+  const [dayTrophies, setDayTrophies] = useState<TrophyWithResults[]>([]);
 
-  const dayTrophies = useMemo(() => {
-    if (!ctx) return [];
-    return getDailyTrophies();
-  }, [ctx]);
+  useEffect(() => {
+    if (!ctx || !observations.length) return;
+
+    async function computeTrophies() {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const tripDefs = getTripTrophies();
+      const dayDefs = getDailyTrophies();
+
+      const tripResults = await Promise.all(
+        tripDefs.map(async (def) => {
+          const results = await def.compute(observations, ctx);
+          return { ...def, results };
+        })
+      );
+
+      const dayResults = await Promise.all(
+        dayDefs.map(async (def) => {
+          const results = await def.compute(observations, ctx, today);
+          return { ...def, results };
+        })
+      );
+
+      setTripTrophies(tripResults);
+      setDayTrophies(dayResults);
+    }
+
+    computeTrophies();
+  }, [ctx, observations]);
 
   // If we have a slug, render the detail page
   if (slug) {
@@ -64,6 +89,14 @@ export default function Trophies() {
           <p className="text-sm text-muted-foreground">
             Achievement awards for outstanding contributions
           </p>
+          <div className="pt-2">
+            <button
+              onClick={() => navigate('/gallery')}
+              className="text-primary hover:underline font-semibold text-sm"
+            >
+              View Trophy Gallery →
+            </button>
+          </div>
         </div>
 
         {/* Daily Trophies */}
@@ -81,30 +114,42 @@ export default function Trophies() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {dayTrophies.map(trophy => (
-                <Card key={trophy.slug} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/trophies/${trophy.slug}`)}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Award className="h-5 w-5 text-yellow-500" />
-                      {trophy.title}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/trophies/${trophy.slug}`);
-                      }}
-                    >
-                      View Details
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+              {dayTrophies.map(trophy => {
+                const isEmpty = !trophy.results || trophy.results.length === 0;
+                return (
+                  <Card 
+                    key={trophy.slug} 
+                    className={`transition-shadow ${isEmpty ? 'trophy-card empty' : 'hover:shadow-lg cursor-pointer trophy-card'}`}
+                    onClick={() => !isEmpty && navigate(`/trophies/${trophy.slug}`)}
+                    aria-disabled={isEmpty}
+                  >
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Award className="h-5 w-5 text-yellow-500" />
+                        {trophy.title}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {isEmpty ? (
+                        <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/trophies/${trophy.slug}`);
+                          }}
+                        >
+                          View Details
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -124,42 +169,44 @@ export default function Trophies() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {tripTrophies.map(trophy => (
-                <Card key={trophy.slug} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/trophies/${trophy.slug}`)}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Award className="h-5 w-5 text-yellow-500" />
-                      {trophy.title}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/trophies/${trophy.slug}`);
-                      }}
-                    >
-                      View Details
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+              {tripTrophies.map(trophy => {
+                const isEmpty = !trophy.results || trophy.results.length === 0;
+                return (
+                  <Card 
+                    key={trophy.slug} 
+                    className={`transition-shadow ${isEmpty ? 'trophy-card empty' : 'hover:shadow-lg cursor-pointer trophy-card'}`}
+                    onClick={() => !isEmpty && navigate(`/trophies/${trophy.slug}`)}
+                    aria-disabled={isEmpty}
+                  >
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Award className="h-5 w-5 text-yellow-500" />
+                        {trophy.title}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {isEmpty ? (
+                        <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/trophies/${trophy.slug}`);
+                          }}
+                        >
+                          View Details
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
-        </div>
-
-        {/* Link to Gallery */}
-        <div className="pt-4 border-t">
-          <button
-            onClick={() => navigate('/gallery')}
-            className="text-primary hover:underline font-semibold"
-          >
-            View Trophy Gallery →
-          </button>
         </div>
         
         <Legend />
