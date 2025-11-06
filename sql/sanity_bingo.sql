@@ -1,0 +1,1 @@
+-- Placeholder: Paste bingo sanity checks here
