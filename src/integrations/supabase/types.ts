@@ -14,7 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      config_scoring: {
+        Row: {
+          id: boolean
+          repeat_decay: number
+          repeat_max_rank: number
+        }
+        Insert: {
+          id?: boolean
+          repeat_decay?: number
+          repeat_max_rank?: number
+        }
+        Update: {
+          id?: boolean
+          repeat_decay?: number
+          repeat_max_rank?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
