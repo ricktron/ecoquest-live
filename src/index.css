@@ -12,6 +12,35 @@ body.has-ticker {
   --ticker-h: 36px;
 }
 
+/* Header & Ticker layout styles */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: hsl(var(--background));
+}
+
+.app-ticker {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 50;
+  height: var(--ticker-h);
+  display: flex;
+  align-items: center;
+  background: hsl(var(--background));
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+
+main {
+  padding-top: calc(var(--header-h) + var(--ticker-h));
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .site-header {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
 html, body, #root { 
   height: 100%; 
   margin: 0;

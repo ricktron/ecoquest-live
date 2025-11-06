@@ -11,19 +11,13 @@ export default function HeaderStack() {
   }, [showTicker]);
 
   return (
-    <header 
-      className="site-header"
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 60,
-        background: 'hsl(var(--background))',
-        boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
-        paddingTop: 'env(safe-area-inset-top, 0)',
-      }}
-    >
+    <header className="site-header">
       <TabNav />
-      {showTicker && <NewsTicker />}
+      {showTicker && (
+        <div className="app-ticker">
+          <NewsTicker />
+        </div>
+      )}
     </header>
   );
 }

@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      config_filters: {
+        Row: {
+          id: boolean
+          night_owl_start_local: string
+          timezone_str: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          id?: boolean
+          night_owl_start_local?: string
+          timezone_str?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          id?: boolean
+          night_owl_start_local?: string
+          timezone_str?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       config_scoring: {
         Row: {
           id: boolean
@@ -37,7 +61,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      compute_scores_mvp: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
