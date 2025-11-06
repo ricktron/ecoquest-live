@@ -6,10 +6,11 @@ import { buildScoringContext } from '@/lib/scoring';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Award, Crown } from 'lucide-react';
+import { Award, Crown, Info } from 'lucide-react';
 import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
 import { getTripTrophies, getDailyTrophies, TrophyDef, TrophyResult } from '@/trophies';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 type TrophyWithResults = TrophyDef & { results?: TrophyResult[] };
 
@@ -29,7 +30,6 @@ export default function Trophies() {
 
   const [tripTrophies, setTripTrophies] = useState<TrophyWithResults[]>([]);
   const [dayTrophies, setDayTrophies] = useState<TrophyWithResults[]>([]);
-  const [showRare, setShowRare] = useState(true); // Toggle for rare vs common
 
   useEffect(() => {
     if (!ctx || !observations.length) return;
@@ -54,20 +54,22 @@ export default function Trophies() {
         })
       );
 
-      // Sort trophies: winners first by value DESC, then empty by title ASC
+      // Sort trophies: won first by value DESC, unwon by minThreshold ASC
       const sortTrophies = (trophies: TrophyWithResults[]) => {
-        const withWinners = trophies.filter(t => t.results && t.results.length > 0);
-        const withoutWinners = trophies.filter(t => !t.results || t.results.length === 0);
+        const won = trophies.filter(t => t.results && t.results.length > 0);
+        const unwon = trophies.filter(t => !t.results || t.results.length === 0);
         
-        withWinners.sort((a, b) => {
+        // Won: sort by highest value DESC
+        won.sort((a, b) => {
           const aMax = Math.max(...(a.results?.map(r => r.value) || [0]));
           const bMax = Math.max(...(b.results?.map(r => r.value) || [0]));
           return bMax - aMax;
         });
         
-        withoutWinners.sort((a, b) => a.title.localeCompare(b.title));
+        // Unwon: sort by minThreshold ASC (easiest first)
+        unwon.sort((a, b) => (a.minThreshold || 0) - (b.minThreshold || 0));
         
-        return [...withWinners, ...withoutWinners];
+        return [...won, ...unwon];
       };
 
       setTripTrophies(sortTrophies(tripResults));
@@ -96,7 +98,7 @@ export default function Trophies() {
   }
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -119,27 +121,6 @@ export default function Trophies() {
             >
               View Trophy Gallery →
             </button>
-          </div>
-        </div>
-
-        {/* Rarity Posters */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">Wanted: Locally {showRare ? 'Rare' : 'Common'} Species</h2>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowRare(!showRare)}
-            >
-              Show {showRare ? 'Common' : 'Rare'}
-            </Button>
-          </div>
-          <div className="text-sm text-muted-foreground mb-4">
-            Species {showRare ? 'rarely' : 'commonly'} seen in this area compared to our group observations
-          </div>
-          {/* TODO: Implement rarity grid with top 10 thumbs, taxon names, counts */}
-          <div className="text-center py-8 bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground text-sm">Rarity data will be computed from local baseline observations</p>
           </div>
         </div>
 
@@ -167,25 +148,34 @@ export default function Trophies() {
                                      trophy.slug.includes('plant') || trophy.slug.includes('fungi') ||
                                      trophy.slug.includes('mollusk') ? 'taxon' : 'daily';
                 return (
-                  <Card 
+                   <Card 
                     key={trophy.slug} 
                     className={`transition-shadow trophy-card ${categoryClass} ${isEmpty ? 'empty' : 'hover:shadow-lg cursor-pointer'}`}
-                    onClick={() => !isEmpty && navigate(`/trophies/${trophy.slug}`)}
-                    aria-disabled={isEmpty}
+                    onClick={() => navigate(`/trophies/${trophy.slug}`)}
                   >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-lg">
                         <Award className={`h-5 w-5 ${isEmpty ? 'text-muted-foreground' : 'text-yellow-500'}`} />
                         {trophy.title}
+                        <Popover>
+                          <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <button className="ml-auto p-1 hover:bg-accent rounded-full" aria-label="Trophy info">
+                              <Info className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="text-sm" onClick={(e) => e.stopPropagation()}>
+                            <p className="font-semibold mb-1">{trophy.subtitle}</p>
+                            <p className="text-muted-foreground text-xs">
+                              {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum threshold'}
+                            </p>
+                          </PopoverContent>
+                        </Popover>
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <p className="text-xs text-muted-foreground">
-                        {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum'}
-                      </p>
                       {isEmpty ? (
-                        <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
+                        <p className="text-xs text-muted-foreground text-center py-2">No winner yet</p>
                       ) : (
                         <Button 
                           variant="outline" 
@@ -234,22 +224,31 @@ export default function Trophies() {
                   <Card 
                     key={trophy.slug} 
                     className={`transition-shadow trophy-card ${categoryClass} ${isEmpty ? 'empty' : 'hover:shadow-lg cursor-pointer'}`}
-                    onClick={() => !isEmpty && navigate(`/trophies/${trophy.slug}`)}
-                    aria-disabled={isEmpty}
+                    onClick={() => navigate(`/trophies/${trophy.slug}`)}
                   >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-lg">
                         <Award className={`h-5 w-5 ${isEmpty ? 'text-muted-foreground' : 'text-yellow-500'}`} />
                         {trophy.title}
+                        <Popover>
+                          <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <button className="ml-auto p-1 hover:bg-accent rounded-full" aria-label="Trophy info">
+                              <Info className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="text-sm" onClick={(e) => e.stopPropagation()}>
+                            <p className="font-semibold mb-1">{trophy.subtitle}</p>
+                            <p className="text-muted-foreground text-xs">
+                              {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum threshold'}
+                            </p>
+                          </PopoverContent>
+                        </Popover>
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">{trophy.subtitle}</p>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <p className="text-xs text-muted-foreground">
-                        {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum'}
-                      </p>
                       {isEmpty ? (
-                        <p className="text-xs text-muted-foreground text-center py-2">No data yet</p>
+                        <p className="text-xs text-muted-foreground text-center py-2">No winner yet</p>
                       ) : (
                         <Button 
                           variant="outline" 

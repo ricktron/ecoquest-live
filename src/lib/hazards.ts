@@ -26,7 +26,8 @@ export async function loadHazardsFromSupabase(): Promise<HazardDef[]> {
   }
 }
 
-export function getHazardLevel(taxonId: number, hazardsMap: Map<number, HazardDef>): number {
+export function getHazardLevel(taxonId: number | undefined, hazardsMap: Map<number, HazardDef>): number {
+  if (!taxonId) return 0;
   return hazardsMap.get(taxonId)?.level || 0;
 }
 

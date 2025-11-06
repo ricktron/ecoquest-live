@@ -64,13 +64,14 @@ export default function Leaderboard() {
   }, [current]);
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Trophy className="h-8 w-8 text-primary" />
-            Leaderboard
+            EcoQuest Live: Leaderboard
           </h1>
+          <p className="text-sm text-muted-foreground italic">Spot it. Snap it. Score it.</p>
           <div className="flex items-center gap-2">
             <Link to="/about/scoring" className="text-sm text-primary hover:underline flex items-center gap-1">
               <Info className="h-4 w-4" />

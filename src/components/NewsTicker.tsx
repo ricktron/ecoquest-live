@@ -12,83 +12,68 @@ type Announcement = {
 
 export default function NewsTicker() {
   const [visible, setVisible] = useState(true);
-  const [snapshot, setSnapshot] = useState<Announcement[]>([]);
+  const [currentItems, setCurrentItems] = useState<Announcement[]>([]);
   const { aggregated, observations } = useAppState();
-  const animRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
 
+  const announcements = useMemo(
+    () => deriveAnnouncements(aggregated, observations),
+    [aggregated, observations]
+  );
+
+  // Stable snapshot per loop - update between loops
   useEffect(() => {
-    const hidden = localStorage.getItem('ticker-hidden');
-    if (hidden === 'true') setVisible(false);
-  }, []);
-
-  const latestAnnouncements = useMemo(() => {
-    return deriveAnnouncements(aggregated, observations);
-  }, [aggregated, observations]);
-
-  // Freeze snapshot at the start of each loop
-  useEffect(() => {
-    if (latestAnnouncements.length > 0 && snapshot.length === 0) {
-      setSnapshot(latestAnnouncements);
+    if (announcements.length > 0) {
+      setCurrentItems(announcements);
     }
-  }, [latestAnnouncements, snapshot]);
+  }, [announcements]);
 
   const handleAnimationIteration = () => {
-    // Update snapshot for next lap
-    setSnapshot(latestAnnouncements);
+    // Refresh items for next loop
+    const fresh = deriveAnnouncements(aggregated, observations);
+    if (fresh.length > 0) {
+      setCurrentItems(fresh);
+    }
   };
 
-  const handleClose = () => {
-    setVisible(false);
-    localStorage.setItem('ticker-hidden', 'true');
-  };
+  if (!visible || currentItems.length === 0) return null;
 
-  if (!FLAGS.TICKER_ENABLED || !visible || snapshot.length === 0) return null;
-
-  const displayItems = [...snapshot, ...snapshot]; // Double for seamless loop
-  const speedMs = ENV.TICKER_SPEED_MS;
+  const speedMs = ENV.TICKER_SPEED_MS || 30000;
 
   return (
     <div 
-      className="ticker-bar w-full bg-primary text-primary-foreground py-2 px-4 flex items-center gap-3 relative overflow-hidden"
-      aria-live="polite"
-      aria-atomic="true"
+      className="ticker-bar"
+      style={{
+        position: 'relative',
+        background: 'hsl(var(--background))',
+        borderTop: '1px solid hsl(var(--border))',
+        overflow: 'hidden',
+        height: '32px',
+      }}
     >
-      <div className="flex-1 min-w-0 overflow-hidden">
-        <div
-          ref={animRef}
-          className="ticker-tape flex gap-8"
-          style={{
-            animation: `scroll ${speedMs}ms linear infinite`,
-          }}
-          onAnimationIteration={handleAnimationIteration}
-          onMouseEnter={(e) => { e.currentTarget.style.animationPlayState = 'paused'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.animationPlayState = 'running'; }}
-        >
-          {displayItems.map((ann, i) => (
-            <span key={`${ann.id}-${i}`} className="whitespace-nowrap">
-              {ann.text}
-            </span>
-          ))}
-        </div>
-      </div>
-      <button
-        onClick={handleClose}
-        className="shrink-0 hover:bg-primary-foreground/20 rounded p-1 transition-colors"
-        aria-label="Close ticker"
+      <div
+        ref={trackRef}
+        className="ticker-track"
+        style={{
+          display: 'flex',
+          gap: '2rem',
+          willChange: 'transform',
+          animation: `ticker-scroll ${speedMs}ms linear infinite`,
+        }}
+        onAnimationIteration={handleAnimationIteration}
       >
-        <X className="w-4 h-4" />
-      </button>
-      <style>{`
-        @keyframes scroll {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .ticker-tape {
-            animation: none !important;
-          }
-        }
-      `}</style>
+        {currentItems.map((item) => (
+          <div key={item.id} className="ticker-item whitespace-nowrap text-sm font-medium py-1.5 px-2">
+            {item.text}
+          </div>
+        ))}
+        {/* Duplicate for seamless loop */}
+        {currentItems.map((item) => (
+          <div key={`${item.id}-dup`} className="ticker-item whitespace-nowrap text-sm font-medium py-1.5 px-2">
+            {item.text}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

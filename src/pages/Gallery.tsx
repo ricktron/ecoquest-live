@@ -5,6 +5,7 @@ import { getTripFilters } from '@/trips';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Trophy } from 'lucide-react';
+import BackButton from '@/components/BackButton';
 
 export default function Gallery() {
   const navigate = useNavigate();
@@ -47,9 +48,10 @@ export default function Gallery() {
   }, [observations]);
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <div className="space-y-2">
+          <BackButton />
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Trophy className="h-8 w-8 text-primary" />
             Trophy Gallery

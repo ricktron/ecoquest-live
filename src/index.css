@@ -199,6 +199,20 @@ html, body, #root {
   border-left-color: hsl(25, 95%, 53%);
 }
 
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* Bottom nav safe area padding */
+.pb-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 56px);
+}
+
 .app-main {
   flex: 1;
   overflow-y: auto;

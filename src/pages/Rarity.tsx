@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sparkles, ExternalLink } from 'lucide-react';
+import BackButton from '@/components/BackButton';
 
 type RarityRow = {
   taxon_id: number;
@@ -51,9 +52,10 @@ export default function Rarity() {
   }, [showRare]);
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <div className="space-y-2">
+          <BackButton />
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Sparkles className="h-8 w-8 text-primary" />
             Locally {showRare ? 'Rare' : 'Common'} Species

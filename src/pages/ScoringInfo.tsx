@@ -7,14 +7,25 @@ export default function ScoringInfo() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 pb-safe-bottom">
       <div className="max-w-3xl mx-auto px-3 md:px-6 py-6 space-y-6">
         <h1 className="text-3xl font-bold">How Scoring Works</h1>
-        <div className="p-4 bg-primary/10 border-l-4 border-primary rounded mb-4">
-          <p className="font-semibold text-foreground">⏰ Important: Scores use the observation's <strong>taken time</strong>, not the upload time!</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            The time you photograph matters for daily trophies and diminishing returns.
-          </p>
+        <p className="text-lg text-muted-foreground italic">
+          EcoQuest Live: Spot it. Snap it. Score it.
+        </p>
+        <div className="space-y-3">
+          <div className="p-4 bg-primary/10 border-l-4 border-primary rounded">
+            <p className="font-semibold text-foreground">⏰ Observed Time Matters</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              We score by the time you <strong>observed</strong> the species, not when you uploaded it. This ensures fair first-finder awards and accurate daily rankings.
+            </p>
+          </div>
+          <div className="p-4 bg-amber-500/10 border-l-4 border-amber-500 rounded">
+            <p className="font-semibold text-foreground">🏆 Trophies Can Change Hands</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Trophy winners are live-updated throughout the day as new observations come in. Keep exploring to stay on top!
+            </p>
+          </div>
         </div>
         <p className="text-muted-foreground">
           EcoQuest Live rewards careful observation, species diversity, and timeliness.

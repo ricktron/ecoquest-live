@@ -81,12 +81,19 @@ export default function Debug() {
   const { loading, observations, aggregated, lastInatSync, initialize } = useAppState();
   const trip = getActiveTrip();
   const filters = getTripFilters();
+  const [membersOpen, setMembersOpen] = useState(false);
 
   useEffect(() => {
     initialize();
   }, []);
 
   const selfCheck = useMemo(() => runSelfCheck(observations), [observations]);
+
+  const dataPreview = useMemo(() => {
+    const uniqueSpecies = new Set(observations.map(o => o.taxonId).filter(Boolean)).size;
+    const uniqueUsers = new Set(observations.map(o => o.userLogin)).size;
+    return { total: observations.length, uniqueSpecies, uniqueUsers };
+  }, [observations]);
 
   const perDayCounts = useMemo(() => {
     const counts = new Map<string, number>();

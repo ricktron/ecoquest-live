@@ -67,17 +67,23 @@ export const ENV = {
   SUPABASE_URL: parsed.VITE_SUPABASE_URL,
   SUPABASE_ANON_KEY: parsed.VITE_SUPABASE_ANON_KEY,
   DEFAULT_ASSIGNMENT_ID: parsed.VITE_DEFAULT_ASSIGNMENT_ID,
+  
+  TRIP_PROFILE: parsed.VITE_TRIP_PROFILE || 'TEST',
   TRIP_MODE: parsed.VITE_TRIP_MODE || "testing",
   TRIP_START: parsed.VITE_TRIP_START,
   TRIP_END: parsed.VITE_TRIP_END,
-  TICKER_SPEED_MS: parseInt(parsed.VITE_TICKER_SPEED_MS || "30000", 10),
   TZ: parsed.VITE_TZ || "America/Costa_Rica",
-  EMAIL_FROM: parsed.VITE_EMAIL_FROM,
-  DIGEST_TO: parsed.VITE_DIGEST_TO,
+  TICKER_SPEED_MS: parseInt(parsed.VITE_TICKER_SPEED_MS || "30000", 10),
+  
   RARITY_GROUP_WEIGHT: parseFloat(parsed.VITE_RARITY_GROUP_WEIGHT || "0.7"),
   RARITY_LOCAL_WEIGHT: parseFloat(parsed.VITE_RARITY_LOCAL_WEIGHT || "0.3"),
   BASELINE_YEARS: parseInt(parsed.VITE_BASELINE_YEARS || "5", 10),
-  BASELINE_MONTHS: parsed.VITE_BASELINE_MONTHS || "10,11,12",
+  BASELINE_MONTHS: (parsed.VITE_BASELINE_MONTHS || "10,11,12")
+    .split(',')
+    .map((m) => parseInt(m.trim(), 10)),
+    
+  EMAIL_FROM: parsed.VITE_EMAIL_FROM || '',
+  DIGEST_TO: parsed.VITE_DIGEST_TO || '',
   RAW: RawEnv,
 } as const;
 
