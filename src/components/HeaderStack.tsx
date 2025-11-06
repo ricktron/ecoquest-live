@@ -1,23 +1,24 @@
-import { useEffect } from 'react';
-import TabNav from './TabNav';
-import NewsTicker from './NewsTicker';
+import React from "react";
 
-export default function HeaderStack() {
-  const showTicker = true; // Control ticker visibility
+type Props = { 
+  tabs: React.ReactNode; 
+  tickerText?: string; 
+  children: React.ReactNode; 
+};
 
-  useEffect(() => {
-    document.body.classList.toggle('has-ticker', showTicker);
-    return () => document.body.classList.remove('has-ticker');
-  }, [showTicker]);
-
+export default function HeaderStack({ tabs, tickerText, children }: Props) {
   return (
-    <header className="site-header">
-      <TabNav />
-      {showTicker && (
-        <div className="app-ticker">
-          <NewsTicker />
-        </div>
-      )}
-    </header>
+    <div className="header-stack">
+      <header className="header-stack__bar">
+        <nav className="header-stack__tabs">{tabs}</nav>
+        {tickerText ? (
+          <div className="header-stack__ticker" role="status" aria-live="polite">
+            <span className="ticker__icon">🏆</span>
+            <span className="ticker__text">{tickerText}</span>
+          </div>
+        ) : null}
+      </header>
+      <main className="header-stack__content">{children}</main>
+    </div>
   );
 }

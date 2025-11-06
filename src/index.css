@@ -6,33 +6,63 @@
   --header-h: 56px;
   --ticker-h: 0px;
   --tabbar-h: 56px;
+  --tab-active-bg: 142 76% 36%; /* primary green */
+  --tab-active-fg: 355.7 100% 97.3%; /* primary-foreground */
+  --header-elev: 30;
+  --tabs-h: 48px;
+  --ticker-row-h: 28px;
+  --safe-top: env(safe-area-inset-top, 0px);
 }
 
 body.has-ticker {
   --ticker-h: 36px;
 }
 
-/* Header & Ticker layout styles */
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 60;
+/* New header stack styles */
+.header-stack__bar { 
+  position: sticky; 
+  top: 0; 
+  z-index: var(--header-elev); 
   background: hsl(var(--background));
 }
 
-.app-ticker {
-  position: sticky;
-  top: var(--header-h);
-  z-index: 50;
-  height: var(--ticker-h);
-  display: flex;
-  align-items: center;
-  background: hsl(var(--background));
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+.header-stack__tabs { 
+  min-height: var(--tabs-h); 
+  display: flex; 
+  align-items: center; 
+  padding-top: var(--safe-top);
 }
 
-main {
-  padding-top: calc(var(--header-h) + var(--ticker-h));
+.header-stack__tabs > * { 
+  margin-bottom: 0 !important;
+}
+
+.header-stack__ticker {
+  height: var(--ticker-row-h); 
+  display: flex; 
+  align-items: center; 
+  gap: 0.5rem; 
+  padding: 0 0.75rem;
+  background: hsl(var(--tab-active-bg)); 
+  color: hsl(var(--tab-active-fg)); 
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  white-space: nowrap; 
+  overflow-x: auto; 
+  scrollbar-width: none;
+}
+
+.header-stack__ticker::-webkit-scrollbar { 
+  display: none;
+}
+
+.ticker__text { 
+  font-size: 0.9rem; 
+  line-height: 1;
+}
+
+.header-stack__content > h1:first-child,
+.header-stack__content .page-title:first-child { 
+  margin-top: 0.5rem;
 }
 
 @supports (padding-top: env(safe-area-inset-top)) {
