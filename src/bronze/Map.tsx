@@ -35,6 +35,20 @@ function BoundsListener({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngB
 
   useEffect(() => {
     onBoundsChange(map.getBounds());
+    
+    // Disable scroll wheel zoom so page can scroll; enable on focus if desired
+    map.scrollWheelZoom.disable();
+    
+    const handleFocus = () => map.scrollWheelZoom.enable();
+    const handleBlur = () => map.scrollWheelZoom.disable();
+    
+    map.on('focus', handleFocus);
+    map.on('blur', handleBlur);
+    
+    return () => {
+      map.off('focus', handleFocus);
+      map.off('blur', handleBlur);
+    };
   }, []);
 
   return null;

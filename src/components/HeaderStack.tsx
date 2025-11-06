@@ -9,12 +9,16 @@ type Props = {
 export default function HeaderStack({ tabs, tickerText, children }: Props) {
   return (
     <div className="header-stack">
-      <header className="header-stack__bar">
+      <header className="header-stack__bar" role="banner">
         <nav className="header-stack__tabs">{tabs}</nav>
         {tickerText ? (
           <div className="header-stack__ticker" role="status" aria-live="polite">
-            <span className="ticker__icon">🏆</span>
-            <span className="ticker__text">{tickerText}</span>
+            <div className="ticker__marquee">
+              <div className="ticker__track">
+                <span className="ticker__chunk">🏆 {tickerText}</span>
+                <span className="ticker__chunk" aria-hidden="true"> • • 🏆 {tickerText}</span>
+              </div>
+            </div>
           </div>
         ) : null}
       </header>

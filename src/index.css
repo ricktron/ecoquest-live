@@ -8,7 +8,7 @@
   --tabbar-h: 56px;
   --tab-active-bg: 142 76% 36%; /* primary green */
   --tab-active-fg: 355.7 100% 97.3%; /* primary-foreground */
-  --header-elev: 30;
+  --header-elev: 2000;
   --tabs-h: 48px;
   --ticker-row-h: 28px;
   --safe-top: env(safe-area-inset-top, 0px);
@@ -16,6 +16,12 @@
 
 body.has-ticker {
   --ticker-h: 36px;
+}
+
+/* Ensure sticky header works - no transforms or overflow on ancestors */
+.app, .app-root, .layout, .page { 
+  transform: none !important; 
+  overflow: visible !important; 
 }
 
 /* New header stack styles */
@@ -40,29 +46,49 @@ body.has-ticker {
 .header-stack__ticker {
   height: var(--ticker-row-h); 
   display: flex; 
-  align-items: center; 
-  gap: 0.5rem; 
-  padding: 0 0.75rem;
+  align-items: center;
   background: hsl(var(--tab-active-bg)); 
   color: hsl(var(--tab-active-fg)); 
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  white-space: nowrap; 
-  overflow-x: auto; 
-  scrollbar-width: none;
+  overflow: hidden;
 }
 
-.header-stack__ticker::-webkit-scrollbar { 
-  display: none;
+.ticker__marquee { 
+  position: relative; 
+  width: 100%; 
+  overflow: hidden; 
 }
 
-.ticker__text { 
+.ticker__track { 
+  display: inline-flex; 
+  gap: 2rem; 
+  white-space: nowrap;
+  will-change: transform; 
+  animation: ticker-scroll 20s linear infinite; 
+}
+
+.ticker__chunk { 
+  padding: 0 0.75rem;
   font-size: 0.9rem; 
   line-height: 1;
+}
+
+@keyframes ticker-scroll { 
+  from { transform: translateX(0); } 
+  to { transform: translateX(-50%); } 
 }
 
 .header-stack__content > h1:first-child,
 .header-stack__content .page-title:first-child { 
   margin-top: 0.5rem;
+}
+
+/* Map must sit below header */
+.map-page .map-container, 
+.leaflet-container, 
+.mapboxgl-map { 
+  position: relative; 
+  z-index: 0 !important; 
 }
 
 @supports (padding-top: env(safe-area-inset-top)) {
