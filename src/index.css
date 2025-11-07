@@ -9,6 +9,7 @@
   --tab-active-bg: 142 76% 36%; /* primary green */
   --tab-active-fg: 355.7 100% 97.3%; /* primary-foreground */
   --header-elev: 2000;
+  --brand-h: 36px;
   --tabs-h: 48px;
   --ticker-row-h: 28px;
   --safe-top: env(safe-area-inset-top, 0px);
@@ -32,11 +33,27 @@ body.has-ticker {
   background: hsl(var(--background));
 }
 
+.header-stack__brand {
+  height: var(--brand-h);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  padding-top: var(--safe-top);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+
+.brand__logo {
+  filter: grayscale(0.2);
+}
+
 .header-stack__tabs { 
   min-height: var(--tabs-h); 
   display: flex; 
-  align-items: center; 
-  padding-top: var(--safe-top);
+  align-items: center;
+  padding: 0 0.75rem;
 }
 
 .header-stack__tabs > * { 

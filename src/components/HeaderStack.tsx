@@ -1,16 +1,26 @@
 import React from "react";
 
-type Props = { 
-  tabs: React.ReactNode; 
-  tickerText?: string; 
-  children: React.ReactNode; 
+type Props = {
+  tabs?: React.ReactNode;
+  tickerText?: string;
+  showTopTabs?: boolean;
+  children: React.ReactNode;
 };
 
-export default function HeaderStack({ tabs, tickerText, children }: Props) {
+export default function HeaderStack({
+  tabs,
+  tickerText,
+  showTopTabs = false,
+  children,
+}: Props) {
   return (
     <div className="header-stack">
       <header className="header-stack__bar" role="banner">
-        <nav className="header-stack__tabs">{tabs}</nav>
+        <div className="header-stack__brand">
+          <span className="brand__logo" aria-hidden>🌿</span>
+          <span className="brand__text">EcoQuest Live</span>
+        </div>
+        {showTopTabs && tabs && <nav className="header-stack__tabs">{tabs}</nav>}
         {tickerText ? (
           <div className="header-stack__ticker" role="status" aria-live="polite">
             <div className="ticker__marquee">
