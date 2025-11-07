@@ -70,6 +70,10 @@ body.has-ticker {
   overflow: hidden;
 }
 
+.header-stack__ticker--alt {
+  background: hsl(142 76% 56%); /* lighter green */
+}
+
 .ticker__marquee { 
   position: relative; 
   width: 100%; 
@@ -81,7 +85,25 @@ body.has-ticker {
   gap: 2rem; 
   white-space: nowrap;
   will-change: transform; 
-  animation: ticker-scroll 20s linear infinite; 
+  animation: ticker-scroll 18s linear infinite; 
+}
+
+.ticker__marquee[data-speed="slow"] .ticker__track {
+  animation-duration: 28s;
+}
+
+.ticker__marquee[data-speed="fast"] .ticker__track {
+  animation-duration: 18s;
+}
+
+.header-stack__ticker:hover .ticker__track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker__track {
+    animation: none;
+  }
 }
 
 .ticker__chunk { 
