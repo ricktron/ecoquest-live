@@ -63,7 +63,7 @@ export default function Leaderboard() {
           </div>
         ) : error ? (
           <div className="text-center py-12 bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground">Leaderboard error. See console.</p>
+            <p className="text-muted-foreground">Leaderboard load failed. See console.</p>
           </div>
         ) : !rows || rows.length === 0 ? (
           <div className="text-center py-12 bg-muted/30 rounded-lg">

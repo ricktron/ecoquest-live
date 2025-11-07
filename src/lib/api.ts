@@ -21,11 +21,26 @@ export async function fetchAnnouncement() {
 }
 
 export async function fetchLeaderboard() {
-  const { data, error } = await supabase.rpc('get_leaderboard_plus_extras_v1');
-  if (error) {
-    console.error('leaderboard extras rpc error', error);
-    return { data: [], error };
+  // Try RPC first (must pass {})
+  let data: any[] | null = null;
+  let error: any = null;
+  const rpc = await supabase.rpc('get_leaderboard_plus_extras_v1', {});
+  if (rpc.error) {
+    console.error('leaderboard extras rpc error', rpc.error);
+    error = rpc.error;
+  } else {
+    data = rpc.data ?? [];
   }
-  const arr = (data ?? []).slice().sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999));
-  return { data: arr, error: null };
+  // Fallback to view if RPC errored or returned empty
+  if (!data || data.length === 0) {
+    const cols = 'user_login, rank, rank_delta, obs_count, distinct_taxa, bingo_points, manual_points';
+    const sel = await supabase.from('leaderboard_overall_plus_extras_latest_v1').select(cols);
+    if (sel.error) {
+      console.error('leaderboard view fallback error', sel.error);
+      return { data: [], error: sel.error };
+    }
+    data = sel.data ?? [];
+  }
+  const out = data.slice().sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999) || (b.obs_count ?? 0) - (a.obs_count ?? 0));
+  return { data: out, error: null };
 }
