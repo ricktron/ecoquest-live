@@ -28,6 +28,7 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f sql/sanity_streaks.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f sql/sanity_trophies.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f sql/sanity_rarity.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f sql/sanity_bronze.sql
       - name: Snapshot Leaderboard
         run: psql "$DB_URL" -A -F, -c "copy (select * from public.leaderboard_overall_latest_v1) to stdout csv header" > leaderboard_snapshot.csv
       - name: Upload artifact
