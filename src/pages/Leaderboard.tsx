@@ -83,10 +83,8 @@ export default function Leaderboard() {
         ) : (
           <div className="space-y-3">
             {rows.map((row, idx) => {
-              const d = row.rank_delta;
-              const trend = d == null ? '–' : d < 0 ? '↑' : d > 0 ? '↓' : '–';
-              const trendClass = d == null ? '' : d < 0 ? 'trend trend--up' : d > 0 ? 'trend trend--down' : '';
-              const score = row.score ?? row.total_score ?? row.score_total ?? row.obs_count ?? 0;
+              const trend = '–';
+              const score = row.obs_count ?? 0;
               
               return (
                 <div
@@ -99,8 +97,8 @@ export default function Leaderboard() {
                       <div className="text-2xl font-bold text-muted-foreground w-8">
                         #{row.rank ?? idx + 1}
                       </div>
-                      <span className={d == null ? '' : d < 0 ? 'trend trend--up' : d > 0 ? 'trend trend--down' : ''} title={d == null ? 'No rank change data' : `Rank change: ${d}`}>
-                        {d == null ? '–' : d < 0 ? '↑' : d > 0 ? '↓' : '–'}
+                      <span className="text-muted-foreground" title="No rank change data">
+                        {trend}
                       </span>
                     </div>
                     <div className="space-y-1">
@@ -112,16 +110,6 @@ export default function Leaderboard() {
                         <Chip variant="primary" title={`${row.distinct_taxa ?? 0} unique species`}>
                           🌿 {row.distinct_taxa ?? 0}
                         </Chip>
-                        {(row.bingo_points ?? 0) > 0 && (
-                          <span className="chip chip--bingo" title="Bingo points (hits + lines + blackout)">
-                            🎯 {row.bingo_points}
-                          </span>
-                        )}
-                        {(row.manual_points ?? 0) !== 0 && (
-                          <span className="chip chip--bonus" title="Manual bonus/penalty">
-                            ⭐ {row.manual_points}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
