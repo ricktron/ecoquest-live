@@ -15,10 +15,9 @@ export default function useAnnouncementText() {
         .maybeSingle();
 
       if (!cancelled && !error && data?.flags) {
-        const flags = data.flags as { announcement?: string };
-        const raw = flags.announcement;
-        const val = typeof raw === 'string' ? raw.trim() : undefined;
-        setText(val || undefined);
+        const flags = data.flags as Record<string, any>;
+        const announcement = ((flags?.announcement ?? '').toString().trim()) || undefined;
+        setText(announcement);
       }
     })();
 
