@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trophy, Info } from 'lucide-react';
+import { Trophy, Info, Clock } from 'lucide-react';
 import { formatPoints, computeTrends, type UserRowWithTrend, type UserRowWithRank } from '@/lib/scoring';
 import { findCloseBattles } from '@/lib/closeBattles';
 import { UI } from '@/uiConfig';
@@ -11,12 +11,14 @@ import Legend from '@/components/Legend';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetchLeaderboard, type LeaderRow } from '@/lib/api';
 import { DEFAULT_AID } from '@/lib/supabase';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function Leaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
   const [error, setError] = useState<any>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -25,6 +27,9 @@ export default function Leaderboard() {
         const result = await fetchLeaderboard();
         setLeaderboardData(result.data);
         setError(result.error);
+        if (!result.error) {
+          setLastUpdated(new Date());
+        }
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);
         setError(err);
@@ -47,11 +52,17 @@ export default function Leaderboard() {
             Leaderboard
           </h1>
           <p className="text-sm text-muted-foreground italic">Spot it. Snap it. Score it.</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
             <Link to="/about/scoring" className="text-sm text-primary hover:underline flex items-center gap-1">
               <Info className="h-4 w-4" />
               How scoring works
             </Link>
+            {lastUpdated && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
+              </span>
+            )}
           </div>
         </div>
 
