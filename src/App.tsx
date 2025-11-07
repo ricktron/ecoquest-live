@@ -51,6 +51,14 @@ export default function App() {
           </Routes>
         </HeaderStack>
         <BottomNav />
+        {import.meta.env.DEV && (
+          <div 
+            data-role="announce-debug" 
+            style={{ position: 'fixed', top: 0, right: 0, fontSize: 10, opacity: 0.4, background: '#000', color: '#fff', padding: '2px 4px' }}
+          >
+            announce: {String(announceText ?? '')}
+          </div>
+        )}
       </BrowserRouter>
     </ErrorBoundary>
   );

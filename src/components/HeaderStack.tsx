@@ -25,7 +25,7 @@ export default function HeaderStack({
         </div>
         {showTopTabs && tabs && <nav className="header-stack__tabs">{tabs}</nav>}
         {tickerText && <Ticker text={tickerText} variant="primary" />}
-        {announceText !== undefined && announceText !== '' && (
+        {announceText && announceText.trim() !== '' && (
           <Ticker text={announceText} variant="announce" />
         )}
       </header>
