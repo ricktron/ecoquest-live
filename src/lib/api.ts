@@ -22,16 +22,8 @@ export async function fetchHeaderTexts() {
 }
 
 export async function fetchLeaderboard() {
-  const r = await supabase.rpc('get_leaderboard_min_v1', {}); // IMPORTANT: pass {}
-  if (r.error) { console.error('min rpc error', r.error); return { data: [], error: r.error }; }
-  const rows = (r.data ?? []).map((x: any, i: number) => ({
-    user_login: x.user_login,
-    rank: i + 1,
-    rank_delta: null,
-    obs_count: x.obs_count,
-    distinct_taxa: x.distinct_taxa,
-    bingo_points: 0,
-    manual_points: 0,
-  }));
+  const r = await supabase.rpc('get_leaderboard_bronze_v1', {}); // note {}
+  if (r.error) { console.error('bronze rpc error', r.error); return { data: [], error: r.error }; }
+  const rows = (r.data ?? []).slice().sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999));
   return { data: rows, error: null };
 }

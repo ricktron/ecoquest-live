@@ -83,7 +83,7 @@ export default function Leaderboard() {
         ) : (
           <div className="space-y-3">
             {rows.map((row, idx) => {
-              const trend = '–';
+              const trendSymbol = '–';
               const score = row.obs_count ?? 0;
               
               return (
@@ -98,7 +98,7 @@ export default function Leaderboard() {
                         #{row.rank ?? idx + 1}
                       </div>
                       <span className="text-muted-foreground" title="No rank change data">
-                        {trend}
+                        {trendSymbol}
                       </span>
                     </div>
                     <div className="space-y-1">
@@ -110,6 +110,16 @@ export default function Leaderboard() {
                         <Chip variant="primary" title={`${row.distinct_taxa ?? 0} unique species`}>
                           🌿 {row.distinct_taxa ?? 0}
                         </Chip>
+                        {(row.bingo_points ?? 0) > 0 && (
+                          <span className="chip chip--bingo" title="Bingo points">
+                            🎯 {row.bingo_points}
+                          </span>
+                        )}
+                        {Number(row.manual_points ?? 0) !== 0 && (
+                          <span className="chip chip--bonus" title="Manual bonus/penalty">
+                            ⭐ {row.manual_points}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
