@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from './supabaseClient';
 
 export type LeaderRow = {
   user_login: string;
@@ -15,7 +15,7 @@ export type LeaderRow = {
 };
 
 export async function fetchHeaderTexts() {
-  const { data, error } = await supabase.rpc('get_header_texts_v1', {});
+  const { data, error } = await supabase().rpc('get_header_texts_v1', {});
   if (error) { console.error('header rpc', error); return { ticker: 'EcoQuest Live — ready to play', announce: undefined }; }
   const row = (data && data[0]) || {};
   return { ticker: row.ticker_text || 'EcoQuest Live — ready to play', announce: row.announcement_text || undefined };
@@ -26,7 +26,7 @@ export async function fetchLeaderboard() {
   let rows: any[] | null = null;
   let lastError: any = null;
 
-  const r1 = await supabase.rpc('get_leaderboard_bronze_v1', {}); // {} is required
+  const r1 = await supabase().rpc('get_leaderboard_bronze_v1', {}); // {} is required
   if (!r1.error && r1.data?.length) {
     rows = r1.data;
   } else {
@@ -36,7 +36,7 @@ export async function fetchLeaderboard() {
 
   // 2) Minimal view fallback (guaranteed to exist)
   if (!rows) {
-    const v = await supabase
+    const v = await supabase()
       .from('leaderboard_overall_latest_v1')
       .select('user_login, obs_count, distinct_taxa, first_observed_at, last_observed_at');
     if (!v.error && v.data?.length) {
@@ -61,6 +61,6 @@ export async function fetchLeaderboard() {
 }
 
 export async function pingBronze() {
-  const r = await supabase.rpc('ping_bronze_v1', {});
+  const r = await supabase().rpc('ping_bronze_v1', {});
   return r;
 }

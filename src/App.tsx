@@ -4,6 +4,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import HeaderStack from './components/HeaderStack';
 import TabNav from './components/TabNav';
 import BottomNav from './components/BottomNav';
+import ConfigButton from './components/ConfigButton';
 import Leaderboard from './pages/Leaderboard';
 import Trophies from './pages/Trophies';
 import TrophyDetail from './pages/TrophyDetail';
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/leaderboard" replace />} />
           </Routes>
         </HeaderStack>
+        <ConfigButton />
         <BottomNav />
         {import.meta.env.DEV && (
           <div 

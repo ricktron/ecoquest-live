@@ -481,3 +481,93 @@ html, body, #root {
   color: #ef4444;
 }
 
+/* Config button and modal */
+.cfg__btn {
+  position: fixed;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 3000;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.cfg__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 3001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg__modal {
+  width: min(560px, 90vw);
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.cfg__modal h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.cfg__modal label {
+  display: block;
+  margin: 0.5rem 0;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.cfg__modal input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.cfg__row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.cfg__row button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #10b981;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.cfg__row button.secondary {
+  background: #64748b;
+}
+
+.cfg__row button.ghost {
+  background: transparent;
+  color: #64748b;
+}
+
+.cfg__status {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+}
+
+
