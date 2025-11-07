@@ -29,10 +29,10 @@ body.has-ticker {
 .header-stack__bar { 
   position: sticky; 
   top: 0; 
-  z-index: var(--header-elev); 
-  background: hsl(var(--background));
+  z-index: 2000; 
   display: flex;
   flex-direction: column;
+  background: #fff;
 }
 
 .header-stack__brand {
@@ -62,63 +62,63 @@ body.has-ticker {
   margin-bottom: 0 !important;
 }
 
-.header-stack__ticker {
-  height: var(--ticker-row-h); 
+/* Ticker styles */
+.ticker { 
+  height: 28px; 
   display: flex; 
-  align-items: center;
-  background: hsl(var(--tab-active-bg)); 
-  color: hsl(var(--tab-active-fg)); 
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-  margin: 0;
+  align-items: center; 
+  background: #10b981; 
+  color: #fff; 
+  overflow: hidden; 
+  border-bottom: 1px solid rgba(0,0,0,.06); 
 }
 
-.header-stack__ticker--alt {
-  background: hsl(142 76% 56%);
-  color: hsl(var(--foreground));
+.ticker.announce { 
+  background: #34d399; 
 }
 
-.ticker__marquee { 
-  position: relative; 
+.ticker__inner { 
   width: 100%; 
   overflow: hidden; 
 }
 
 .ticker__track { 
   display: inline-flex; 
+  align-items: center; 
   gap: 2rem; 
   white-space: nowrap;
   will-change: transform; 
-  animation: marquee 20s linear infinite; 
+  animation: marquee 18s linear infinite; 
 }
 
-.ticker__marquee[data-speed="slow"] .ticker__track {
-  animation-duration: 28s;
-}
-
-.ticker__marquee[data-speed="fast"] .ticker__track {
-  animation-duration: 18s;
-}
-
-.header-stack__ticker:hover .ticker__track {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticker__track {
-    animation: none;
-  }
+.ticker__inner[data-speed="slow"] .ticker__track { 
+  animation-duration: 26s; 
 }
 
 .ticker__chunk { 
-  padding: 0 0.75rem;
-  font-size: 0.9rem; 
-  line-height: 1;
+  padding-right: 2rem; 
+}
+
+.ticker:hover .ticker__track { 
+  animation-play-state: paused; 
+}
+
+@media (prefers-reduced-motion: reduce) { 
+  .ticker__track { 
+    animation: none; 
+  } 
 }
 
 @keyframes marquee { 
-  from { transform: translateX(0); } 
-  to { transform: translateX(-50%); } 
+  to { 
+    transform: translateX(-50%); 
+  } 
+}
+
+.header-stack__content { 
+  flex: 1; 
+  overflow-x: hidden; 
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .header-stack__content > h1:first-child,

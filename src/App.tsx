@@ -24,7 +24,7 @@ import { fetchHeaderTexts } from './lib/api';
 
 export default function App() {
   const [tickerText, setTicker] = useState<string>();
-  const [announceText, setAnn] = useState<string | undefined>();
+  const [announceText, setAnnounce] = useState<string | undefined>();
 
   useEffect(() => {
     let on = true;
@@ -32,7 +32,7 @@ export default function App() {
       const { ticker, announce } = await fetchHeaderTexts();
       if (!on) return;
       setTicker(ticker);
-      setAnn(announce);
+      setAnnounce(announce);
     })();
     return () => { on = false; };
   }, []);
