@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchBingo, fetchUserLogins } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { HelpCircle } from 'lucide-react';
 
 type BingoCell = {
   label: string;
@@ -113,6 +114,7 @@ export default function Bingo() {
   const [cells, setCells] = useState<BingoCell[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const getCellInfo = (label: string): CellInfo => {
     return CELL_INFO[label] || {
@@ -149,7 +151,16 @@ export default function Bingo() {
 
   return (
     <div className="page">
-      <h1 className="text-2xl font-bold mb-4">Bingo</h1>
+      <div className="flex items-center gap-2 mb-4">
+        <h1 className="text-2xl font-bold">Bingo</h1>
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-1 rounded-full hover:bg-muted transition-colors"
+          aria-label="Show bingo rules"
+        >
+          <HelpCircle className="h-5 w-5 text-muted-foreground" />
+        </button>
+      </div>
       
       <div className="mb-6">
         <label htmlFor="user-select" className="block text-sm font-medium mb-2">
@@ -216,6 +227,44 @@ export default function Bingo() {
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-1">How to Earn</h4>
                   <p>{selectedCell ? getCellInfo(selectedCell).howToEarn : ''}</p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showHelp} onOpenChange={setShowHelp}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span>🎯</span>
+                  <span>How Bingo Works</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Scoring Rules</h4>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold">•</span>
+                      <span><strong>Hit a square:</strong> Earn 1 point</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold">•</span>
+                      <span><strong>Complete a line:</strong> Get +5 bonus points (horizontal, vertical, or diagonal)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold">•</span>
+                      <span><strong>Blackout (all 25):</strong> Get +20 bonus points</span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-2">How to Play</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Complete challenges by recording observations on iNaturalist. 
+                    Tap any square to see what's required to earn it. 
+                    Bingo points are used as tie-breakers on the leaderboard.
+                  </p>
                 </div>
               </div>
             </DialogContent>
