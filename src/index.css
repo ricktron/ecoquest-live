@@ -62,13 +62,12 @@ body.has-ticker {
   margin-bottom: 0 !important;
 }
 
-/* Bridge old & new classnames */
-.header-stack__ticker, .ticker {
+/* Ticker styles */
+.ticker {
   height: 28px;
   display: flex;
   align-items: center;
   overflow: hidden;
-  margin: 0;
   color: #fff;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
@@ -77,7 +76,7 @@ body.has-ticker {
   background: #10b981;
 }
 
-.ticker.announce, .header-stack__ticker--alt {
+.ticker.announce {
   background: #34d399;
 }
 
@@ -102,12 +101,12 @@ body.has-ticker {
   align-items: center;
   gap: 2rem;
   white-space: nowrap;
+  animation: marquee 18s linear infinite;
   will-change: transform;
-  animation: marquee 20s linear infinite;
 }
 
 .ticker__inner[data-speed="slow"] .ticker__track {
-  animation-duration: 28s;
+  animation-duration: 26s;
 }
 
 .ticker__chunk {
