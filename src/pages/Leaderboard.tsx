@@ -16,15 +16,18 @@ export default function Leaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
+  const [error, setError] = useState<any>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const data = await fetchLeaderboard();
-        setLeaderboardData(data);
+        const result = await fetchLeaderboard();
+        setLeaderboardData(result.data);
+        setError(result.error);
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);
+        setError(err);
       } finally {
         setLoading(false);
       }
@@ -58,9 +61,13 @@ export default function Leaderboard() {
               <Skeleton key={i} className="h-20 w-full" />
             ))}
           </div>
-        ) : rows.length === 0 ? (
+        ) : error ? (
           <div className="text-center py-12 bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground">No observations found.</p>
+            <p className="text-muted-foreground">Leaderboard error. See console.</p>
+          </div>
+        ) : !rows || rows.length === 0 ? (
+          <div className="text-center py-12 bg-muted/30 rounded-lg">
+            <p className="text-muted-foreground">No leaderboard rows for the latest run.</p>
           </div>
         ) : (
           <div className="space-y-3">

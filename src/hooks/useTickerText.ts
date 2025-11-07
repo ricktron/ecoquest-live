@@ -9,8 +9,8 @@ export function useTickerText(): string {
   useEffect(() => {
     const loadLeaderboard = async () => {
       try {
-        const data = await fetchLeaderboard();
-        setLeaderboardData(data.slice(0, 3));
+        const result = await fetchLeaderboard();
+        setLeaderboardData(result.data.slice(0, 3));
       } catch (err) {
         console.error('Failed to fetch leaderboard for ticker:', err);
       }
