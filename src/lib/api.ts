@@ -126,3 +126,24 @@ export async function fetchDisplayFlags() {
   const { data } = await supabase().rpc('get_display_flags_v1', {});
   return data?.[0] ?? { trophies_include_adults: true, score_blackout_until: null };
 }
+
+export async function adminSetTrophiesIncludeAdults(token: boolean | string, include: boolean) {
+  return supabase().rpc('admin_set_trophies_include_adults', { 
+    p_admin_token: String(token), 
+    p_include: include 
+  });
+}
+
+export async function adminSetStudentLogins(token: string, arr: string[] | null) {
+  return supabase().rpc('admin_set_student_logins', { 
+    p_admin_token: token, 
+    p_logins: arr 
+  });
+}
+
+export async function adminSetBlackoutUntil(token: string, until: string | null) {
+  return supabase().rpc('admin_set_blackout_until', { 
+    p_admin_token: token, 
+    p_until: until 
+  });
+}

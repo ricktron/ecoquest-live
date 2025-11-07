@@ -3,7 +3,8 @@ import { saveRuntimeConfig, loadRuntimeConfig, clearRuntimeConfig } from '../lib
 import { recreateSupabase } from '../lib/supabaseClient';
 import { 
   pingBronze, adminAward, adminList, adminDelete, fetchUserLogins,
-  fieldAward, adminSetSpeeds, adminSetAnnouncement, listRecentAwards, listWeeklyAwards
+  fieldAward, adminSetSpeeds, adminSetAnnouncement, listRecentAwards, listWeeklyAwards,
+  adminSetTrophiesIncludeAdults, adminSetStudentLogins, adminSetBlackoutUntil, fetchDisplayFlags
 } from '../lib/api';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Textarea } from './ui/textarea';
@@ -34,6 +35,10 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
   const [announceText, setAnnounceText] = useState('');
   const [recentAwards, setRecentAwards] = useState<any[]>([]);
   const [weeklyAwards, setWeeklyAwards] = useState<any[]>([]);
+  const [includeAdults, setIncludeAdults] = useState(true);
+  const [studentLogins, setStudentLogins] = useState('');
+  const [blackoutUntil, setBlackoutUntil] = useState('');
+  const [displayStatus, setDisplayStatus] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -54,6 +59,12 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
       fetchUserLogins().then(logins => {
         setUserLogins(logins);
         if (logins.length > 0) setSelectedUser(logins[0]);
+      });
+
+      // Load display flags
+      fetchDisplayFlags().then(flags => {
+        setIncludeAdults(flags.trophies_include_adults ?? true);
+        setBlackoutUntil(flags.score_blackout_until || '');
       });
     }
   }, [open]);
@@ -225,6 +236,46 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
     if (r2.data) setWeeklyAwards(r2.data);
   };
 
+  const handleSaveIncludeAdults = async () => {
+    if (!adminToken.trim()) {
+      setDisplayStatus('Error: Admin token required');
+      return;
+    }
+    const r = await adminSetTrophiesIncludeAdults(adminToken.trim(), includeAdults);
+    if (r.error) {
+      setDisplayStatus('Error: ' + r.error.message);
+    } else {
+      setDisplayStatus('Adult toggle saved successfully');
+    }
+  };
+
+  const handleSaveStudentLogins = async () => {
+    if (!adminToken.trim()) {
+      setDisplayStatus('Error: Admin token required');
+      return;
+    }
+    const logins = studentLogins.split('\n').map(s => s.trim()).filter(Boolean);
+    const r = await adminSetStudentLogins(adminToken.trim(), logins.length > 0 ? logins : null);
+    if (r.error) {
+      setDisplayStatus('Error: ' + r.error.message);
+    } else {
+      setDisplayStatus('Student logins saved successfully');
+    }
+  };
+
+  const handleSaveBlackout = async () => {
+    if (!adminToken.trim()) {
+      setDisplayStatus('Error: Admin token required');
+      return;
+    }
+    const r = await adminSetBlackoutUntil(adminToken.trim(), blackoutUntil.trim() || null);
+    if (r.error) {
+      setDisplayStatus('Error: ' + r.error.message);
+    } else {
+      setDisplayStatus('Blackout saved successfully');
+    }
+  };
+
   if (!open) return null;
   return (
     <div className="cfg__backdrop" onClick={onClose}>
@@ -237,6 +288,7 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
         <Tabs defaultValue="connection">
           <TabsList className="w-full">
             <TabsTrigger value="connection">Connection</TabsTrigger>
+            <TabsTrigger value="display">Display</TabsTrigger>
             <TabsTrigger value="points">Points</TabsTrigger>
             <TabsTrigger value="logs" onClick={loadLogs}>Logs</TabsTrigger>
           </TabsList>
@@ -254,6 +306,95 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
               <button onClick={reset} className="secondary">Clear</button>
             </div>
             <pre className="cfg__status">{status}</pre>
+          </TabsContent>
+
+          <TabsContent value="display">
+            <div className="cfg__section">
+              <h4>Display Settings (Admin)</h4>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  checked={includeAdults}
+                  onChange={e => setIncludeAdults(e.target.checked)}
+                />
+                Include adults in trophies
+              </label>
+              <div className="cfg__row">
+                <button onClick={handleSaveIncludeAdults}>Save Adult Toggle</button>
+              </div>
+
+              <label style={{ marginTop: '1rem' }}>
+                Student Logins (one per line)
+                <Textarea
+                  value={studentLogins}
+                  onChange={e => setStudentLogins(e.target.value)}
+                  placeholder="student1&#10;student2&#10;student3"
+                  rows={5}
+                />
+              </label>
+              <div className="cfg__row">
+                <button onClick={handleSaveStudentLogins}>Save Student Logins</button>
+              </div>
+
+              <label style={{ marginTop: '1rem' }}>
+                Scoreboard Blackout Until (ISO datetime)
+                <input
+                  type="datetime-local"
+                  value={blackoutUntil ? blackoutUntil.slice(0, 16) : ''}
+                  onChange={e => setBlackoutUntil(e.target.value ? e.target.value + ':00Z' : '')}
+                  placeholder="2025-12-31T23:59"
+                />
+              </label>
+              <div className="cfg__row">
+                <button onClick={handleSaveBlackout}>Save Blackout</button>
+              </div>
+
+              <div className="cfg__section" style={{ marginTop: '1.5rem' }}>
+                <h4>Ticker Speeds</h4>
+                <label>
+                  Primary Ticker (ms)
+                  <input
+                    type="number"
+                    value={primaryMs}
+                    onChange={e => setPrimaryMs(Number(e.target.value))}
+                    placeholder="16000"
+                  />
+                </label>
+                <label>
+                  Announce Ticker (ms)
+                  <input
+                    type="number"
+                    value={announceMs}
+                    onChange={e => setAnnounceMs(Number(e.target.value))}
+                    placeholder="26000"
+                  />
+                </label>
+                <div className="cfg__row">
+                  <button onClick={handleSaveSpeeds}>Save Speeds</button>
+                </div>
+                <pre className="cfg__status">{speedsStatus}</pre>
+              </div>
+
+              <div className="cfg__section" style={{ marginTop: '1.5rem' }}>
+                <h4>Announcement Text</h4>
+                <label>
+                  Announcement
+                  <Textarea
+                    value={announceText}
+                    onChange={e => setAnnounceText(e.target.value)}
+                    placeholder="Enter announcement text"
+                    rows={3}
+                  />
+                </label>
+                <div className="cfg__row">
+                  <button onClick={handleSaveAnnouncement}>Save Announcement</button>
+                </div>
+                <pre className="cfg__status">{announceStatus}</pre>
+              </div>
+
+              <pre className="cfg__status">{displayStatus}</pre>
+            </div>
           </TabsContent>
 
           <TabsContent value="points">
@@ -388,51 +529,6 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
               </div>
 
               <pre className="cfg__status">{fieldStatus}</pre>
-            </div>
-
-            {/* Speeds subsection */}
-            <div className="cfg__section">
-              <h4>Ticker Speeds (Admin)</h4>
-              <label>
-                Primary Ticker (ms)
-                <input
-                  type="number"
-                  value={primaryMs}
-                  onChange={e => setPrimaryMs(Number(e.target.value))}
-                  placeholder="16000"
-                />
-              </label>
-              <label>
-                Announce Ticker (ms)
-                <input
-                  type="number"
-                  value={announceMs}
-                  onChange={e => setAnnounceMs(Number(e.target.value))}
-                  placeholder="26000"
-                />
-              </label>
-              <div className="cfg__row">
-                <button onClick={handleSaveSpeeds}>Save Speeds</button>
-              </div>
-              <pre className="cfg__status">{speedsStatus}</pre>
-            </div>
-
-            {/* Announcement subsection */}
-            <div className="cfg__section">
-              <h4>Announcement Text (Admin)</h4>
-              <label>
-                Announcement
-                <Textarea
-                  value={announceText}
-                  onChange={e => setAnnounceText(e.target.value)}
-                  placeholder="Enter announcement text"
-                  rows={3}
-                />
-              </label>
-              <div className="cfg__row">
-                <button onClick={handleSaveAnnouncement}>Save Announcement</button>
-              </div>
-              <pre className="cfg__status">{announceStatus}</pre>
             </div>
           </TabsContent>
 

@@ -8,7 +8,7 @@ import { UI } from '@/uiConfig';
 import Chip from '@/components/Chip';
 import Legend from '@/components/Legend';
 import { Card, CardContent } from '@/components/ui/card';
-import { fetchLeaderboard, type LeaderRow } from '@/lib/api';
+import { fetchLeaderboard, fetchDisplayFlags, type LeaderRow } from '@/lib/api';
 import { DEFAULT_AID } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -19,16 +19,24 @@ export default function Leaderboard() {
   const [error, setError] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [openChip, setOpenChip] = useState<string | null>(null);
+  const [isBlackout, setIsBlackout] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const result = await fetchLeaderboard();
+        const [result, flags] = await Promise.all([
+          fetchLeaderboard(),
+          fetchDisplayFlags()
+        ]);
         setLeaderboardData(result.data);
         setError(result.error);
         if (!result.error) {
           setLastUpdated(new Date());
+        }
+        // Check if blackout is active
+        if (flags.score_blackout_until) {
+          setIsBlackout(new Date() < new Date(flags.score_blackout_until));
         }
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);
@@ -52,6 +60,11 @@ export default function Leaderboard() {
             Leaderboard
           </h1>
           <p className="text-sm text-muted-foreground italic">Spot it. Snap it. Score it.</p>
+          {isBlackout && (
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+              <p className="text-sm text-primary font-medium">🔒 Final reveal after blackout.</p>
+            </div>
+          )}
           <div className="flex items-center gap-3 flex-wrap">
             <Link to="/about/scoring" className="text-sm text-primary hover:underline flex items-center gap-1">
               <Info className="h-4 w-4" />
@@ -102,9 +115,11 @@ export default function Leaderboard() {
                           <div className="text-2xl font-bold text-muted-foreground w-8">
                             #{row.rank ?? idx + 1}
                           </div>
-                          <span className="text-muted-foreground" title="No rank change data">
-                            {trendSymbol}
-                          </span>
+                          {!isBlackout && (
+                            <span className="text-muted-foreground" title="No rank change data">
+                              {trendSymbol}
+                            </span>
+                          )}
                         </div>
                         <div className="space-y-1">
                           <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
@@ -124,54 +139,58 @@ export default function Leaderboard() {
                                 <div className="chip-pop">Observations (headline score)</div>
                               )}
                             </div>
-                            <div className="relative">
-                              <button 
-                                className="chip chip--info" 
-                                aria-haspopup="dialog" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenChip(openChip === 'taxa' ? null : 'taxa');
-                                }}
-                              >
-                                🌿 {row.distinct_taxa ?? 0}
-                              </button>
-                              {openChip === 'taxa' && (
-                                <div className="chip-pop">Distinct taxa (info)</div>
-                              )}
-                            </div>
-                            {(row.bingo_points ?? 0) > 0 && (
-                              <div className="relative">
-                                <button 
-                                  className="chip chip--bingo" 
-                                  aria-haspopup="dialog"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenChip(openChip === 'bingo' ? null : 'bingo');
-                                  }}
-                                >
-                                  🎯 {row.bingo_points}
-                                </button>
-                                {openChip === 'bingo' && (
-                                  <div className="chip-pop">Bingo points (tie-breaker)</div>
+                            {!isBlackout && (
+                              <>
+                                <div className="relative">
+                                  <button 
+                                    className="chip chip--info" 
+                                    aria-haspopup="dialog" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenChip(openChip === 'taxa' ? null : 'taxa');
+                                    }}
+                                  >
+                                    🌿 {row.distinct_taxa ?? 0}
+                                  </button>
+                                  {openChip === 'taxa' && (
+                                    <div className="chip-pop">Distinct taxa (info)</div>
+                                  )}
+                                </div>
+                                {(row.bingo_points ?? 0) > 0 && (
+                                  <div className="relative">
+                                    <button 
+                                      className="chip chip--bingo" 
+                                      aria-haspopup="dialog"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenChip(openChip === 'bingo' ? null : 'bingo');
+                                      }}
+                                    >
+                                      🎯 {row.bingo_points}
+                                    </button>
+                                    {openChip === 'bingo' && (
+                                      <div className="chip-pop">Bingo points (tie-breaker)</div>
+                                    )}
+                                  </div>
                                 )}
-                              </div>
-                            )}
-                            {Number(row.manual_points ?? 0) !== 0 && (
-                              <div className="relative">
-                                <button 
-                                  className="chip chip--bonus" 
-                                  aria-haspopup="dialog"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenChip(openChip === 'manual' ? null : 'manual');
-                                  }}
-                                >
-                                  ⭐ {row.manual_points}
-                                </button>
-                                {openChip === 'manual' && (
-                                  <div className="chip-pop">Manual points (admin; tie-breaker)</div>
+                                {Number(row.manual_points ?? 0) !== 0 && (
+                                  <div className="relative">
+                                    <button 
+                                      className="chip chip--bonus" 
+                                      aria-haspopup="dialog"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenChip(openChip === 'manual' ? null : 'manual');
+                                      }}
+                                    >
+                                      ⭐ {row.manual_points}
+                                    </button>
+                                    {openChip === 'manual' && (
+                                      <div className="chip-pop">Manual points (admin; tie-breaker)</div>
+                                    )}
+                                  </div>
                                 )}
-                              </div>
+                              </>
                             )}
                           </div>
                         </div>
