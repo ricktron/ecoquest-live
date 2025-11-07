@@ -21,7 +21,7 @@ export default function Leaderboard() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const data = await fetchLeaderboard(DEFAULT_AID);
+        const { data } = await fetchLeaderboard();
         setLeaderboardData(data);
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);
@@ -65,8 +65,10 @@ export default function Leaderboard() {
         ) : (
           <div className="space-y-3">
             {rows.map((row, idx) => {
-              const delta = row.rank_delta;
-              const displayValue = row.score ?? row.total_score ?? row.score_total ?? row.obs_count ?? 0;
+              const d = row.rank_delta;
+              const trend = d == null ? '–' : d < 0 ? '↑' : d > 0 ? '↓' : '–';
+              const trendClass = d == null ? '' : d < 0 ? 'trend trend--up' : d > 0 ? 'trend trend--down' : '';
+              const score = row.score ?? row.total_score ?? row.score_total ?? row.obs_count ?? 0;
               
               return (
                 <div
@@ -79,13 +81,15 @@ export default function Leaderboard() {
                       <div className="text-2xl font-bold text-muted-foreground w-8">
                         #{row.rank ?? idx + 1}
                       </div>
-                      {delta != null && delta !== 0 ? (
-                        <span className={`trend ${delta < 0 ? 'trend--up' : 'trend--down'}`} title={`Rank change: ${delta < 0 ? 'up' : 'down'} ${Math.abs(delta)}`}>
-                          {delta < 0 ? '↑' : '↓'}
+                      {trendClass ? (
+                        <span className={trendClass} title={`Rank change: ${d}`}>
+                          {trend}
                         </span>
-                      ) : delta === 0 ? (
-                        <span className="trend text-muted-foreground" title="No rank change">–</span>
-                      ) : null}
+                      ) : (
+                        <span className="text-muted-foreground" title="No rank change data">
+                          {trend}
+                        </span>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
@@ -106,7 +110,7 @@ export default function Leaderboard() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-2xl font-bold text-primary">
-                      {formatPoints(displayValue)}
+                      {formatPoints(score)}
                     </div>
                   </div>
                 </div>
