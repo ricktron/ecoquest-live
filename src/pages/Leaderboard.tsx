@@ -69,7 +69,7 @@ export default function Leaderboard() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Trophy className="h-8 w-8 text-primary" />
-            EcoQuest Live: Leaderboard
+            Leaderboard
           </h1>
           <p className="text-sm text-muted-foreground italic">Spot it. Snap it. Score it.</p>
           <div className="flex items-center gap-2">

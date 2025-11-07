@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import HeaderStack from './components/HeaderStack';
 import TabNav from './components/TabNav';
+import BottomNav from './components/BottomNav';
 import Leaderboard from './pages/Leaderboard';
 import Trophies from './pages/Trophies';
 import TrophyDetail from './pages/TrophyDetail';
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/leaderboard" replace />} />
           </Routes>
         </HeaderStack>
+        <BottomNav />
       </BrowserRouter>
     </ErrorBoundary>
   );
