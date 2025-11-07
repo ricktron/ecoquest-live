@@ -64,3 +64,15 @@ export async function pingBronze() {
   const r = await supabase().rpc('ping_bronze_v1', {});
   return r;
 }
+
+export async function fetchBingo(userLogin: string) {
+  const { data, error } = await supabase().rpc('get_bingo_for_user', { p_user_login: userLogin });
+  if (error) { console.error('bingo rpc', error); return []; }
+  return data ?? [];
+}
+
+export async function fetchUserLogins() {
+  const r = await supabase().rpc('get_leaderboard_bronze_v1', {});
+  if (r.error) return [];
+  return (r.data ?? []).map((x: any) => x.user_login);
+}

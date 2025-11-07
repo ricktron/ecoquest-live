@@ -415,7 +415,7 @@ html, body, #root {
   right: 0;
   z-index: 1500;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   background: hsl(var(--background));
   height: 56px;
@@ -567,6 +567,38 @@ html, body, #root {
   margin-top: 0.5rem;
   white-space: pre-wrap;
   font-size: 0.85rem;
+}
+
+/* Bingo styles */
+.bingo {
+  padding: 1rem 0;
+}
+
+.bingo__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+
+.bingo__cell {
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--background));
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bingo__cell.hit {
+  background: #ecfdf5;
+  border-color: #10b981;
+  font-weight: 600;
+  color: #047857;
 }
 
 

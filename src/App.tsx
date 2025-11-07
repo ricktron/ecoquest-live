@@ -20,6 +20,7 @@ import Guide from './pages/Guide';
 import Compare from './pages/Compare';
 import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
+import Bingo from './pages/Bingo';
 import { FLAGS } from './env';
 import { fetchHeaderTexts } from './lib/api';
 
@@ -45,6 +46,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/leaderboard" replace />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/bingo" element={<Bingo />} />
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/gallery" element={<Gallery />} />}

@@ -7,6 +7,10 @@ export default function BottomNav() {
         <span aria-hidden>📊</span>
         <span>Leaderboard</span>
       </NavLink>
+      <NavLink to="/bingo" className="bottom-nav__item">
+        <span aria-hidden>🎯</span>
+        <span>Bingo</span>
+      </NavLink>
       <NavLink to="/trophies" className="bottom-nav__item">
         <span aria-hidden>🏆</span>
         <span>Trophies</span>
