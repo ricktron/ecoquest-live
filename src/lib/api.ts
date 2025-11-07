@@ -121,3 +121,8 @@ export async function listRecentAwards() {
 export async function listWeeklyAwards() {
   return supabase().from('manual_points_weekly_v1').select('*');
 }
+
+export async function fetchDisplayFlags() {
+  const { data } = await supabase().rpc('get_display_flags_v1', {});
+  return data?.[0] ?? { trophies_include_adults: true, score_blackout_until: null };
+}

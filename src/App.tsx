@@ -64,7 +64,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/leaderboard" replace />} />
           </Routes>
         </HeaderStack>
-        <ConfigButton />
+        {localStorage.getItem('admin_token') && <ConfigButton />}
         <BottomNav />
         {import.meta.env.DEV && (
           <div 

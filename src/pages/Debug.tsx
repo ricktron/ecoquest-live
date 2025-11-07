@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { ENV, FLAGS } from '@/env';
+import { fetchLeaderboard } from '@/lib/api';
 
 type SelfCheckResult = {
   name: string;
@@ -82,9 +83,15 @@ export default function Debug() {
   const trip = getActiveTrip();
   const filters = getTripFilters();
   const [membersOpen, setMembersOpen] = useState(false);
+  const [memberCount, setMemberCount] = useState<number>(0);
 
   useEffect(() => {
     initialize();
+    // Fetch member count from leaderboard
+    fetchLeaderboard().then(({ data }) => {
+      const uniqueLogins = new Set(data.map(r => r.user_login));
+      setMemberCount(uniqueLogins.size);
+    });
   }, []);
 
   const selfCheck = useMemo(() => runSelfCheck(observations), [observations]);
@@ -205,8 +212,8 @@ export default function Debug() {
                     <p className="text-2xl font-bold">{observations.length}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Users</p>
-                    <p className="text-2xl font-bold">{aggregated?.byUser.size || 0}</p>
+                    <p className="text-sm text-muted-foreground">Members</p>
+                    <p className="text-2xl font-bold">{memberCount}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Unique Species</p>
