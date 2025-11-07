@@ -653,24 +653,46 @@ html, body, #root {
 }
 
 .bingo__cell {
-  padding: 0.75rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.5rem;
-  background: hsl(var(--background));
+  padding: 0.9rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
   text-align: center;
-  font-size: 0.875rem;
-  line-height: 1.2;
-  min-height: 60px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 80px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+.bingo__cell:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
 .bingo__cell.hit {
   background: #ecfdf5;
   border-color: #10b981;
   font-weight: 600;
-  color: #047857;
+}
+
+.bingo__cell.hit:hover {
+  background: #d1fae5;
+}
+
+.bingo__emoji {
+  font-size: 1.3rem;
+  display: block;
+}
+
+.bingo__short {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  display: block;
 }
 
 
