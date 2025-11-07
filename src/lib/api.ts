@@ -92,3 +92,32 @@ export async function adminList(token: string) {
 export async function adminDelete(token: string, id: number) {
   return supabase().rpc('admin_delete_manual_point', { p_token: token, p_id: id });
 }
+
+export async function fieldAward({ token, user_login, points, reason, by }: {
+  token: string; user_login: string; points: number; reason?: string; by?: string;
+}) {
+  return supabase().rpc('field_award_manual_points', {
+    p_token: token, p_user_login: user_login, p_points: points, 
+    p_reason: reason ?? 'field-award', p_awarded_by: by ?? 'guide'
+  });
+}
+
+export async function adminSetSpeeds({ token, primary_ms, announce_ms }: {
+  token: string; primary_ms: number; announce_ms: number;
+}) {
+  return supabase().rpc('admin_set_ticker_speeds', { 
+    p_admin_token: token, p_primary_ms: primary_ms, p_announce_ms: announce_ms 
+  });
+}
+
+export async function adminSetAnnouncement({ token, text }: { token: string; text: string; }) {
+  return supabase().rpc('admin_set_announcement', { p_admin_token: token, p_text: text });
+}
+
+export async function listRecentAwards() {
+  return supabase().from('manual_points_recent_v1').select('*');
+}
+
+export async function listWeeklyAwards() {
+  return supabase().from('manual_points_weekly_v1').select('*');
+}
