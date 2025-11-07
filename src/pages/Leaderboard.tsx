@@ -21,7 +21,7 @@ export default function Leaderboard() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const { data } = await fetchLeaderboard();
+        const data = await fetchLeaderboard();
         setLeaderboardData(data);
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);

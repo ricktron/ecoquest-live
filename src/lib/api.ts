@@ -13,24 +13,14 @@ export type LeaderRow = {
   score_total?: number | null;
 };
 
+export async function fetchAnnouncement() {
+  const { data, error } = await supabase.rpc('get_announcement_text');
+  if (error) { console.error('announce rpc', error); return undefined; }
+  return (data ?? '').toString().trim() || undefined;
+}
+
 export async function fetchLeaderboard() {
-  const cols = 'user_login, display_name, rank, rank_delta, obs_count, distinct_taxa, bingo_points, score, total_score, score_total';
-  const { data, error } = await supabase
-    .from('leaderboard_overall_plus_bingo_latest_v2')
-    .select(cols);
-  
-  if (error) { 
-    console.error('Leaderboard fetch failed', error); 
-    return { data: [], error }; 
-  }
-  
-  // Sort by rank; fallback to obs_count if rank missing
-  const out = (data ?? []).slice().sort((a, b) => {
-    const ra = a.rank ?? 9999;
-    const rb = b.rank ?? 9999;
-    if (ra !== rb) return ra - rb;
-    return (b.obs_count ?? 0) - (a.obs_count ?? 0);
-  });
-  
-  return { data: out as LeaderRow[], error: null };
+  const { data, error } = await supabase.rpc('get_leaderboard_plus_bingo_v2');
+  if (error) { console.error('leaderboard rpc', error); return []; }
+  return (data ?? []).sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999));
 }
