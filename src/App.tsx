@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import HeaderStack from './components/HeaderStack';
@@ -19,12 +20,22 @@ import Compare from './pages/Compare';
 import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
 import { FLAGS } from './env';
-import { useTickerText } from './hooks/useTickerText';
-import useAnnouncementText from './hooks/useAnnouncementText';
+import { fetchHeaderTexts } from './lib/api';
 
 export default function App() {
-  const tickerText = useTickerText();
-  const announceText = useAnnouncementText();
+  const [tickerText, setTicker] = useState<string>();
+  const [announceText, setAnn] = useState<string | undefined>();
+
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const { ticker, announce } = await fetchHeaderTexts();
+      if (!on) return;
+      setTicker(ticker);
+      setAnn(announce);
+    })();
+    return () => { on = false; };
+  }, []);
   
   return (
     <ErrorBoundary>

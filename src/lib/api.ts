@@ -14,10 +14,11 @@ export type LeaderRow = {
   manual_points?: number | null;
 };
 
-export async function fetchAnnouncement() {
-  const { data, error } = await supabase.rpc('get_announcement_text');
-  if (error) { console.error('announce rpc', error); return undefined; }
-  return (data ?? '').toString().trim() || undefined;
+export async function fetchHeaderTexts() {
+  const { data, error } = await supabase.rpc('get_header_texts_v1', {});
+  if (error) { console.error('header rpc', error); return { ticker: 'EcoQuest Live — ready to play', announce: undefined }; }
+  const row = (data && data[0]) || {};
+  return { ticker: row.ticker_text || 'EcoQuest Live — ready to play', announce: row.announcement_text || undefined };
 }
 
 export async function fetchLeaderboard() {
