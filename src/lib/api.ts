@@ -11,6 +11,7 @@ export type LeaderRow = {
   score?: number | null;
   total_score?: number | null;
   score_total?: number | null;
+  manual_points?: number | null;
 };
 
 export async function fetchAnnouncement() {
@@ -20,7 +21,10 @@ export async function fetchAnnouncement() {
 }
 
 export async function fetchLeaderboard() {
-  const { data, error } = await supabase.rpc('get_leaderboard_plus_bingo_v2');
-  if (error) { console.error('leaderboard rpc', error); return []; }
+  const cols = 'user_login, display_name, rank, rank_delta, obs_count, distinct_taxa, bingo_points, score, total_score, score_total, manual_points';
+  const { data, error } = await supabase
+    .from('leaderboard_overall_plus_extras_latest_v1')
+    .select(cols);
+  if (error) { console.error('leaderboard fetch', error); return []; }
   return (data ?? []).sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999));
 }

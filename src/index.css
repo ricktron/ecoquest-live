@@ -439,6 +439,12 @@ html, body, #root {
   border: 1px solid hsl(var(--border));
 }
 
+.chip--bonus {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+
 .trend {
   font-weight: 700;
   font-size: 16px;

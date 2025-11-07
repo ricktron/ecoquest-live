@@ -105,6 +105,11 @@ export default function Leaderboard() {
                             🎯 {row.bingo_points}
                           </span>
                         )}
+                        {(row.manual_points ?? 0) !== 0 && (
+                          <span className="chip chip--bonus" title="Manual bonus/penalty">
+                            ⭐ {row.manual_points}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
