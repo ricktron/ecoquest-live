@@ -72,66 +72,73 @@ export default function Leaderboard() {
               <Skeleton key={i} className="h-20 w-full" />
             ))}
           </div>
-        ) : error && (!rows || rows.length === 0) ? (
-          <div className="text-center py-12 bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground">Leaderboard load failed. See console.</p>
-          </div>
-        ) : !rows || rows.length === 0 ? (
-          <div className="text-center py-12 bg-muted/30 rounded-lg">
-            <p className="text-muted-foreground">No leaderboard rows for the latest run.</p>
-          </div>
         ) : (
-          <div className="space-y-3">
-            {rows.map((row, idx) => {
-              const trendSymbol = '–';
-              const score = row.obs_count ?? 0;
-              
-              return (
-                <div
-                  key={row.user_login}
-                  className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
-                  onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1">
-                      <div className="text-2xl font-bold text-muted-foreground w-8">
-                        #{row.rank ?? idx + 1}
-                      </div>
-                      <span className="text-muted-foreground" title="No rank change data">
-                        {trendSymbol}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
-                      <div className="flex gap-2 flex-wrap">
-                        <Chip variant="default" title={`${row.obs_count ?? 0} total observations`}>
-                          🔍 {row.obs_count ?? 0}
-                        </Chip>
-                        <Chip variant="primary" title={`${row.distinct_taxa ?? 0} unique species`}>
-                          🌿 {row.distinct_taxa ?? 0}
-                        </Chip>
-                        {(row.bingo_points ?? 0) > 0 && (
-                          <span className="chip chip--bingo" title="Bingo points">
-                            🎯 {row.bingo_points}
+          <>
+            {error && (
+              <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm text-destructive">
+                  Leaderboard error: {error.message || JSON.stringify(error)}
+                </p>
+              </div>
+            )}
+            {!rows || rows.length === 0 ? (
+              <div className="text-center py-12 bg-muted/30 rounded-lg">
+                <p className="text-muted-foreground">No leaderboard rows for the latest run.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {rows.map((row, idx) => {
+                  const trendSymbol = '–';
+                  const score = row.obs_count ?? 0;
+                  
+                  return (
+                    <div
+                      key={row.user_login}
+                      className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
+                      onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1">
+                          <div className="text-2xl font-bold text-muted-foreground w-8">
+                            #{row.rank ?? idx + 1}
+                          </div>
+                          <span className="text-muted-foreground" title="No rank change data">
+                            {trendSymbol}
                           </span>
-                        )}
-                        {Number(row.manual_points ?? 0) !== 0 && (
-                          <span className="chip chip--bonus" title="Manual bonus/penalty">
-                            ⭐ {row.manual_points}
-                          </span>
-                        )}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
+                          <div className="flex gap-2 flex-wrap">
+                            <Chip variant="default" title={`${row.obs_count ?? 0} total observations`}>
+                              🔍 {row.obs_count ?? 0}
+                            </Chip>
+                            <Chip variant="primary" title={`${row.distinct_taxa ?? 0} unique species`}>
+                              🌿 {row.distinct_taxa ?? 0}
+                            </Chip>
+                            {(row.bingo_points ?? 0) > 0 && (
+                              <span className="chip chip--bingo" title="Bingo points">
+                                🎯 {row.bingo_points}
+                              </span>
+                            )}
+                            {Number(row.manual_points ?? 0) !== 0 && (
+                              <span className="chip chip--bonus" title="Manual bonus/penalty">
+                                ⭐ {row.manual_points}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-2xl font-bold text-primary">
+                          {formatPoints(score)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl font-bold text-primary">
-                      {formatPoints(score)}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
         <Legend />
