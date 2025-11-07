@@ -76,3 +76,19 @@ export async function fetchUserLogins() {
   if (r.error) return [];
   return (r.data ?? []).map((x: any) => x.user_login);
 }
+
+export async function adminAward({ token, user_login, points, reason, by }: {
+  token: string; user_login: string; points: number; reason?: string; by?: string;
+}) {
+  return supabase().rpc('admin_award_manual_points', {
+    p_token: token, p_user_login: user_login, p_points: points, p_reason: reason ?? 'manual', p_awarded_by: by ?? 'admin'
+  });
+}
+
+export async function adminList(token: string) {
+  return supabase().rpc('admin_list_manual_points', { p_token: token });
+}
+
+export async function adminDelete(token: string, id: number) {
+  return supabase().rpc('admin_delete_manual_point', { p_token: token, p_id: id });
+}

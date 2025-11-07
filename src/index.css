@@ -569,6 +569,44 @@ html, body, #root {
   font-size: 0.85rem;
 }
 
+.cfg__section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.cfg__table {
+  width: 100%;
+  font-size: 0.9rem;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+.cfg__table td,
+.cfg__table th {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.35rem 0.25rem;
+  text-align: left;
+}
+
+.cfg__table .del {
+  cursor: pointer;
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.cfg__table .del:hover {
+  color: #dc2626;
+}
+
+.cfg__modal select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 /* Bingo styles */
 .bingo {
   padding: 1rem 0;
