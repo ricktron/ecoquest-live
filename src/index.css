@@ -599,6 +599,48 @@ html, body, #root {
   color: #dc2626;
 }
 
+.legend-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.legend-inline__btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  background: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.legend-pop {
+  position: absolute;
+  z-index: 2200;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  width: max-content;
+  top: 100%;
+  margin-top: 0.25rem;
+}
+
+.legend-pop > div {
+  margin: 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .legend-pop {
+    right: 0;
+  }
+}
+
 .cfg__modal select {
   width: 100%;
   padding: 0.5rem;

@@ -1,6 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAppState } from '@/lib/state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Info, Clock } from 'lucide-react';
 import { formatPoints, computeTrends, type UserRowWithTrend, type UserRowWithRank } from '@/lib/scoring';
@@ -19,6 +18,7 @@ export default function Leaderboard() {
   const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
   const [error, setError] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [chipOpen, setChipOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -57,6 +57,24 @@ export default function Leaderboard() {
               <Info className="h-4 w-4" />
               How scoring works
             </Link>
+            <div className="legend-inline">
+              <button 
+                className="legend-inline__btn" 
+                aria-expanded={chipOpen}
+                aria-controls="chip-legend" 
+                onClick={() => setChipOpen(v => !v)}
+              >
+                i
+              </button>
+              {chipOpen && (
+                <div className="legend-pop" id="chip-legend" role="dialog" aria-label="Chip legend">
+                  <div><span className="chip">🔍 48</span> Observations (headline score)</div>
+                  <div><span className="chip">🌿 46</span> Distinct taxa (info)</div>
+                  <div><span className="chip chip--bingo">🎯 51</span> Bingo points (tie-breaker)</div>
+                  <div><span className="chip chip--bonus">⭐ 3</span> Manual points (admin; tie-breaker)</div>
+                </div>
+              )}
+            </div>
             {lastUpdated && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
