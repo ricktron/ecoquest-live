@@ -71,10 +71,21 @@ export async function fetchBingo(userLogin: string) {
   return data ?? [];
 }
 
+export async function fetchMembers() {
+  const { data, error } = await supabase()
+    .from('members_latest_v1')
+    .select('user_login')
+    .order('user_login');
+  if (error) { 
+    console.error('fetchMembers error', error); 
+    return []; 
+  }
+  return (data ?? []).map(m => m.user_login);
+}
+
 export async function fetchUserLogins() {
-  const r = await supabase().rpc('get_leaderboard_bronze_v1', {});
-  if (r.error) return [];
-  return (r.data ?? []).map((x: any) => x.user_login);
+  // Legacy wrapper - use fetchMembers() instead
+  return fetchMembers();
 }
 
 export async function adminAward({ token, user_login, points, reason, by }: {

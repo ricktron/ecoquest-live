@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { ENV, FLAGS } from '@/env';
-import { fetchLeaderboard } from '@/lib/api';
+import { fetchMembers } from '@/lib/api';
 
 type SelfCheckResult = {
   name: string;
@@ -84,13 +84,14 @@ export default function Debug() {
   const filters = getTripFilters();
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberCount, setMemberCount] = useState<number>(0);
+  const [memberLogins, setMemberLogins] = useState<string[]>([]);
 
   useEffect(() => {
     initialize();
-    // Fetch member count from leaderboard
-    fetchLeaderboard().then(({ data }) => {
-      const uniqueLogins = new Set(data.map(r => r.user_login));
-      setMemberCount(uniqueLogins.size);
+    // Fetch members from unified view
+    fetchMembers().then(logins => {
+      setMemberCount(logins.length);
+      setMemberLogins(logins);
     });
   }, []);
 
@@ -211,9 +212,20 @@ export default function Debug() {
                     <p className="text-sm text-muted-foreground">Total Observations</p>
                     <p className="text-2xl font-bold">{observations.length}</p>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <p className="text-sm text-muted-foreground">Members</p>
                     <p className="text-2xl font-bold">{memberCount}</p>
+                    {memberLogins.length > 0 && (
+                      <details className="text-sm mt-2">
+                        <summary className="cursor-pointer text-muted-foreground hover:text-primary">
+                          Show first 10 logins
+                        </summary>
+                        <div className="mt-2 text-xs font-mono text-muted-foreground">
+                          {memberLogins.slice(0, 10).join(', ')}
+                          {memberLogins.length > 10 && '...'}
+                        </div>
+                      </details>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Unique Species</p>

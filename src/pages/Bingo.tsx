@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchBingo, fetchUserLogins } from '../lib/api';
+import { fetchBingo, fetchMembers } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
 
@@ -128,7 +128,7 @@ export default function Bingo() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const logins = await fetchUserLogins();
+      const logins = await fetchMembers();
       if (!mounted) return;
       setUserLogins(logins);
       if (logins.length > 0) setSelectedUser(logins[0]);
