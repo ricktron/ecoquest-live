@@ -18,7 +18,7 @@ export default function Leaderboard() {
   const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
   const [error, setError] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [chipOpen, setChipOpen] = useState(false);
+  const [openChip, setOpenChip] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -57,24 +57,6 @@ export default function Leaderboard() {
               <Info className="h-4 w-4" />
               How scoring works
             </Link>
-            <div className="legend-inline">
-              <button 
-                className="legend-inline__btn" 
-                aria-expanded={chipOpen}
-                aria-controls="chip-legend" 
-                onClick={() => setChipOpen(v => !v)}
-              >
-                i
-              </button>
-              {chipOpen && (
-                <div className="legend-pop" id="chip-legend" role="dialog" aria-label="Chip legend">
-                  <div><span className="chip">🔍 48</span> Observations (headline score)</div>
-                  <div><span className="chip">🌿 46</span> Distinct taxa (info)</div>
-                  <div><span className="chip chip--bingo">🎯 51</span> Bingo points (tie-breaker)</div>
-                  <div><span className="chip chip--bonus">⭐ 3</span> Manual points (admin; tie-breaker)</div>
-                </div>
-              )}
-            </div>
             {lastUpdated && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
@@ -127,21 +109,69 @@ export default function Leaderboard() {
                         <div className="space-y-1">
                           <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
                           <div className="flex gap-2 flex-wrap">
-                            <Chip variant="default" title={`${row.obs_count ?? 0} total observations`}>
-                              🔍 {row.obs_count ?? 0}
-                            </Chip>
-                            <Chip variant="primary" title={`${row.distinct_taxa ?? 0} unique species`}>
-                              🌿 {row.distinct_taxa ?? 0}
-                            </Chip>
+                            <div className="relative">
+                              <button 
+                                className="chip chip--info" 
+                                aria-haspopup="dialog" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenChip(openChip === 'obs' ? null : 'obs');
+                                }}
+                              >
+                                🔍 {row.obs_count ?? 0}
+                              </button>
+                              {openChip === 'obs' && (
+                                <div className="chip-pop">Observations (headline score)</div>
+                              )}
+                            </div>
+                            <div className="relative">
+                              <button 
+                                className="chip chip--info" 
+                                aria-haspopup="dialog" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenChip(openChip === 'taxa' ? null : 'taxa');
+                                }}
+                              >
+                                🌿 {row.distinct_taxa ?? 0}
+                              </button>
+                              {openChip === 'taxa' && (
+                                <div className="chip-pop">Distinct taxa (info)</div>
+                              )}
+                            </div>
                             {(row.bingo_points ?? 0) > 0 && (
-                              <span className="chip chip--bingo" title="Bingo points">
-                                🎯 {row.bingo_points}
-                              </span>
+                              <div className="relative">
+                                <button 
+                                  className="chip chip--bingo" 
+                                  aria-haspopup="dialog"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenChip(openChip === 'bingo' ? null : 'bingo');
+                                  }}
+                                >
+                                  🎯 {row.bingo_points}
+                                </button>
+                                {openChip === 'bingo' && (
+                                  <div className="chip-pop">Bingo points (tie-breaker)</div>
+                                )}
+                              </div>
                             )}
                             {Number(row.manual_points ?? 0) !== 0 && (
-                              <span className="chip chip--bonus" title="Manual bonus/penalty">
-                                ⭐ {row.manual_points}
-                              </span>
+                              <div className="relative">
+                                <button 
+                                  className="chip chip--bonus" 
+                                  aria-haspopup="dialog"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenChip(openChip === 'manual' ? null : 'manual');
+                                  }}
+                                >
+                                  ⭐ {row.manual_points}
+                                </button>
+                                {openChip === 'manual' && (
+                                  <div className="chip-pop">Manual points (admin; tie-breaker)</div>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

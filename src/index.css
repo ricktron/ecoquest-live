@@ -459,6 +459,18 @@ html, body, #root {
   border: 1px solid #fed7aa;
 }
 
+.chip-pop {
+  position: absolute;
+  z-index: 2200;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+  white-space: nowrap;
+  transform: translateY(-0.5rem);
+}
+
 .trend {
   font-weight: 700;
   font-size: 16px;
