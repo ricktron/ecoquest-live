@@ -15,6 +15,8 @@ export default function Ticker({ text, variant = 'primary' }: Props) {
         <div className="ticker__track">
           <span className="ticker__chunk">{text}</span>
           <span className="ticker__chunk" aria-hidden="true">{text}</span>
+          <span className="ticker__chunk" aria-hidden="true">{text}</span>
+          <span className="ticker__chunk" aria-hidden="true">{text}</span>
         </div>
       </div>
     </div>

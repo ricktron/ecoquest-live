@@ -62,62 +62,85 @@ body.has-ticker {
   margin-bottom: 0 !important;
 }
 
-/* Ticker styles */
-.ticker { 
-  height: 28px; 
-  display: flex; 
-  align-items: center; 
-  background: #10b981; 
-  color: #fff; 
-  overflow: hidden; 
-  border-bottom: 1px solid rgba(0,0,0,.06); 
+/* Bridge old & new classnames */
+.header-stack__ticker, .ticker {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  margin: 0;
+  color: #fff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.ticker.announce { 
-  background: #34d399; 
+.ticker.primary {
+  background: #10b981;
 }
 
-.ticker__inner { 
-  width: 100%; 
-  overflow: hidden; 
+.ticker.announce, .header-stack__ticker--alt {
+  background: #34d399;
 }
 
-.ticker__track { 
-  display: inline-flex; 
-  align-items: center; 
-  gap: 2rem; 
+/* Layout: header stacks vertically and sits above map/content */
+.header-stack__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+/* Marquee motion + spacing */
+.ticker__inner {
+  width: 100%;
+  overflow: hidden;
+}
+
+.ticker__track {
+  display: inline-flex;
+  align-items: center;
+  gap: 2rem;
   white-space: nowrap;
-  will-change: transform; 
-  animation: marquee 18s linear infinite; 
+  will-change: transform;
+  animation: marquee 20s linear infinite;
 }
 
-.ticker__inner[data-speed="slow"] .ticker__track { 
-  animation-duration: 26s; 
+.ticker__inner[data-speed="slow"] .ticker__track {
+  animation-duration: 28s;
 }
 
-.ticker__chunk { 
-  padding-right: 2rem; 
+.ticker__chunk {
+  padding-right: 2rem;
 }
 
-.ticker:hover .ticker__track { 
-  animation-play-state: paused; 
+.ticker:hover .ticker__track {
+  animation-play-state: paused;
 }
 
-@media (prefers-reduced-motion: reduce) { 
-  .ticker__track { 
-    animation: none; 
-  } 
+@media (prefers-reduced-motion: reduce) {
+  .ticker__track {
+    animation: none;
+  }
 }
 
-@keyframes marquee { 
-  to { 
-    transform: translateX(-50%); 
-  } 
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
-.header-stack__content { 
-  flex: 1; 
-  overflow-x: hidden; 
+/* Optional: map shouldn't cover header */
+.map-container {
+  z-index: 1;
+}
+
+.header-stack__content {
+  flex: 1;
+  overflow-x: hidden;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
