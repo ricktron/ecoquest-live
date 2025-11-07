@@ -91,44 +91,36 @@ body.has-ticker {
 }
 
 /* Marquee motion + spacing */
-.ticker__inner {
-  width: 100%;
-  overflow: hidden;
-}
-
-.ticker__track {
-  display: inline-flex;
-  align-items: center;
-  gap: 2rem;
-  white-space: nowrap;
-  animation: marquee 18s linear infinite;
+.ticker__lane {
+  display: flex;
+  width: max-content;
+  animation: marquee var(--ticker-duration, 18000ms) linear infinite;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
 }
 
-.ticker__inner[data-speed="slow"] .ticker__track {
-  animation-duration: 26s;
-}
-
-.ticker__chunk {
+.ticker__content {
+  display: inline-block;
   padding-right: 2rem;
+  white-space: nowrap;
 }
 
-.ticker:hover .ticker__track {
+.ticker:hover .ticker__lane {
   animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticker__track {
-    animation: none;
-  }
 }
 
 @keyframes marquee {
   from {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker__lane {
+    animation: none;
   }
 }
 

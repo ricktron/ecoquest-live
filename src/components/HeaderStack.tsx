@@ -24,9 +24,9 @@ export default function HeaderStack({
           <span className="brand__text">EcoQuest Live</span>
         </div>
         {showTopTabs && tabs && <nav className="header-stack__tabs">{tabs}</nav>}
-        {tickerText && <Ticker text={tickerText} variant="primary" />}
+        {tickerText && <Ticker text={tickerText} variant="primary" speedMs={16000} />}
         {announceText && announceText.trim() !== '' && (
-          <Ticker text={announceText} variant="announce" />
+          <Ticker text={announceText} variant="announce" speedMs={26000} />
         )}
       </header>
       <main className="header-stack__content">{children}</main>
