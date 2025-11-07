@@ -31,8 +31,8 @@ export function useTickerText(): string {
     // Top 3 leaders
     const top3 = leaderboardData
       .map((row, i) => {
-        const name = row.display_name || 'Unknown';
-        const count = row.O ?? 0;
+        const name = row.display_name || row.user_login || 'Unknown';
+        const count = row.obs_count ?? 0;
         return `#${i + 1} ${name} (${count} obs)`;
       })
       .join(' • ');
@@ -45,11 +45,11 @@ export function useTickerText(): string {
     if (leaderboardData.length >= 2) {
       const first = leaderboardData[0];
       const second = leaderboardData[1];
-      const firstCount = first.O ?? 0;
-      const secondCount = second.O ?? 0;
+      const firstCount = first.obs_count ?? 0;
+      const secondCount = second.obs_count ?? 0;
       const gap = firstCount - secondCount;
       if (gap <= 5) {
-        const firstName = first.display_name || 'Unknown';
+        const firstName = first.display_name || first.user_login || 'Unknown';
         items.push(`🏁 Tight race! ${firstName} leads by ${gap}`);
       }
     }

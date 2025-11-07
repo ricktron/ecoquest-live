@@ -14,8 +14,8 @@ export default function Ticker() {
         const data = await fetchLeaderboard(DEFAULT_AID);
         const top3 = data.slice(0, 3);
         const out: Item[] = top3.map(r => ({
-          title: r.display_name ?? 'Unknown',
-          detail: `${r.points ?? 0} pts`
+          title: r.display_name ?? r.user_login ?? 'Unknown',
+          detail: `${r.score ?? r.total_score ?? r.score_total ?? r.obs_count ?? 0} pts`
         }));
         if (alive) setItems(out);
       } catch { /* ignore */ }

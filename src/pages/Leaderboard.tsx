@@ -65,10 +65,12 @@ export default function Leaderboard() {
         ) : (
           <div className="space-y-3">
             {rows.map((row, idx) => {
-              const delta = row.delta_rank ?? row.rank_delta ?? row.rank_change;
+              const delta = row.rank_delta;
+              const displayValue = row.score ?? row.total_score ?? row.score_total ?? row.obs_count ?? 0;
+              
               return (
                 <div
-                  key={row.display_name || row.student_id}
+                  key={row.user_login}
                   className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
                   onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
                 >
@@ -77,7 +79,7 @@ export default function Leaderboard() {
                       <div className="text-2xl font-bold text-muted-foreground w-8">
                         #{row.rank ?? idx + 1}
                       </div>
-                      {delta !== null && delta !== undefined && delta !== 0 ? (
+                      {delta != null && delta !== 0 ? (
                         <span className={`trend ${delta < 0 ? 'trend--up' : 'trend--down'}`} title={`Rank change: ${delta < 0 ? 'up' : 'down'} ${Math.abs(delta)}`}>
                           {delta < 0 ? '↑' : '↓'}
                         </span>
@@ -86,19 +88,14 @@ export default function Leaderboard() {
                       ) : null}
                     </div>
                     <div className="space-y-1">
-                      <div className="font-semibold text-lg">{row.display_name || 'Unknown'}</div>
+                      <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
                       <div className="flex gap-2 flex-wrap">
-                        <Chip variant="default" title={`${row.O ?? 0} total observations`}>
-                          🔍 {row.O ?? 0}
+                        <Chip variant="default" title={`${row.obs_count ?? 0} total observations`}>
+                          🔍 {row.obs_count ?? 0}
                         </Chip>
-                        <Chip variant="primary" title={`${row.U ?? 0} unique species`}>
-                          🌿 {row.U ?? 0}
+                        <Chip variant="primary" title={`${row.distinct_taxa ?? 0} unique species`}>
+                          🌿 {row.distinct_taxa ?? 0}
                         </Chip>
-                        {(row.RG ?? 0) > 0 && (
-                          <Chip variant="secondary" title={`${row.RG} research-grade observations`}>
-                            ✅ {row.RG}
-                          </Chip>
-                        )}
                         {(row.bingo_points ?? 0) > 0 && (
                           <span className="chip chip--bingo" title="Bingo points (hits + lines + blackout)">
                             🎯 {row.bingo_points}
@@ -109,7 +106,7 @@ export default function Leaderboard() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-2xl font-bold text-primary">
-                      {formatPoints(row.points ?? 0)}
+                      {formatPoints(displayValue)}
                     </div>
                   </div>
                 </div>
