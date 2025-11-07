@@ -41,7 +41,7 @@ export default function Daily() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Calendar className="h-8 w-8 text-primary" />
-            Daily Rollup
+            Daily
           </h1>
           <p className="text-sm text-muted-foreground">
             Trip days from {trip.dayRanges[0]?.start} to {trip.dayRanges[trip.dayRanges.length - 1]?.end}

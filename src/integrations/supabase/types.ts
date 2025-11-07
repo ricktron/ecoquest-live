@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       config_filters: {
         Row: {
+          flags: Json | null
           id: boolean
           night_owl_start_local: string
           timezone_str: string
@@ -23,6 +24,7 @@ export type Database = {
           window_start: string
         }
         Insert: {
+          flags?: Json | null
           id?: boolean
           night_owl_start_local?: string
           timezone_str?: string
@@ -30,6 +32,7 @@ export type Database = {
           window_start: string
         }
         Update: {
+          flags?: Json | null
           id?: boolean
           night_owl_start_local?: string
           timezone_str?: string

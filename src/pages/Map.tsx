@@ -48,7 +48,7 @@ export default function Map() {
   return (
     <div className="pb-6">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-4">
-        <h1 className="text-3xl font-bold">Map View</h1>
+        <h1 className="text-3xl font-bold">Map</h1>
 
         {loading ? (
           <Skeleton className="h-[600px] w-full" />

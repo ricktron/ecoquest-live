@@ -20,14 +20,16 @@ import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
 import { FLAGS } from './env';
 import { useTickerText } from './hooks/useTickerText';
+import useAnnouncementText from './hooks/useAnnouncementText';
 
 export default function App() {
   const tickerText = useTickerText();
+  const announceText = useAnnouncementText();
   
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <HeaderStack tabs={<TabNav />} tickerText={tickerText}>
+        <HeaderStack tabs={<TabNav />} tickerText={tickerText} announceText={announceText}>
           <Routes>
             <Route path="/" element={<Navigate to="/leaderboard" replace />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
