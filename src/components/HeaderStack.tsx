@@ -1,4 +1,5 @@
 import React from "react";
+import Ticker from "./Ticker";
 
 type Props = {
   tabs?: React.ReactNode;
@@ -19,29 +20,13 @@ export default function HeaderStack({
     <div className="header-stack">
       <header className="header-stack__bar" role="banner">
         <div className="header-stack__brand">
-          <span className="brand__logo" aria-hidden>🌿</span>
+          <span className="brand__logo" aria-hidden="true">🌿</span>
           <span className="brand__text">EcoQuest Live</span>
         </div>
         {showTopTabs && tabs && <nav className="header-stack__tabs">{tabs}</nav>}
-        {tickerText && (
-          <div className="header-stack__ticker" role="status" aria-live="polite">
-            <div className="ticker__marquee" data-speed="fast">
-              <div className="ticker__track">
-                <span className="ticker__chunk">🏆 {tickerText}</span>
-                <span className="ticker__chunk" aria-hidden="true"> • • 🏆 {tickerText}</span>
-              </div>
-            </div>
-          </div>
-        )}
-        {announceText !== undefined && (
-          <div className="header-stack__ticker header-stack__ticker--alt" role="status" aria-live="polite" data-role="announce-ticker">
-            <div className="ticker__marquee" data-speed="slow">
-              <div className="ticker__track">
-                <span className="ticker__chunk">📣 {announceText}</span>
-                <span className="ticker__chunk" aria-hidden="true"> • • 📣 {announceText}</span>
-              </div>
-            </div>
-          </div>
+        {tickerText && <Ticker text={tickerText} variant="primary" />}
+        {announceText !== undefined && announceText !== '' && (
+          <Ticker text={announceText} variant="announce" />
         )}
       </header>
       <main className="header-stack__content">{children}</main>

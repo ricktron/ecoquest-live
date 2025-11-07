@@ -1,41 +1,26 @@
-import { useEffect, useState } from "react";
-import { DEFAULT_AID } from "@/lib/supabase";
-import { fetchLeaderboard } from "@/lib/api";
+type Props = { 
+  text: string; 
+  variant?: 'primary' | 'announce'; 
+};
 
-type Item = { title: string; detail: string; };
-
-export default function Ticker() {
-  const [items, setItems] = useState<Item[]>([]);
-
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const data = await fetchLeaderboard(DEFAULT_AID);
-        const top3 = data.slice(0, 3);
-        const out: Item[] = top3.map(r => ({
-          title: r.display_name ?? r.user_login ?? 'Unknown',
-          detail: `${r.score ?? r.total_score ?? r.score_total ?? r.obs_count ?? 0} pts`
-        }));
-        if (alive) setItems(out);
-      } catch { /* ignore */ }
-    };
-    load();
-    const id = setInterval(load, 60000);
-    return () => { alive = false; clearInterval(id); };
-  }, []);
-
-  if (!items.length) return null;
+export default function Ticker({ text, variant = 'primary' }: Props) {
   return (
-    <div className="w-full overflow-hidden bg-black text-white text-sm py-1">
-      <div className="animate-[ticker_20s_linear_infinite] whitespace-nowrap">
-        {items.map((it, i) => (
-          <span key={i} className="mx-6">
-            <span className="font-semibold">{it.title}</span> takes the lead with {it.detail}!
+    <div 
+      className={`header-stack__ticker ${variant === 'announce' ? 'header-stack__ticker--alt' : ''}`}
+      role="status" 
+      aria-live="polite" 
+      data-role={variant === 'announce' ? 'announce-ticker' : 'ticker'}
+    >
+      <div className="ticker__marquee" data-speed={variant === 'announce' ? 'slow' : 'fast'}>
+        <div className="ticker__track">
+          <span className="ticker__chunk">
+            {variant === 'announce' ? '📣 ' : '🏆 '}{text}
           </span>
-        ))}
+          <span className="ticker__chunk" aria-hidden="true">
+            {' • • '}{variant === 'announce' ? '📣 ' : '🏆 '}{text}
+          </span>
+        </div>
       </div>
-      <style>{`@keyframes ticker {0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
     </div>
   );
 }
