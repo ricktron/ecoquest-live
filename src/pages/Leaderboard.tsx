@@ -72,7 +72,7 @@ export default function Leaderboard() {
               <Skeleton key={i} className="h-20 w-full" />
             ))}
           </div>
-        ) : error ? (
+        ) : error && (!rows || rows.length === 0) ? (
           <div className="text-center py-12 bg-muted/30 rounded-lg">
             <p className="text-muted-foreground">Leaderboard load failed. See console.</p>
           </div>
@@ -99,15 +99,9 @@ export default function Leaderboard() {
                       <div className="text-2xl font-bold text-muted-foreground w-8">
                         #{row.rank ?? idx + 1}
                       </div>
-                      {trendClass ? (
-                        <span className={trendClass} title={`Rank change: ${d}`}>
-                          {trend}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground" title="No rank change data">
-                          {trend}
-                        </span>
-                      )}
+                      <span className={d == null ? '' : d < 0 ? 'trend trend--up' : d > 0 ? 'trend trend--down' : ''} title={d == null ? 'No rank change data' : `Rank change: ${d}`}>
+                        {d == null ? '–' : d < 0 ? '↑' : d > 0 ? '↓' : '–'}
+                      </span>
                     </div>
                     <div className="space-y-1">
                       <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
