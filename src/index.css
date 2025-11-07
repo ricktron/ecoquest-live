@@ -417,3 +417,21 @@ html, body, #root {
   color: hsl(var(--primary));
   font-weight: 600;
 }
+
+/* Chip styles */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.chip--bingo {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+

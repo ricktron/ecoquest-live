@@ -9,59 +9,31 @@ import { UI } from '@/uiConfig';
 import Chip from '@/components/Chip';
 import Legend from '@/components/Legend';
 import { Card, CardContent } from '@/components/ui/card';
+import { fetchLeaderboard, type LeaderRow } from '@/lib/api';
+import { DEFAULT_AID } from '@/lib/supabase';
 
 export default function Leaderboard() {
   const navigate = useNavigate();
-  const { loading, aggregated, observations, initialize } = useAppState();
-  const [yesterdayScores, setYesterdayScores] = useState<Map<string, number>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
 
   useEffect(() => {
-    initialize();
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchLeaderboard(DEFAULT_AID);
+        setLeaderboardData(data);
+      } catch (err) {
+        console.error('Failed to fetch leaderboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
-  useEffect(() => {
-    if (!observations.length) return;
-    
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
-    const yesterdayObs = observations.filter(o => o.observedOn === yesterday);
-    const userPoints = new Map<string, number>();
-    
-    yesterdayObs.forEach(obs => {
-      const login = obs.userLogin;
-      userPoints.set(login, (userPoints.get(login) || 0) + 1);
-    });
-    
-    setYesterdayScores(userPoints);
-  }, [observations]);
-
-  const current = useMemo(() => {
-    if (!aggregated) return [];
-    
-    const today = new Date().toISOString().split('T')[0];
-    const todayObs = observations.filter(o => o.observedOn === today);
-    const todayPoints = new Map<string, number>();
-    
-    todayObs.forEach(obs => {
-      todayPoints.set(obs.userLogin, (todayPoints.get(obs.userLogin) || 0) + 1);
-    });
-    
-    return Array.from(aggregated.byUser.values())
-      .sort((a, b) => b.points - a.points)
-      .map((u, i) => ({ 
-        ...u, 
-        rank: i + 1,
-        trend: (todayPoints.get(u.login) || 0) - (yesterdayScores.get(u.login) || 0),
-      }));
-  }, [aggregated, observations, yesterdayScores]);
-
-  const rows = current;
-
-  const closeBattles = useMemo(() => {
-    if (!current.length) return [];
-    return findCloseBattles(current);
-  }, [current]);
+  const rows = leaderboardData;
 
   return (
     <div className="pb-6 pb-safe-bottom">
@@ -80,22 +52,6 @@ export default function Leaderboard() {
           </div>
         </div>
 
-        {/* Who's Close Panel */}
-        {closeBattles.length > 0 && (
-          <Card className="p-4 bg-muted/30">
-            <h3 className="font-semibold mb-2 text-sm">Who's Close?</h3>
-            <div className="space-y-1 text-sm">
-              {closeBattles.map((b, i) => (
-                <div key={i}>
-                  <span className="font-medium">{b.a.login}</span> vs{' '}
-                  <span className="font-medium">{b.b.login}</span>{' '}
-                  <span className="text-muted-foreground">(Δ{b.d.toFixed(2)} pts)</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map(i => (
@@ -110,42 +66,39 @@ export default function Leaderboard() {
           <div className="space-y-3">
             {rows.map((row, idx) => (
               <div
-                key={row.login}
+                key={row.display_name || row.student_id}
                 className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
-                onClick={() => navigate(`/user/${row.login}`)}
+                onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
               >
                 <div className="flex items-center gap-4">
                   <div className="text-2xl font-bold text-muted-foreground w-8">
-                    #{idx + 1}
+                    #{row.rank ?? idx + 1}
                   </div>
                   <div className="space-y-1">
-                    <div className="font-semibold text-lg">{row.login}</div>
+                    <div className="font-semibold text-lg">{row.display_name || 'Unknown'}</div>
                     <div className="flex gap-2 flex-wrap">
-                      <Chip variant="default" title={`${row.obsCount} total observations`}>
-                        🔍 {row.obsCount}
+                      <Chip variant="default" title={`${row.O ?? 0} total observations`}>
+                        🔍 {row.O ?? 0}
                       </Chip>
-                      <Chip variant="primary" title={`${row.speciesCount} unique species`}>
-                        🌿 {row.speciesCount}
+                      <Chip variant="primary" title={`${row.U ?? 0} unique species`}>
+                        🌿 {row.U ?? 0}
                       </Chip>
-                      {row.researchCount > 0 && (
-                        <Chip variant="secondary" title={`${row.researchCount} research-grade observations`}>
-                          ✅ {row.researchCount}
+                      {(row.RG ?? 0) > 0 && (
+                        <Chip variant="secondary" title={`${row.RG} research-grade observations`}>
+                          ✅ {row.RG}
                         </Chip>
+                      )}
+                      {(row.bingo_points ?? 0) > 0 && (
+                        <span className="chip chip--bingo" title="Bingo points (hits + lines + blackout)">
+                          🎯 {row.bingo_points}
+                        </span>
                       )}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* Trend column - always visible */}
-                  <div className={`text-sm font-semibold min-w-[3rem] text-right ${
-                    row.trend > 0 ? 'text-green-600 dark:text-green-400' : 
-                    row.trend < 0 ? 'text-red-600 dark:text-red-400' : 
-                    'text-muted-foreground'
-                  }`}>
-                    {row.trend > 0 ? '+' : ''}{row.trend === 0 ? '—' : row.trend.toFixed(1)}
-                  </div>
                   <div className="text-2xl font-bold text-primary">
-                    {formatPoints(row.points)}
+                    {formatPoints(row.points ?? 0)}
                   </div>
                 </div>
               </div>

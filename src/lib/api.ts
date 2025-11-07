@@ -7,12 +7,13 @@ export type LeaderRow = {
   points: number | null;
   rank: number | null;
   delta_rank: number | null;
+  bingo_points: number | null;
   O?: number | null; U?: number | null; RG?: number | null; SL?: number | null; D?: number | null;
 };
 
 export async function fetchLeaderboard(assignmentId: string) {
   const { data, error } = await supabase
-    .from('public_leaderboard_v2')
+    .from('leaderboard_overall_plus_bingo_latest_v1')
     .select('*')
     .eq('assignment_id', assignmentId)
     .order('points', { ascending: false, nullsFirst: false });
