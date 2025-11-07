@@ -163,11 +163,28 @@ export default function Trophies() {
                               <Info className="h-4 w-4 text-muted-foreground" />
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="text-sm" onClick={(e) => e.stopPropagation()}>
-                            <p className="font-semibold mb-1">{trophy.subtitle}</p>
-                            <p className="text-muted-foreground text-xs">
-                              {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum threshold'}
-                            </p>
+                          <PopoverContent className="text-sm max-w-sm" onClick={(e) => e.stopPropagation()}>
+                            {trophy.slug === 'biodiversity-set-trip' ? (
+                              <div className="space-y-2">
+                                <p className="font-semibold">What is Shannon diversity (H′)?</p>
+                                <p className="text-xs text-muted-foreground">
+                                  A diversity score that considers both how many species you saw (richness) and how evenly your observations are spread across those species (evenness). Higher = more diverse.
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  <strong>Formula:</strong> <code className="bg-muted px-1 py-0.5 rounded">H′ = − Σ (pᵢ · ln pᵢ)</code> where pᵢ is the fraction of observations that belong to species i.
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  We require a minimum of 6 observations to avoid noisy results.
+                                </p>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="font-semibold mb-1">{trophy.subtitle}</p>
+                                <p className="text-muted-foreground text-xs">
+                                  {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum threshold'}
+                                </p>
+                              </>
+                            )}
                           </PopoverContent>
                         </Popover>
                       </CardTitle>
@@ -236,11 +253,28 @@ export default function Trophies() {
                               <Info className="h-4 w-4 text-muted-foreground" />
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="text-sm" onClick={(e) => e.stopPropagation()}>
-                            <p className="font-semibold mb-1">{trophy.subtitle}</p>
-                            <p className="text-muted-foreground text-xs">
-                              {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum threshold'}
-                            </p>
+                          <PopoverContent className="text-sm max-w-sm" onClick={(e) => e.stopPropagation()}>
+                            {trophy.slug === 'biodiversity-set-trip' ? (
+                              <div className="space-y-2">
+                                <p className="font-semibold">What is Shannon diversity (H′)?</p>
+                                <p className="text-xs text-muted-foreground">
+                                  A diversity score that considers both how many species you saw (richness) and how evenly your observations are spread across those species (evenness). Higher = more diverse.
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  <strong>Formula:</strong> <code className="bg-muted px-1 py-0.5 rounded">H′ = − Σ (pᵢ · ln pᵢ)</code> where pᵢ is the fraction of observations that belong to species i.
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  We require a minimum of 6 observations to avoid noisy results.
+                                </p>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="font-semibold mb-1">{trophy.subtitle}</p>
+                                <p className="text-muted-foreground text-xs">
+                                  {trophy.minThreshold ? `Minimum ${trophy.minThreshold} required` : 'No minimum threshold'}
+                                </p>
+                              </>
+                            )}
                           </PopoverContent>
                         </Popover>
                       </CardTitle>

@@ -64,45 +64,57 @@ export default function Leaderboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {rows.map((row, idx) => (
-              <div
-                key={row.display_name || row.student_id}
-                className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
-                onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="text-2xl font-bold text-muted-foreground w-8">
-                    #{row.rank ?? idx + 1}
-                  </div>
-                  <div className="space-y-1">
-                    <div className="font-semibold text-lg">{row.display_name || 'Unknown'}</div>
-                    <div className="flex gap-2 flex-wrap">
-                      <Chip variant="default" title={`${row.O ?? 0} total observations`}>
-                        🔍 {row.O ?? 0}
-                      </Chip>
-                      <Chip variant="primary" title={`${row.U ?? 0} unique species`}>
-                        🌿 {row.U ?? 0}
-                      </Chip>
-                      {(row.RG ?? 0) > 0 && (
-                        <Chip variant="secondary" title={`${row.RG} research-grade observations`}>
-                          ✅ {row.RG}
-                        </Chip>
-                      )}
-                      {(row.bingo_points ?? 0) > 0 && (
-                        <span className="chip chip--bingo" title="Bingo points (hits + lines + blackout)">
-                          🎯 {row.bingo_points}
+            {rows.map((row, idx) => {
+              const delta = row.delta_rank ?? row.rank_delta ?? row.rank_change;
+              return (
+                <div
+                  key={row.display_name || row.student_id}
+                  className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
+                  onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <div className="text-2xl font-bold text-muted-foreground w-8">
+                        #{row.rank ?? idx + 1}
+                      </div>
+                      {delta !== null && delta !== undefined && delta !== 0 ? (
+                        <span className={`trend ${delta < 0 ? 'trend--up' : 'trend--down'}`} title={`Rank change: ${delta < 0 ? 'up' : 'down'} ${Math.abs(delta)}`}>
+                          {delta < 0 ? '↑' : '↓'}
                         </span>
-                      )}
+                      ) : delta === 0 ? (
+                        <span className="trend text-muted-foreground" title="No rank change">–</span>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-semibold text-lg">{row.display_name || 'Unknown'}</div>
+                      <div className="flex gap-2 flex-wrap">
+                        <Chip variant="default" title={`${row.O ?? 0} total observations`}>
+                          🔍 {row.O ?? 0}
+                        </Chip>
+                        <Chip variant="primary" title={`${row.U ?? 0} unique species`}>
+                          🌿 {row.U ?? 0}
+                        </Chip>
+                        {(row.RG ?? 0) > 0 && (
+                          <Chip variant="secondary" title={`${row.RG} research-grade observations`}>
+                            ✅ {row.RG}
+                          </Chip>
+                        )}
+                        {(row.bingo_points ?? 0) > 0 && (
+                          <span className="chip chip--bingo" title="Bingo points (hits + lines + blackout)">
+                            🎯 {row.bingo_points}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl font-bold text-primary">
+                      {formatPoints(row.points ?? 0)}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl font-bold text-primary">
-                    {formatPoints(row.points ?? 0)}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

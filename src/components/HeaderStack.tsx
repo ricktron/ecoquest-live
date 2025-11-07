@@ -33,8 +33,8 @@ export default function HeaderStack({
             </div>
           </div>
         )}
-        {announceText && (
-          <div className="header-stack__ticker header-stack__ticker--alt" role="status" aria-live="polite">
+        {announceText !== undefined && (
+          <div className="header-stack__ticker header-stack__ticker--alt" role="status" aria-live="polite" data-role="announce-ticker">
             <div className="ticker__marquee" data-speed="slow">
               <div className="ticker__track">
                 <span className="ticker__chunk">📣 {announceText}</span>

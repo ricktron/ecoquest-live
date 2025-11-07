@@ -71,7 +71,11 @@ body.has-ticker {
 }
 
 .header-stack__ticker--alt {
-  background: hsl(142 76% 56%); /* lighter green */
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.05), hsl(var(--primary) / 0.08));
+  border-bottom: 1px solid hsl(var(--primary) / 0.15);
+  margin: 0;
+  display: flex;
+  color: hsl(var(--foreground));
 }
 
 .ticker__marquee { 
@@ -433,5 +437,18 @@ html, body, #root {
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
   border: 1px solid hsl(var(--border));
+}
+
+.trend {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.trend--up {
+  color: #10b981;
+}
+
+.trend--down {
+  color: #ef4444;
 }
 
