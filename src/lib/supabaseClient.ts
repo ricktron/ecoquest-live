@@ -25,6 +25,14 @@ export function makeSupabase(): SupabaseClient {
   if (!url || !key) {
     throw new Error('Supabase configuration failed: no URL or ANON key available');
   }
+
+  // Diagnostic logging (temporary - remove after verification)
+  const source = import.meta.env.VITE_SUPABASE_URL
+    ? 'VITE'
+    : (globalThis as any).__SUPABASE_URL__
+      ? 'ENVJS'
+      : 'DEFAULTS';
+  console.info('[Supabase] using', source, url.slice(0, 40) + '...');
   
   return createClient(url, key);
 }
