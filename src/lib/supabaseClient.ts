@@ -26,15 +26,27 @@ export function makeSupabase(): SupabaseClient {
     throw new Error('Supabase configuration failed: no URL or ANON key available');
   }
 
-  // Diagnostic logging (temporary - remove after verification)
+  // Mismatch guard: ensure JWT ref matches URL host
+  function jwtRef(key: string) {
+    try { return JSON.parse(atob(key.split('.')[1]))?.ref as string | undefined; }
+    catch { return undefined; }
+  }
+
+  const hostRef = new URL(url).host.split('.')[0];
+  const keyRef = jwtRef(key);
+
+  if (keyRef && keyRef !== hostRef) {
+    throw new Error(`Supabase URL/key mismatch: url=${hostRef} key=${keyRef}`);
+  }
+
+  // One-time runtime fingerprint (remove after verification)
   const _src = import.meta.env.VITE_SUPABASE_URL
     ? 'VITE'
     : (globalThis as any).__SUPABASE_URL__
       ? 'ENVJS'
       : 'DEFAULTS';
-  const _pid = new URL(url).host.split('.')[0];
   const _fp = (key || '').slice(0, 4) + '...' + (key || '').slice(-4);
-  console.info('[Supabase] using', _src, _pid, 'key', _fp);
+  console.info('[Supabase] using', _src, hostRef, 'key', _fp);
   
   const client = createClient(url, key);
   
