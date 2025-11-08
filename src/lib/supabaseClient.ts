@@ -1,5 +1,4 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { loadRuntimeConfig } from './runtimeConfig';
 
 // Hardcoded LAST-RESORT defaults (safe for client; never ship service_role key)
 const DEFAULT_URL = 'https://uovqjvpluqtmrqswuyai.supabase.co';
@@ -7,29 +6,19 @@ const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 let client: SupabaseClient | null = null;
 
-function getEnv(name: string): string | undefined {
-  // @ts-ignore - Check Vite import.meta.env
-  return import.meta?.env?.[name];
-}
-
 export function makeSupabase(): SupabaseClient {
   // Three-tier fallback priority:
-  // 1. localStorage runtime overrides (for ConfigModal)
-  // 2. Build-time environment variables (import.meta.env)
-  // 3. Runtime global overrides (from public/env.js)
-  // 4. Hardcoded defaults (last resort)
-  
-  const overrides = loadRuntimeConfig();
+  // 1. Build-time environment variables (import.meta.env)
+  // 2. Runtime global overrides (from public/env.js)
+  // 3. Hardcoded defaults (last resort)
   
   const url = 
-    overrides.supabaseUrl || 
-    getEnv('VITE_SUPABASE_URL') || 
+    import.meta.env.VITE_SUPABASE_URL || 
     (globalThis as any).__SUPABASE_URL__ || 
     DEFAULT_URL;
     
   const key = 
-    overrides.supabaseAnonKey || 
-    getEnv('VITE_SUPABASE_ANON_KEY') || 
+    import.meta.env.VITE_SUPABASE_ANON_KEY || 
     (globalThis as any).__SUPABASE_ANON_KEY__ || 
     DEFAULT_ANON;
 

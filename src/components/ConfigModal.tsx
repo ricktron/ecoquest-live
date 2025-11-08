@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { saveRuntimeConfig, loadRuntimeConfig, clearRuntimeConfig } from '../lib/runtimeConfig';
 import { recreateSupabase } from '../lib/supabaseClient';
 import { 
-  pingBronze, adminAward, adminList, adminDelete, fetchUserLogins,
+  adminAward, adminList, adminDelete, fetchUserLogins,
   fieldAward, adminSetSpeeds, adminSetAnnouncement, listRecentAwards, listWeeklyAwards,
   adminSetTrophiesIncludeAdults, adminSetStudentLogins, adminSetBlackoutUntil, fetchDisplayFlags
 } from '../lib/api';
@@ -12,10 +11,6 @@ import { Textarea } from './ui/textarea';
 const K_ADMIN_TOKEN = 'eql.admin.token';
 
 export default function ConfigModal({ open, onClose }: { open: boolean; onClose: () => void; }) {
-  const [url, setUrl] = useState('');
-  const [key, setKey] = useState('');
-  const [status, setStatus] = useState<string>('');
-
   // Admin section
   const [adminToken, setAdminToken] = useState('');
   const [fieldToken, setFieldToken] = useState('');
@@ -42,11 +37,6 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
 
   useEffect(() => {
     if (open) {
-      const cfg = loadRuntimeConfig();
-      setUrl(cfg.supabaseUrl || '');
-      setKey(cfg.supabaseAnonKey || '');
-      setStatus('');
-
       // Load admin token
       const token = localStorage.getItem(K_ADMIN_TOKEN) || '';
       const fToken = localStorage.getItem('eql.field.token') || '';
@@ -68,20 +58,6 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
       });
     }
   }, [open]);
-
-  const test = async () => {
-    saveRuntimeConfig({ supabaseUrl: url.trim(), supabaseAnonKey: key.trim() });
-    recreateSupabase();
-    const r = await pingBronze();
-    if ((r as any).error) setStatus('Error: ' + (r as any).error.message);
-    else setStatus('OK: ' + JSON.stringify(r.data));
-  };
-
-  const reset = () => {
-    clearRuntimeConfig();
-    recreateSupabase();
-    setStatus('Cleared overrides.');
-  };
 
   const saveAdminToken = () => {
     localStorage.setItem(K_ADMIN_TOKEN, adminToken.trim());
@@ -285,28 +261,12 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
           <button onClick={onClose} className="ghost">Close</button>
         </div>
 
-        <Tabs defaultValue="connection">
+        <Tabs defaultValue="display">
           <TabsList className="w-full">
-            <TabsTrigger value="connection">Connection</TabsTrigger>
             <TabsTrigger value="display">Display</TabsTrigger>
             <TabsTrigger value="points">Points</TabsTrigger>
             <TabsTrigger value="logs" onClick={loadLogs}>Logs</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="connection">
-            <h4>Supabase Connection</h4>
-            <label>
-              URL <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" />
-            </label>
-            <label>
-              Anon Key <input value={key} onChange={e => setKey(e.target.value)} placeholder="eyJhbGciOi..." />
-            </label>
-            <div className="cfg__row">
-              <button onClick={test}>Save & Test</button>
-              <button onClick={reset} className="secondary">Clear</button>
-            </div>
-            <pre className="cfg__status">{status}</pre>
-          </TabsContent>
 
           <TabsContent value="display">
             <div className="cfg__section">
