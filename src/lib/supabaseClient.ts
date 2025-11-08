@@ -36,7 +36,12 @@ export function makeSupabase(): SupabaseClient {
   const _fp = (key || '').slice(0, 4) + '...' + (key || '').slice(-4);
   console.info('[Supabase] using', _src, _pid, 'key', _fp);
   
-  return createClient(url, key);
+  const client = createClient(url, key);
+  
+  // Global export for debugging
+  if (typeof window !== 'undefined') (window as any).supabase = client;
+  
+  return client;
 }
 
 export function supabase(): SupabaseClient {
