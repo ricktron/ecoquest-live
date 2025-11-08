@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // Hardcoded LAST-RESORT defaults (safe for client; never ship service_role key)
-const DEFAULT_URL = 'https://uovqjvpluqtmrqswuyai.supabase.co';
-const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvdnFqdnBsdXF0bXJxc3d1eWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIxOTU2NzcsImV4cCI6MjA3Nzc3MTY3N30.W_Auw1GN9U6q1zDHkrfkwotlq_HbSYLjsOJZ80rsnto';
+const DEFAULT_URL = 'https://fceyhhzufkcqkjrjbdwl.supabase.co';
+const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjZXloaHp1ZmtjcWtqcmpiZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyNDk4NDAsImV4cCI6MjA3NjgyNTg0MH0.q5Eo24UxneDe5Xo-pRJmfcLd9WbJTqAtLycuDcwNoek';
 
 let client: SupabaseClient | null = null;
 
