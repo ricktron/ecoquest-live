@@ -27,12 +27,14 @@ export function makeSupabase(): SupabaseClient {
   }
 
   // Diagnostic logging (temporary - remove after verification)
-  const source = import.meta.env.VITE_SUPABASE_URL
+  const _src = import.meta.env.VITE_SUPABASE_URL
     ? 'VITE'
     : (globalThis as any).__SUPABASE_URL__
       ? 'ENVJS'
       : 'DEFAULTS';
-  console.info('[Supabase] using', source, url.slice(0, 40) + '...');
+  const _pid = new URL(url).host.split('.')[0];
+  const _fp = (key || '').slice(0, 4) + '...' + (key || '').slice(-4);
+  console.info('[Supabase] using', _src, _pid, 'key', _fp);
   
   return createClient(url, key);
 }
