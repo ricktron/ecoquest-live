@@ -4,7 +4,7 @@ import type { BingoTile } from "./types";
 export function BingoTile({ tile }: { tile: BingoTile }) {
   const isFree = tile.slug === "free";
   return (
-    <div className="aspect-square rounded-2xl border border-border grid place-items-center bg-card p-2 hover:bg-accent/50 transition-colors">
+    <div className="aspect-square rounded-2xl border border-border grid place-items-center bg-card p-1.5 sm:p-2 relative overflow-hidden hover:bg-accent/50 transition-colors">
       <div className="grid gap-1 place-items-center">
         <Popover>
           <PopoverTrigger asChild>
@@ -13,10 +13,10 @@ export function BingoTile({ tile }: { tile: BingoTile }) {
               aria-label={`${tile.label} details`}
               title="Tap for details"
             >
-              <span>{tile.emoji}</span>
+              <span className="text-3xl sm:text-4xl md:text-5xl">{tile.emoji}</span>
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 text-sm">
+          <PopoverContent className="max-w-[85vw] sm:w-80 text-sm" side="top" align="center" sideOffset={6}>
             <h3 className="font-semibold text-lg mb-2">{tile.label}</h3>
             {tile.details.whatCounts && (
               <p className="mt-2"><span className="font-semibold text-primary">What counts:</span> {tile.details.whatCounts}</p>
@@ -36,7 +36,7 @@ export function BingoTile({ tile }: { tile: BingoTile }) {
             )}
           </PopoverContent>
         </Popover>
-        <span className={`text-xs font-medium text-foreground text-center ${isFree ? "uppercase font-bold" : ""}`}>
+        <span className={`max-w-[92%] text-[10px] sm:text-xs md:text-sm font-medium text-foreground text-center leading-tight break-words ${isFree ? "uppercase font-bold" : ""}`}>
           {tile.label}
         </span>
       </div>
