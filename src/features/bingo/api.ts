@@ -19,6 +19,8 @@ export async function getClaims(
   userId: string,
   weekId: string
 ): Promise<string[]> {
+  if (!userId || !weekId) return [];
+  
   const { data, error } = await supabase
     .from("bingo_claims" as any)
     .select("tile_slug")
@@ -37,10 +39,12 @@ export async function getClaims(
  * Toggle a claim: delete if exists, insert if not
  */
 export async function toggleClaim(
-  userId: string,
+  userId: string | null,
   weekId: string,
   tileSlug: string
-): Promise<boolean> {
+): Promise<{ ok: boolean }> {
+  if (!userId) return { ok: false };
+
   // Check if claim exists
   const { data: existing, error: checkError } = await supabase
     .from("bingo_claims" as any)
@@ -52,7 +56,7 @@ export async function toggleClaim(
 
   if (checkError) {
     console.error("Error checking claim:", checkError);
-    return false;
+    return { ok: false };
   }
 
   if (existing) {
@@ -66,7 +70,7 @@ export async function toggleClaim(
 
     if (deleteError) {
       console.error("Error deleting claim:", deleteError);
-      return false;
+      return { ok: false };
     }
   } else {
     // Insert new claim
@@ -80,9 +84,9 @@ export async function toggleClaim(
 
     if (insertError) {
       console.error("Error inserting claim:", insertError);
-      return false;
+      return { ok: false };
     }
   }
 
-  return true;
+  return { ok: true };
 }

@@ -1,107 +1,83 @@
-/**
- * Student viewer controls: segmented + combobox
- */
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-interface StudentViewerProps {
-  viewMode: "me" | "student";
-  onViewModeChange: (mode: "me" | "student") => void;
-  selectedStudent: string | null;
-  onStudentChange: (login: string) => void;
-  students: string[];
-}
+type Option = { id: string; name: string };
 
 export function StudentViewer({
-  viewMode,
-  onViewModeChange,
-  selectedStudent,
-  onStudentChange,
-  students,
-}: StudentViewerProps) {
-  const [open, setOpen] = useState(false);
+  weekId,
+  meUserId,
+  value,
+  onChange
+}: { weekId: string; meUserId?: string | null; value: string | null; onChange: (id: string | null) => void; }) {
+  const [tab, setTab] = useState<"me"|"student">("me");
+  const [options, setOptions] = useState<Option[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      setLoading(true);
+      // Prefer users with claims this week
+      const { data: claimUsers } = await supabase
+        .from("bingo_claims")
+        .select("user_id")
+        .eq("week_id", weekId);
+      const ids = Array.from(new Set((claimUsers ?? []).map((r: any) => r.user_id).filter(Boolean)));
+
+      let rows: Option[] = [];
+      if (ids.length) {
+        const { data: profs } = await supabase
+          .from("profiles" as any)
+          .select("id, display_name")
+          .in("id", ids);
+        rows = (profs ?? []).map((p: any) => ({ id: p.id, name: p.display_name || p.id }));
+      } else {
+        // Fallback to all profiles (light)
+        const { data: profs } = await supabase
+          .from("profiles" as any)
+          .select("id, display_name")
+          .limit(1000);
+        rows = (profs ?? []).map((p: any) => ({ id: p.id, name: p.display_name || p.id }));
+      }
+      if (!ignore) setOptions(rows);
+      setLoading(false);
+    })();
+    return () => { ignore = true; };
+  }, [weekId]);
+
+  // keep current in list
+  const opts = useMemo(() => options, [options]);
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center mt-3">
-      {/* Segmented control */}
-      <div className="inline-flex rounded-lg border border-border bg-muted p-1">
-        <Button
-          variant={viewMode === "me" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => onViewModeChange("me")}
-          className="rounded-md px-3"
-        >
+    <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="inline-flex rounded border border-border bg-muted">
+        <button
+          className={`px-3 py-1.5 text-sm rounded transition-colors ${tab==="me"?"bg-background font-semibold shadow-sm":"hover:bg-background/50"}`}
+          onClick={() => { setTab("me"); onChange(meUserId ?? null); }}>
           Me
-        </Button>
-        <Button
-          variant={viewMode === "student" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => onViewModeChange("student")}
-          className="rounded-md px-3"
-        >
-          Student
-        </Button>
+        </button>
+        <button
+          className={`px-3 py-1.5 text-sm rounded transition-colors ${tab==="student"?"bg-background font-semibold shadow-sm":"hover:bg-background/50"}`}
+          onClick={() => setTab("student")}>
+          Student…
+        </button>
       </div>
 
-      {/* Student combobox (only when in student view mode) */}
-      {viewMode === "student" && (
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={open}
-              className="w-[200px] justify-between"
-            >
-              {selectedStudent || "Select student..."}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[200px] p-0">
-            <Command>
-              <CommandInput placeholder="Search student..." />
-              <CommandList>
-                <CommandEmpty>No student found.</CommandEmpty>
-                <CommandGroup>
-                  {students.map((login) => (
-                    <CommandItem
-                      key={login}
-                      value={login}
-                      onSelect={(currentValue) => {
-                        onStudentChange(currentValue);
-                        setOpen(false);
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          selectedStudent === login ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      {login}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+      {tab==="student" && (
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Pick:</span>
+          <select
+            className="border border-border rounded px-3 py-1.5 text-sm min-w-[12rem] bg-background"
+            disabled={loading || !opts.length}
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value || null)}
+          >
+            <option value="">Select a student</option>
+            {opts.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          {loading && <span className="text-xs text-muted-foreground">Loading…</span>}
+          {!loading && !opts.length && <span className="text-xs text-muted-foreground">No participants yet.</span>}
+        </label>
       )}
     </div>
   );
