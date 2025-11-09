@@ -8,32 +8,58 @@ import { computeScore } from "./lines";
 import { StudentViewer } from "./StudentViewer";
 
 export default function BingoBoard() {
+  const CLAIMS_ON = import.meta.env.VITE_FEATURE_BINGO_CLAIMS === "1";
+  const weekId = "week-2025-11-09"; // Derived from trip window
+  
+  // Parse URL param for preselected user
+  const params = new URLSearchParams(window.location.search);
+  const urlUser = params.get("u");
+  
   const [user, setUser] = useState<any>(null);
-  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+  const [viewingUserId, setViewingUserId] = useState<string | null>(urlUser);
   const [claimedSlugs, setClaimedSlugs] = useState<Set<string>>(new Set());
   const [score, setScore] = useState({ lines: 0, blackout: false, claimed: 0 });
-  const weekId = "week-2025-11-09"; // Derived from trip window
+
+  // Debug logging
+  console.debug("BINGO flags:", { CLAIMS_ON, weekId, meId: user?.id ?? null });
 
   // Check auth state
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const userId = session?.user?.id ?? null;
       setUser(session?.user ?? null);
-      setViewingUserId(userId);
+      // Only auto-set viewing user if no URL param was provided
+      if (!urlUser) {
+        setViewingUserId(userId);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const userId = session?.user?.id ?? null;
       setUser(session?.user ?? null);
-      setViewingUserId(userId);
+      // Only auto-set viewing user if no URL param was provided
+      if (!urlUser) {
+        setViewingUserId(userId);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  // Sync URL when viewingUserId changes
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (viewingUserId && viewingUserId !== user?.id) {
+      sp.set("u", viewingUserId);
+    } else {
+      sp.delete("u");
+    }
+    history.replaceState(null, "", `${location.pathname}?${sp.toString()}`);
+  }, [viewingUserId, user]);
+
   // Load claims when viewer changes
   useEffect(() => {
-    if (!FLAGS.FEATURE_BINGO_CLAIMS || !viewingUserId) {
+    if (!CLAIMS_ON || !viewingUserId) {
       setClaimedSlugs(new Set());
       return;
     }
@@ -99,7 +125,7 @@ export default function BingoBoard() {
   };
 
   const isViewingOwnBoard = user && viewingUserId === user.id;
-  const canToggle = FLAGS.FEATURE_BINGO_CLAIMS && isViewingOwnBoard;
+  const canToggle = CLAIMS_ON && isViewingOwnBoard;
 
   return (
     <div className="page pb-[calc(72px+env(safe-area-inset-bottom))] min-h-screen">
@@ -109,28 +135,31 @@ export default function BingoBoard() {
           <p className="text-sm text-muted-foreground">{BINGO_BOARD_THIS_WEEK.weekHint}</p>
         )}
         
-        {FLAGS.FEATURE_BINGO_CLAIMS && user && (
-          <>
+        {CLAIMS_ON && (
+          <div className="mt-4 mb-2">
+            <div className="mb-1 text-xs text-muted-foreground">Viewer</div>
             <StudentViewer
               weekId={weekId}
-              meUserId={user.id}
+              meUserId={user?.id ?? null}
               value={viewingUserId}
               onChange={setViewingUserId}
             />
             
-            <div className="mt-3 p-3 bg-accent/30 rounded-lg border border-border">
-              <p className="text-sm font-medium">
-                Lines: {score.lines}/12 · Blackout: {score.blackout ? "Yes" : "No"} · {score.claimed}/24 tiles
-              </p>
-            </div>
-          </>
-        )}
-
-        {FLAGS.FEATURE_BINGO_CLAIMS && !user && (
-          <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border">
-            <p className="text-sm text-muted-foreground">
-              Log in to track your board.
-            </p>
+            {viewingUserId && (
+              <div className="mt-3 p-3 bg-accent/30 rounded-lg border border-border">
+                <p className="text-sm font-medium">
+                  Lines: {score.lines}/12 · Blackout: {score.blackout ? "Yes" : "No"} · {score.claimed}/24 tiles
+                </p>
+              </div>
+            )}
+            
+            {!user && !viewingUserId && (
+              <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border">
+                <p className="text-sm text-muted-foreground">
+                  Log in to track your own board, or select a student above.
+                </p>
+              </div>
+            )}
           </div>
         )}
         
