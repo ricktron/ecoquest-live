@@ -109,19 +109,20 @@ export default function Debug() {
       .select('mode,d1,d2,flags')
       .eq('id', true)
       .single()
-      .then(({ data }: any) => {
-        if (data) {
-          const tz = (data.flags as any)?.tz ?? 'America/Costa_Rica';
-          const members: string[] = ((data.flags as any)?.student_logins ?? []).slice().sort();
-          const tripId = (data.mode === 'TRIP') ? 'LIVE' : 'DEMO';
-          const title = (data.mode === 'TRIP') ? 'Trip Mode' : 'Demo Mode';
+      .then(({ data: cfg }: any) => {
+        if (cfg) {
+          const flags = (cfg?.flags ?? {}) as any;
+          const tz = flags.tz ?? 'America/Costa_Rica';
+          const members: string[] = (flags.student_logins ?? []).slice().sort();
+          const tripId = cfg?.mode === 'TRIP' ? 'LIVE' : 'DEMO';
+          const title = cfg?.mode === 'TRIP' ? 'Trip Mode' : 'Demo Mode';
           setLiveTripConfig({
             tripId,
             title,
             tz,
             members,
-            d1: data.d1,
-            d2: data.d2
+            d1: cfg?.d1,
+            d2: cfg?.d2
           });
         }
       });
