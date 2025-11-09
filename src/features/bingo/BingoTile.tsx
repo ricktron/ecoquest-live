@@ -1,15 +1,39 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check } from "lucide-react";
 import type { BingoTile } from "./types";
 
-export function BingoTile({ tile }: { tile: BingoTile }) {
+interface BingoTileProps {
+  tile: BingoTile;
+  isDone?: boolean;
+  onToggle?: () => void;
+  readOnly?: boolean;
+}
+
+export function BingoTile({ tile, isDone, onToggle, readOnly }: BingoTileProps) {
+  const handleClick = (e: React.MouseEvent) => {
+    if (onToggle && !readOnly) {
+      e.stopPropagation();
+      onToggle();
+    }
+  };
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
-          className="group aspect-square rounded-2xl border border-border grid place-items-center bg-card p-1 sm:p-2 relative overflow-hidden hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring/50"
+          onClick={handleClick}
+          className={`group aspect-square rounded-2xl border grid place-items-center p-1 sm:p-2 relative overflow-hidden transition-colors focus:outline-none focus:ring-2 focus:ring-ring/50 ${
+            isDone 
+              ? "bg-primary/20 border-primary hover:bg-primary/30" 
+              : "bg-card border-border hover:bg-accent/50"
+          }`}
           aria-label={`${tile.label} details`}
-          title="Tap for details"
+          title={onToggle ? "Click to toggle, tap emoji for details" : "Tap for details"}
         >
+          {isDone && (
+            <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
+              <Check className="w-3 h-3 text-primary-foreground" />
+            </div>
+          )}
           <div className="grid gap-1 place-items-center">
             <span className="leading-none text-[clamp(24px,7.5vw,48px)] sm:text-4xl md:text-5xl">
               {tile.emoji}

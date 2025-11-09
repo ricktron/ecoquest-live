@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      bingo_claims: {
+        Row: {
+          created_at: string | null
+          observation_id: string | null
+          tile_slug: string
+          user_id: string
+          week_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          observation_id?: string | null
+          tile_slug: string
+          user_id: string
+          week_id: string
+        }
+        Update: {
+          created_at?: string | null
+          observation_id?: string | null
+          tile_slug?: string
+          user_id?: string
+          week_id?: string
+        }
+        Relationships: []
+      }
       config_filters: {
         Row: {
           flags: Json | null
