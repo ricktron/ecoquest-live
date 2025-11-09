@@ -15,6 +15,7 @@ export type TrophySpec = {
   title: string;
   description: string;
   period: 'trip' | 'day';
+  view?: string | null;  // Supabase view name for live winners
   evaluate: (observations: ObservationData[], ctx: ScoringContext, date?: string) => TrophyResult[];
 };
 
@@ -24,6 +25,7 @@ export const TROPHIES: TrophySpec[] = [
     title: 'Variety Hero',
     description: 'Most unique species observed',
     period: 'trip',
+    view: 'trophies_variety_hero_latest_run_v',
     evaluate: (obs) => {
       const userSpecies = new Map<string, Set<number>>();
       obs.forEach(o => {
