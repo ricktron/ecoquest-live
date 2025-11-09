@@ -129,7 +129,7 @@ export default function BingoBoard() {
   const canToggle = FLAGS.FEATURE_BINGO_CLAIMS && isViewingOwnBoard;
 
   return (
-    <div className="page">
+    <div className="page pb-[calc(72px+env(safe-area-inset-bottom))] min-h-screen">
       <header className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Weekly Bingo</h1>
         {BINGO_BOARD_THIS_WEEK.weekHint && (
