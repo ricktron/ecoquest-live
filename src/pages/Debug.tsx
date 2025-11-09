@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { ENV, FLAGS } from '@/env';
-import { fetchMembers } from '@/lib/api';
+import { fetchMembers, fetchTrophyPoints } from '@/lib/api';
 import { PROFILE } from '@/lib/config/profile';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -95,6 +95,7 @@ export default function Debug() {
   const [memberCount, setMemberCount] = useState<number>(0);
   const [memberLogins, setMemberLogins] = useState<string[]>([]);
   const [liveTripConfig, setLiveTripConfig] = useState<LiveTripConfig | null>(null);
+  const [trophyPoints, setTrophyPoints] = useState<Array<{ user_login: string; points: number }>>([]);
 
   useEffect(() => {
     initialize();
@@ -102,6 +103,10 @@ export default function Debug() {
     fetchMembers().then(logins => {
       setMemberCount(logins.length);
       setMemberLogins(logins);
+    });
+    // Fetch trophy points
+    fetchTrophyPoints().then(points => {
+      setTrophyPoints(points);
     });
     // Fetch live trip config from config_filters
     (async () => {
@@ -327,6 +332,22 @@ export default function Debug() {
                         <span className="font-bold">{count}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 border-t pt-4">
+                  <p className="text-sm font-semibold mb-2">Trophy Points (computed)</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {trophyPoints.length > 0 ? (
+                      trophyPoints.map(tp => (
+                        <div key={tp.user_login} className="text-xs font-mono bg-muted/50 p-2 rounded flex justify-between">
+                          <span>{tp.user_login}</span>
+                          <span className="font-bold">🏆 {tp.points}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No trophy points data</p>
+                    )}
                   </div>
                 </div>
 

@@ -198,6 +198,23 @@ export default function Leaderboard() {
                                     )}
                                   </div>
                                 )}
+                                {(row.trophy_points ?? 0) > 0 && (
+                                  <div className="relative">
+                                    <button 
+                                      className="chip chip--trophy" 
+                                      aria-haspopup="dialog"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenChip(openChip === 'trophy' ? null : 'trophy');
+                                      }}
+                                    >
+                                      🏆 +{row.trophy_points}
+                                    </button>
+                                    {openChip === 'trophy' && (
+                                      <div className="chip-pop">Points from trophies this trip</div>
+                                    )}
+                                  </div>
+                                )}
                               </>
                             )}
                           </div>

@@ -3,7 +3,8 @@ import { recreateSupabase } from '../lib/supabaseClient';
 import { 
   adminAward, adminList, adminDelete, fetchUserLogins,
   fieldAward, adminSetSpeeds, adminSetAnnouncement, listRecentAwards, listWeeklyAwards,
-  adminSetTrophiesIncludeAdults, adminSetStudentLogins, adminSetBlackoutUntil, fetchDisplayFlags
+  adminSetTrophiesIncludeAdults, adminSetStudentLogins, adminSetBlackoutUntil, fetchDisplayFlags,
+  adminSetTrophyPointsEnabled
 } from '../lib/api';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Textarea } from './ui/textarea';
@@ -33,6 +34,7 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
   const [includeAdults, setIncludeAdults] = useState(true);
   const [studentLogins, setStudentLogins] = useState('');
   const [blackoutUntil, setBlackoutUntil] = useState('');
+  const [trophyPointsEnabled, setTrophyPointsEnabled] = useState(false);
   const [displayStatus, setDisplayStatus] = useState('');
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
       fetchDisplayFlags().then(flags => {
         setIncludeAdults(flags.trophies_include_adults ?? true);
         setBlackoutUntil(flags.score_blackout_until || '');
+        setTrophyPointsEnabled((flags as any).trophies_points_v1 ?? false);
       });
     }
   }, [open]);
@@ -252,6 +255,19 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
     }
   };
 
+  const handleSaveTrophyPoints = async () => {
+    if (!adminToken.trim()) {
+      setDisplayStatus('Error: Admin token required');
+      return;
+    }
+    const r = await adminSetTrophyPointsEnabled(adminToken.trim(), trophyPointsEnabled);
+    if (r.error) {
+      setDisplayStatus('Error: ' + r.error.message);
+    } else {
+      setDisplayStatus('Trophy points toggle saved successfully');
+    }
+  };
+
   if (!open) return null;
   return (
     <div className="cfg__backdrop" onClick={onClose}>
@@ -282,6 +298,18 @@ export default function ConfigModal({ open, onClose }: { open: boolean; onClose:
               </label>
               <div className="cfg__row">
                 <button onClick={handleSaveIncludeAdults}>Save Adult Toggle</button>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+                <input
+                  type="checkbox"
+                  checked={trophyPointsEnabled}
+                  onChange={e => setTrophyPointsEnabled(e.target.checked)}
+                />
+                Trophy points in score
+              </label>
+              <div className="cfg__row">
+                <button onClick={handleSaveTrophyPoints}>Save Trophy Points</button>
               </div>
 
               <label style={{ marginTop: '1rem' }}>

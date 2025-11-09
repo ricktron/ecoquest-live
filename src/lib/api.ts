@@ -12,6 +12,7 @@ export type LeaderRow = {
   total_score?: number | null;
   score_total?: number | null;
   manual_points?: number | null;
+  trophy_points?: number | null;
 };
 
 export async function fetchHeaderTexts() {
@@ -46,11 +47,26 @@ export async function fetchLeaderboard() {
         obs_count: x.obs_count,
         distinct_taxa: x.distinct_taxa,
         bingo_points: 0,
-        manual_points: 0
+        manual_points: 0,
+        trophy_points: 0
       }));
     } else {
       lastError = v.error ?? lastError;
       console.error('minimal view fallback error', v.error);
+    }
+  }
+
+  // 3) Fetch trophy points and merge
+  if (rows) {
+    const { data: trophyData } = await supabase()
+      .from('score_entries_trophies_latest_v1' as any)
+      .select('user_login, points');
+    
+    if (trophyData) {
+      const trophyMap = new Map(trophyData.map((t: any) => [t.user_login, t.points]));
+      rows.forEach(row => {
+        row.trophy_points = trophyMap.get(row.user_login) ?? 0;
+      });
     }
   }
 
@@ -157,4 +173,19 @@ export async function adminSetBlackoutUntil(token: string, until: string | null)
     p_admin_token: token, 
     p_until: until 
   });
+}
+
+export async function adminSetTrophyPointsEnabled(token: string, enabled: boolean) {
+  return supabase().rpc('admin_set_flag', {
+    p_admin_token: token,
+    p_flag_name: 'trophies_points_v1',
+    p_flag_value: enabled
+  });
+}
+
+export async function fetchTrophyPoints() {
+  const { data } = await supabase()
+    .from('score_entries_trophies_latest_v1' as any)
+    .select('user_login, points');
+  return data ?? [];
 }

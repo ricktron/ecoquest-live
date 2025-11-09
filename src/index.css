@@ -459,6 +459,18 @@ html, body, #root {
   border: 1px solid #fed7aa;
 }
 
+.chip--trophy {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.chip--info {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
 .chip-pop {
   position: absolute;
   z-index: 2200;

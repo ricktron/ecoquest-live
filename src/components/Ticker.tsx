@@ -5,15 +5,32 @@ type Props = {
 };
 
 export default function Ticker({ text, variant = 'primary', speedMs = 18000 }: Props) {
-  // Two lanes with identical width → transform(-50%) is a perfect wrap
+  // Duplicate items with bullet dividers for seamless loop
+  const items = [text, text];
+  
   return (
     <div 
       className={`ticker ${variant}`} 
       data-role={variant === 'announce' ? 'announce-ticker' : 'ticker'}
+      style={{ 
+        ['--gap' as any]: '2rem',
+        ['--speed-ms' as any]: `${speedMs}ms`
+      }}
     >
-      <div className="ticker__lane" style={{ ['--ticker-duration' as any]: `${speedMs}ms` }}>
-        <div className="ticker__content">{text}</div>
-        <div className="ticker__content" aria-hidden>{text}</div>
+      <div 
+        className="ticker__lane" 
+        style={{ 
+          animation: `marquee ${speedMs}ms linear infinite`,
+          display: 'flex',
+          gap: 'var(--gap)',
+        }}
+      >
+        {items.map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap)' }}>
+            <div className="ticker__content whitespace-nowrap">{item}</div>
+            <span className="ticker__divider" aria-hidden>•</span>
+          </div>
+        ))}
       </div>
     </div>
   );
