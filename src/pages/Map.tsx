@@ -40,30 +40,57 @@ function MapInvalidator() {
 
 export default function Map() {
   const navigate = useNavigate();
-  const { loading, observations, initialize } = useAppState();
+  const { loading, initialize } = useAppState();
   const [bbox, setBbox] = useState<{ swlat: number; swlng: number; nelat: number; nelng: number } | null>(null);
+  const [observations, setObservations] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     initialize();
-    // Fetch bounding box from config_filters
-    supabase
-      .from('config_filters')
-      .select('flags')
-      .eq('id', true)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.flags) {
-          const flags = data.flags as any;
-          if (flags.swlat && flags.swlng && flags.nelat && flags.nelng) {
-            setBbox({
-              swlat: flags.swlat,
-              swlng: flags.swlng,
-              nelat: flags.nelat,
-              nelng: flags.nelng
-            });
-          }
-        }
-      });
+    
+    async function loadMapData() {
+      setDataLoading(true);
+      
+      // Fetch bounding box from config_filters.flags.bbox
+      const { data: cfg }: any = await supabase
+        .from('config_filters')
+        .select('flags')
+        .eq('id', true)
+        .maybeSingle();
+      
+      const bboxData = (cfg?.flags as any)?.bbox || null;
+      if (bboxData && bboxData.swlat && bboxData.swlng && bboxData.nelat && bboxData.nelng) {
+        setBbox({
+          swlat: bboxData.swlat,
+          swlng: bboxData.swlng,
+          nelat: bboxData.nelat,
+          nelng: bboxData.nelng
+        });
+      }
+      
+      // Fetch latest run id
+      const { data: latest }: any = await supabase
+        .from('latest_run_v' as any)
+        .select('run_id')
+        .maybeSingle();
+      
+      const latestRun = latest?.run_id ?? null;
+      
+      // Fetch observations filtered by latest run
+      if (latestRun) {
+        const { data: points }: any = await supabase
+          .from('observations' as any)
+          .select('*')
+          .eq('run_id', latestRun);
+        setObservations(points || []);
+      } else {
+        setObservations([]);
+      }
+      
+      setDataLoading(false);
+    }
+    
+    loadMapData();
   }, []);
 
   return (
@@ -71,7 +98,7 @@ export default function Map() {
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-4">
         <h1 className="text-3xl font-bold">Map</h1>
 
-        {loading ? (
+        {dataLoading ? (
           <Skeleton className="h-[600px] w-full" />
         ) : observations.length === 0 ? (
           <div className="h-[600px] flex items-center justify-center bg-muted/30 rounded-lg">

@@ -100,14 +100,14 @@ export default function Debug() {
     // Fetch config_filters
     supabase
       .from('config_filters')
-      .select('window_start,window_end')
+      .select('d1,d2')
       .eq('id', true)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (data) {
           setConfigData({
-            d1: data.window_start,
-            d2: data.window_end
+            d1: data.d1,
+            d2: data.d2
           });
         }
       });

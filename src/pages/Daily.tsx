@@ -19,13 +19,13 @@ export default function Daily() {
     // Fetch date range from config_filters
     supabase
       .from('config_filters')
-      .select('window_start,window_end')
+      .select('d1,d2')
       .eq('id', true)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (data) {
-          setD1(data.window_start);
-          setD2(data.window_end);
+          setD1(data.d1);
+          setD2(data.d2);
         }
       });
   }, []);
