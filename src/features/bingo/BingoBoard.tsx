@@ -13,11 +13,11 @@ export default function BingoBoard() {
   return (
     <div className="page">
       <header className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">{BINGO_BOARD_THIS_WEEK.title}</h1>
+        <h1 className="text-3xl font-bold mb-2">Weekly Bingo</h1>
         {BINGO_BOARD_THIS_WEEK.weekHint && (
           <p className="text-sm text-muted-foreground">{BINGO_BOARD_THIS_WEEK.weekHint}</p>
         )}
-        <p className="text-xs text-muted-foreground mt-2">
+        <p className="text-xs text-muted-foreground mt-2 hidden sm:block">
           Tap an emoji for "What counts / Examples / Photo tip".
         </p>
       </header>

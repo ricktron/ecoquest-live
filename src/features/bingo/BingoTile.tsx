@@ -15,9 +15,14 @@ export function BingoTile({ tile }: { tile: BingoTile }) {
               {tile.emoji}
             </span>
             <span
-              className={`max-w-[92%] text-[10px] sm:text-xs md:text-sm font-medium text-foreground text-center leading-tight break-words ${
-                tile.slug === "free" ? "uppercase font-bold" : ""
-              }`}
+              className={`
+                max-w-full
+                text-[clamp(9px,2.2vw,12px)] sm:text-xs md:text-sm
+                font-medium text-foreground text-center
+                leading-tight
+                break-normal whitespace-normal hyphens-none
+                ${tile.slug === "free" ? "uppercase font-bold" : ""}
+              `}
             >
               {tile.label}
             </span>
@@ -25,7 +30,13 @@ export function BingoTile({ tile }: { tile: BingoTile }) {
         </button>
       </PopoverTrigger>
 
-      <PopoverContent className="max-w-[90vw] sm:w-80 text-sm" side="top" align="center" sideOffset={8}>
+      <PopoverContent
+        className="max-w-[92vw] sm:w-80 text-sm"
+        side="top"
+        align="center"
+        sideOffset={8}
+        collisionPadding={12}
+      >
         <h3 className="font-semibold">{tile.label}</h3>
         {tile.details.whatCounts && (
           <p className="mt-1">
