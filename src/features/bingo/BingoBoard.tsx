@@ -5,10 +5,13 @@ import { FLAGS } from "@/env";
 import { supabase } from "@/integrations/supabase/client";
 import { getClaims, toggleClaim } from "./api";
 import { computeScore } from "./lines";
-import { Button } from "@/components/ui/button";
+import { StudentViewer } from "./StudentViewer";
 
 export default function BingoBoard() {
   const [user, setUser] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"me" | "student">("me");
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
+  const [students, setStudents] = useState<string[]>([]);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [claimedSlugs, setClaimedSlugs] = useState<Set<string>>(new Set());
   const [score, setScore] = useState({ lines: 0, blackout: false, claimed: 0 });
@@ -27,6 +30,33 @@ export default function BingoBoard() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Load student roster from config_filters.flags.student_logins
+  useEffect(() => {
+    if (!FLAGS.FEATURE_BINGO_CLAIMS) return;
+
+    supabase
+      .from("config_filters" as any)
+      .select("flags")
+      .eq("id", true)
+      .single()
+      .then(({ data }: any) => {
+        const logins = data?.flags?.student_logins || [];
+        setStudents(logins);
+      });
+  }, []);
+
+  // Update viewingUserId based on view mode
+  useEffect(() => {
+    if (viewMode === "me") {
+      setViewingUserId(user?.id ?? null);
+    } else if (viewMode === "student" && selectedStudent) {
+      // In student view, we need to look up the user_id for the selected login
+      // For now, we'll use a stub - this requires a user_logins mapping table
+      // Fallback: just show empty state for student view without proper mapping
+      setViewingUserId(null);
+    }
+  }, [viewMode, selectedStudent, user]);
 
   // Load claims when viewer changes
   useEffect(() => {
@@ -107,11 +137,26 @@ export default function BingoBoard() {
         )}
         
         {FLAGS.FEATURE_BINGO_CLAIMS && user && (
-          <div className="mt-3 p-3 bg-accent/30 rounded-lg border border-border">
-            <p className="text-sm font-medium">
-              Lines: {score.lines}/12 · Blackout: {score.blackout ? "Yes" : "No"} · {score.claimed}/24 tiles
-            </p>
-          </div>
+          <>
+            <StudentViewer
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              selectedStudent={selectedStudent}
+              onStudentChange={setSelectedStudent}
+              students={students}
+            />
+            
+            <div className="mt-3 p-3 bg-accent/30 rounded-lg border border-border">
+              <p className="text-sm font-medium">
+                {viewMode === "student" && selectedStudent && (
+                  <span className="text-muted-foreground mr-2">
+                    Viewing: {selectedStudent} ·{" "}
+                  </span>
+                )}
+                Lines: {score.lines}/12 · Blackout: {score.blackout ? "Yes" : "No"} · {score.claimed}/24 tiles
+              </p>
+            </div>
+          </>
         )}
 
         {FLAGS.FEATURE_BINGO_CLAIMS && !user && (
