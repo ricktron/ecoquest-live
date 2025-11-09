@@ -34,6 +34,7 @@ const RawEnv = {
   VITE_BASELINE_YEARS: import.meta.env.VITE_BASELINE_YEARS,
   VITE_BASELINE_MONTHS: import.meta.env.VITE_BASELINE_MONTHS,
   VITE_ENABLE_COMPARE: import.meta.env.VITE_ENABLE_COMPARE,
+  VITE_FEATURE_BINGO: import.meta.env.VITE_FEATURE_BINGO,
 };
 
 const EnvSchema = z.object({
@@ -59,6 +60,7 @@ const EnvSchema = z.object({
   VITE_BASELINE_YEARS: z.string().optional(),
   VITE_BASELINE_MONTHS: z.string().optional(),
   VITE_ENABLE_COMPARE: z.any().optional(),
+  VITE_FEATURE_BINGO: z.any().optional(),
 });
 
 const parsed = EnvSchema.parse(RawEnv);
@@ -95,4 +97,5 @@ export const FLAGS = {
   DAILY_TROPHIES_ENABLED: toBool(RawEnv.VITE_FEATURE_DAILY_TROPHIES, true),
   EMAIL_DIGEST_ENABLED: toBool(RawEnv.VITE_ENABLE_EMAIL_DIGEST, false),
   ENABLE_COMPARE: toBool(RawEnv.VITE_ENABLE_COMPARE, false),
+  FEATURE_BINGO: toBool(RawEnv.VITE_FEATURE_BINGO, false),
 } as const;
