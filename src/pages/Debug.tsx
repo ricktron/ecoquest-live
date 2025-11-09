@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppState } from '@/lib/state';
-import { getActiveTrip, getTripFilters } from '@/trips';
+import { getActiveTrip } from '@/trips';
 import { TROPHIES } from '@/trophies';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,7 +20,6 @@ type SelfCheckResult = {
 
 function runSelfCheck(observations: any[]): SelfCheckResult[] {
   const trip = getActiveTrip();
-  const filters = getTripFilters();
   const results: SelfCheckResult[] = [];
 
   // ENV present
@@ -81,14 +80,21 @@ function runSelfCheck(observations: any[]): SelfCheckResult[] {
   return results;
 }
 
+type LiveTripConfig = {
+  tripId: string;
+  title: string;
+  tz: string;
+  members: string[];
+  d1: string;
+  d2: string;
+};
+
 export default function Debug() {
   const { loading, observations, aggregated, lastInatSync, initialize } = useAppState();
   const trip = getActiveTrip();
-  const filters = getTripFilters();
-  const [membersOpen, setMembersOpen] = useState(false);
   const [memberCount, setMemberCount] = useState<number>(0);
   const [memberLogins, setMemberLogins] = useState<string[]>([]);
-  const [configData, setConfigData] = useState<{ d1: string; d2: string } | null>(null);
+  const [liveTripConfig, setLiveTripConfig] = useState<LiveTripConfig | null>(null);
 
   useEffect(() => {
     initialize();
@@ -97,14 +103,23 @@ export default function Debug() {
       setMemberCount(logins.length);
       setMemberLogins(logins);
     });
-    // Fetch trip window from trip_window_v
+    // Fetch live trip config from config_filters
     supabase
-      .from('trip_window_v' as any)
-      .select('d1,d2')
+      .from('config_filters' as any)
+      .select('mode,d1,d2,flags')
+      .eq('id', true)
       .single()
       .then(({ data }: any) => {
         if (data) {
-          setConfigData({
+          const tz = (data.flags as any)?.tz ?? 'America/Costa_Rica';
+          const members: string[] = ((data.flags as any)?.student_logins ?? []).slice().sort();
+          const tripId = (data.mode === 'TRIP') ? 'LIVE' : 'DEMO';
+          const title = (data.mode === 'TRIP') ? 'Trip Mode' : 'Demo Mode';
+          setLiveTripConfig({
+            tripId,
+            title,
+            tz,
+            members,
             d1: data.d1,
             d2: data.d2
           });
@@ -156,11 +171,11 @@ export default function Debug() {
                 <p className="text-sm text-muted-foreground">Active Profile</p>
                 <p className="text-lg font-bold font-mono">{PROFILE}</p>
               </div>
-              {configData && (
+              {liveTripConfig && (
                 <div className="col-span-2">
                   <p className="text-sm text-muted-foreground">Trip Window (from config_filters)</p>
                   <p className="text-sm font-mono">
-                    {new Date(configData.d1).toLocaleDateString()} → {new Date(configData.d2).toLocaleDateString()}
+                    {new Date(liveTripConfig.d1).toLocaleDateString()} → {new Date(liveTripConfig.d2).toLocaleDateString()}
                   </p>
                 </div>
               )}
@@ -213,57 +228,49 @@ export default function Debug() {
             <CardTitle>Active Trip Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Trip ID</p>
-                <p className="text-lg font-bold font-mono">{trip.id}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Title</p>
-                <p className="text-lg font-bold">{trip.title}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Timezone</p>
-                <p className="text-lg font-mono">{trip.timezone}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm text-muted-foreground mb-1">Members</p>
-                {trip.memberLogins.length > 0 ? (
-                  <details className="text-sm">
-                    <summary className="cursor-pointer text-foreground hover:text-primary font-medium">
-                      {trip.memberLogins.length} members configured
-                    </summary>
-                    <ul className="mt-2 ml-4 space-y-1 list-disc">
-                      {trip.memberLogins.map(login => (
-                        <li key={login} className="text-muted-foreground">{login}</li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : (
-                  <p className="text-lg font-bold">All users</p>
-                )}
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Place Filter</p>
-                <p className="text-sm font-mono">
-                  {trip.placeId ? `Place ID: ${trip.placeId}` : trip.bbox ? 'Bounding Box' : 'None'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Sunset Fallback</p>
-                <p className="text-sm font-mono">{trip.fallbackSunsetHHMM || '17:30'}</p>
-              </div>
-            </div>
-            <div className="border-t pt-3">
-              <p className="text-sm text-muted-foreground mb-2">Day Ranges</p>
-              <div className="space-y-1">
-                {trip.dayRanges.map((range, idx) => (
-                  <div key={idx} className="text-xs font-mono bg-muted/50 p-2 rounded">
-                    {range.start} to {range.end}
+            {liveTripConfig ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Trip ID</p>
+                    <p className="text-lg font-bold font-mono">{liveTripConfig.tripId}</p>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Title</p>
+                    <p className="text-lg font-bold">{liveTripConfig.title}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Timezone</p>
+                    <p className="text-lg font-mono">{liveTripConfig.tz}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground mb-1">Members</p>
+                    {liveTripConfig.members.length > 0 ? (
+                      <details className="text-sm">
+                        <summary className="cursor-pointer text-foreground hover:text-primary font-medium">
+                          {liveTripConfig.members.length} members configured
+                        </summary>
+                        <ul className="mt-2 ml-4 space-y-1 list-disc">
+                          {liveTripConfig.members.map(login => (
+                            <li key={login} className="text-muted-foreground">{login}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : (
+                      <p className="text-lg font-bold">All users</p>
+                    )}
+                  </div>
+                </div>
+                <div className="border-t pt-3">
+                  <p className="text-sm text-muted-foreground mb-2">Day Ranges</p>
+                  <div className="text-xs font-mono bg-muted/50 p-2 rounded">
+                    {liveTripConfig.d1} to {liveTripConfig.d2}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <Skeleton className="h-32 w-full" />
+            )}
           </CardContent>
         </Card>
 
