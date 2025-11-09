@@ -104,28 +104,29 @@ export default function Debug() {
       setMemberLogins(logins);
     });
     // Fetch live trip config from config_filters
-    supabase
-      .from('config_filters' as any)
-      .select('mode,d1,d2,flags')
-      .eq('id', true)
-      .single()
-      .then(({ data: cfg }: any) => {
-        if (cfg) {
-          const flags = (cfg?.flags ?? {}) as any;
-          const tz = flags.tz ?? 'America/Costa_Rica';
-          const members: string[] = (flags.student_logins ?? []).slice().sort();
-          const tripId = cfg?.mode === 'TRIP' ? 'LIVE' : 'DEMO';
-          const title = cfg?.mode === 'TRIP' ? 'Trip Mode' : 'Demo Mode';
-          setLiveTripConfig({
-            tripId,
-            title,
-            tz,
-            members,
-            d1: cfg?.d1,
-            d2: cfg?.d2
-          });
-        }
-      });
+    (async () => {
+      const { data: cfg }: any = await supabase
+        .from('config_filters' as any)
+        .select('mode,d1,d2,flags')
+        .eq('id', true)
+        .single();
+      
+      if (cfg) {
+        const flags = (cfg?.flags ?? {}) as any;
+        const tz = flags.tz ?? 'America/Costa_Rica';
+        const members: string[] = (flags.student_logins ?? []).slice().sort();
+        const tripId = cfg?.mode === 'TRIP' ? 'LIVE' : 'DEMO';
+        const title = cfg?.mode === 'TRIP' ? 'Trip Mode' : 'Demo Mode';
+        setLiveTripConfig({
+          tripId,
+          title,
+          tz,
+          members,
+          d1: cfg?.d1,
+          d2: cfg?.d2
+        });
+      }
+    })();
   }, []);
 
   const selfCheck = useMemo(() => runSelfCheck(observations), [observations]);
