@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/lib/state';
@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
+import { supabase } from '@/integrations/supabase/client';
 
 // Helper component to invalidate map size when container changes
 function MapInvalidator() {
@@ -40,9 +41,29 @@ function MapInvalidator() {
 export default function Map() {
   const navigate = useNavigate();
   const { loading, observations, initialize } = useAppState();
+  const [bbox, setBbox] = useState<{ swlat: number; swlng: number; nelat: number; nelng: number } | null>(null);
 
   useEffect(() => {
     initialize();
+    // Fetch bounding box from config_filters
+    supabase
+      .from('config_filters')
+      .select('flags')
+      .eq('id', true)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.flags) {
+          const flags = data.flags as any;
+          if (flags.swlat && flags.swlng && flags.nelat && flags.nelng) {
+            setBbox({
+              swlat: flags.swlat,
+              swlng: flags.swlng,
+              nelat: flags.nelat,
+              nelng: flags.nelng
+            });
+          }
+        }
+      });
   }, []);
 
   return (
@@ -62,11 +83,14 @@ export default function Map() {
         ) : (
           <div className="map-wrap rounded-lg overflow-hidden border">
             <MapContainer
-              center={[
+              center={bbox ? [
+                (bbox.swlat + bbox.nelat) / 2,
+                (bbox.swlng + bbox.nelng) / 2
+              ] : [
                 observations[0]?.lat || 10,
                 observations[0]?.lng || -84
               ]}
-              zoom={10}
+              zoom={bbox ? 11 : 10}
               style={{ height: '100%', width: '100%' }}
             >
               <MapInvalidator />

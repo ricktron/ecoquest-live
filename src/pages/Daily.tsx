@@ -5,14 +5,29 @@ import { getActiveTrip } from '@/trips';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { formatPoints } from '@/lib/scoring';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Daily() {
   const navigate = useNavigate();
   const { loading, aggregated, initialize } = useAppState();
   const trip = getActiveTrip();
+  const [d1, setD1] = useState<string | null>(null);
+  const [d2, setD2] = useState<string | null>(null);
 
   useEffect(() => {
     initialize();
+    // Fetch date range from config_filters
+    supabase
+      .from('config_filters')
+      .select('window_start,window_end')
+      .eq('id', true)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setD1(data.window_start);
+          setD2(data.window_end);
+        }
+      });
   }, []);
 
   const dayScores = useMemo(() => {
@@ -35,17 +50,29 @@ export default function Daily() {
     return scores;
   }, [aggregated, trip]);
 
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleDateString(undefined, { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      timeZone: 'America/Chicago'
+    });
+  };
+
   return (
     <div className="pb-6">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Calendar className="h-8 w-8 text-primary" />
-            Daily
+            Daily {d1 && d2 && `(${formatDate(d1)} – ${formatDate(d2)})`}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Trip days from {trip.dayRanges[0]?.start} to {trip.dayRanges[trip.dayRanges.length - 1]?.end}
-          </p>
+          {d1 && d2 && (
+            <p className="text-sm text-muted-foreground">
+              Trip window from database
+            </p>
+          )}
         </div>
 
 

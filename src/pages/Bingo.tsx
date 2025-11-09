@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { fetchBingo, fetchMembers } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 type BingoCell = {
   label: string;
@@ -128,10 +129,18 @@ export default function Bingo() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const logins = await fetchMembers();
+      // Get student logins from config_filters flags
+      const { data: cfg } = await supabase
+        .from('config_filters')
+        .select('flags')
+        .eq('id', true)
+        .maybeSingle();
+
+      const studentLogins = (cfg?.flags as any)?.student_logins ?? [];
+      
       if (!mounted) return;
-      setUserLogins(logins);
-      if (logins.length > 0) setSelectedUser(logins[0]);
+      setUserLogins(studentLogins);
+      if (studentLogins.length > 0) setSelectedUser(studentLogins[0]);
     })();
     return () => { mounted = false; };
   }, []);

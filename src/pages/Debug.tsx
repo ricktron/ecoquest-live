@@ -8,6 +8,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { ENV, FLAGS } from '@/env';
 import { fetchMembers } from '@/lib/api';
+import { PROFILE } from '@/lib/config/profile';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 
 type SelfCheckResult = {
   name: string;
@@ -85,6 +88,7 @@ export default function Debug() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberCount, setMemberCount] = useState<number>(0);
   const [memberLogins, setMemberLogins] = useState<string[]>([]);
+  const [configData, setConfigData] = useState<{ d1: string; d2: string } | null>(null);
 
   useEffect(() => {
     initialize();
@@ -93,6 +97,20 @@ export default function Debug() {
       setMemberCount(logins.length);
       setMemberLogins(logins);
     });
+    // Fetch config_filters
+    supabase
+      .from('config_filters')
+      .select('window_start,window_end')
+      .eq('id', true)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setConfigData({
+            d1: data.window_start,
+            d2: data.window_end
+          });
+        }
+      });
   }, []);
 
   const selfCheck = useMemo(() => runSelfCheck(observations), [observations]);
@@ -112,10 +130,57 @@ export default function Debug() {
     return Array.from(counts.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [observations]);
 
+  const setProfile = (p: 'LIVE' | 'TEST') => {
+    localStorage.setItem('eql:profile', p);
+    window.location.reload();
+  };
+
   return (
     <div className="pb-6">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
         <h1 className="text-3xl font-bold">Debug Info</h1>
+
+        {/* Profile Config */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Environment Config</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Active Profile</p>
+                <p className="text-lg font-bold font-mono">{PROFILE}</p>
+              </div>
+              {configData && (
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground">Trip Window (from config_filters)</p>
+                  <p className="text-sm font-mono">
+                    {new Date(configData.d1).toLocaleDateString()} → {new Date(configData.d2).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="border-t pt-3">
+              <p className="text-sm text-muted-foreground mb-2">Developer Toggle</p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={PROFILE === 'LIVE' ? 'default' : 'outline'}
+                  onClick={() => setProfile('LIVE')}
+                >
+                  Switch to LIVE
+                </Button>
+                <Button
+                  size="sm"
+                  variant={PROFILE === 'TEST' ? 'default' : 'outline'}
+                  onClick={() => setProfile('TEST')}
+                >
+                  Switch to TEST
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Self-Check */}
         <Card>

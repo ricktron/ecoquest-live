@@ -2,6 +2,10 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import "leaflet/dist/leaflet.css";
+import { PROFILE } from "./lib/config/profile";
+
+// Log active profile at boot
+console.debug('[EQL] Active profile:', PROFILE);
 
 // Post-build ENV reminder
 console.info(

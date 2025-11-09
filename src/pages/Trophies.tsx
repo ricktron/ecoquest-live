@@ -11,6 +11,8 @@ import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
 import { getTripTrophies, getDailyTrophies, TrophyDef, TrophyResult } from '@/trophies';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { isLive } from '@/lib/config/profile';
+import { Badge } from '@/components/ui/badge';
 
 type TrophyWithResults = TrophyDef & { results?: TrophyResult[] };
 
@@ -104,6 +106,7 @@ export default function Trophies() {
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Crown className="h-8 w-8 text-yellow-500" />
             Trophies
+            {isLive && <Badge variant="secondary" className="ml-2">Trip Mode</Badge>}
           </h1>
           <p className="text-sm text-muted-foreground">
             Achievement awards for outstanding contributions
