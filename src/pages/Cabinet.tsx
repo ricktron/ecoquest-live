@@ -3,7 +3,44 @@ import { supabase } from '@/lib/supabaseClient';
 import type { TrophySpec } from '@/lib/trophies/registry';
 import { loadCatalog } from '@/lib/trophies/loadCatalog';
 
-type VHRow = { user_login: string; unique_species: number };
+type VHRow = { user_login: string; unique_species: number; awarded_at?: string };
+
+function minutesToHHMM(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatTrophyValue(id: string, v: any): string {
+  if (v == null) return '—';
+  switch (id) {
+    case 'early-bird':
+      return minutesToHHMM(Math.round(Number(v)));
+    case 'daily-rare-find':
+      return `1-in-${v}`;
+    case 'daily-variety-hero':
+      return `${v} unique spp.`;
+    case 'daily-obs-leader':
+      return `${v} obs`;
+    case 'daily-shutterbug':
+      return `${v} obs`;
+    case 'daily-night-owl':
+      return `${v} night obs`;
+    default:
+      return String(v);
+  }
+}
+
+function formatDateCostaRica(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/Costa_Rica',
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
 
 export default function Cabinet() {
   const [catalog, setCatalog] = useState<TrophySpec[]>([]);
@@ -30,7 +67,7 @@ export default function Cabinet() {
       if (!who) return;
       const { data, error }: any = await supabase()
         .from('trophies_variety_hero_latest_run_v' as any)
-        .select('user_login, unique_species')
+        .select('user_login, unique_species, awarded_at')
         .eq('user_login', who)
         .maybeSingle();
       if (!cancelled && !error) setVh(data ?? null);
@@ -76,10 +113,17 @@ export default function Cabinet() {
                   <div className="text-sm text-muted-foreground">{t.subtitle}</div>
                   <div className="mt-3">
                     {earned ? (
-                      <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-sm">
-                        <span className="font-semibold text-primary">Earned</span>
+                      <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-sm space-y-1">
+                        <div><span className="font-semibold text-primary">Earned</span></div>
                         {value !== null && (
-                          <span className="ml-2">• {value}{t.metric ? ` ${t.metric}` : ''}</span>
+                          <div className="text-muted-foreground">
+                            Value: {formatTrophyValue(t.id, value)}
+                          </div>
+                        )}
+                        {vh?.awarded_at && (
+                          <div className="text-xs text-muted-foreground">
+                            Won: {formatDateCostaRica(vh.awarded_at)}
+                          </div>
                         )}
                       </div>
                     ) : (

@@ -10,6 +10,32 @@ import { InfoPopover } from '@/components/InfoPopover';
 
 type Winner = { user_login: string; unique_species?: number; value?: number };
 
+function minutesToHHMM(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatTrophyValue(id: string, v: any): string {
+  if (v == null) return '—';
+  switch (id) {
+    case 'early-bird':
+      return minutesToHHMM(Math.round(Number(v)));
+    case 'daily-rare-find':
+      return `1-in-${v}`;
+    case 'daily-variety-hero':
+      return `${v} unique spp.`;
+    case 'daily-obs-leader':
+      return `${v} obs`;
+    case 'daily-shutterbug':
+      return `${v} obs`;
+    case 'daily-night-owl':
+      return `${v} night obs`;
+    default:
+      return String(v);
+  }
+}
+
 export default function Trophies() {
   const { slug } = useParams<{ slug?: string }>();
   const navigate = useNavigate();
@@ -152,8 +178,8 @@ export default function Trophies() {
                             <span className="text-muted-foreground font-medium">#{i + 1}</span>
                             <span>{w.user_login}</span>
                           </span>
-                          <span className="font-semibold text-primary">
-                            {w.value ?? w.unique_species}{trophy.metric ? ` ${trophy.metric}` : ''}
+                          <span className="text-sm font-medium text-primary">
+                            {formatTrophyValue(trophy.id, w.value ?? w.unique_species)}
                           </span>
                         </li>
                       ))}
