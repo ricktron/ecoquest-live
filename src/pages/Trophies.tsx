@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FLAGS } from '@/env';
 import { Crown, Lock } from 'lucide-react';
-import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
 import { TrophySpec, TrophyScope } from '@/lib/trophies/registry';
 import { loadCatalog } from '@/lib/trophies/loadCatalog';
@@ -169,8 +168,6 @@ export default function Trophies() {
             );
           })}
         </div>
-        
-        <Legend />
       </div>
     </div>
   );
