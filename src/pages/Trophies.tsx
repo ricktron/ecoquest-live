@@ -4,8 +4,9 @@ import { FLAGS } from '@/env';
 import { Crown, Lock } from 'lucide-react';
 import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
-import { TROPHIES, TrophySpec } from '@/trophies/registry';
-import { isLive } from '@/lib/config/profile';
+import { TROPHIES, TrophySpec, TrophyScope } from '@/lib/trophies/registry';
+import { PROFILE } from '@/lib/config/profile';
+import { InfoPopover } from '@/components/InfoPopover';
 
 type Winner = { user_login: string; unique_species?: number; value?: number };
 
@@ -14,6 +15,7 @@ export default function Trophies() {
   const navigate = useNavigate();
   
   // ALL HOOKS AT TOP - unconditional
+  const [scope, setScope] = useState<TrophyScope>('daily');
   const [winnersById, setWinnersById] = useState<Record<string, Winner[]>>({});
   const [loading, setLoading] = useState(true);
 
@@ -22,22 +24,22 @@ export default function Trophies() {
     (async () => {
       try {
         const { supabase } = await import('@/lib/supabaseClient');
-        const specsWithViews = TROPHIES.filter(t => !!t.view);
-        const results = await Promise.all(specsWithViews.map(async (t): Promise<[string, Winner[]]> => {
+        const withViews = TROPHIES.filter(t => !!t.view);
+        const results = await Promise.all(withViews.map(async t => {
           const { data, error } = await supabase()
             .from(t.view as any)
             .select('*');
-          if (error) return [t.slug, []];
-          const winners: Winner[] = (data ?? []).map((row: any) => ({
-            user_login: row.user_login,
-            unique_species: row.unique_species,
-            value: row.unique_species ?? row.value ?? null
+          if (error) return [t.id, []] as const;
+          const list: Winner[] = (data ?? []).map((r: any) => ({
+            user_login: r.user_login,
+            unique_species: r.unique_species,
+            value: r.unique_species ?? r.value ?? null
           }));
-          return [t.slug, winners];
+          return [t.id, list] as const;
         }));
         if (!cancelled) {
           const map: Record<string, Winner[]> = {};
-          results.forEach(([id, list]) => { map[id] = list; });
+          results.forEach(([id, list]) => { map[id] = [...list]; });
           setWinnersById(map);
         }
       } finally {
@@ -65,6 +67,8 @@ export default function Trophies() {
     );
   }
 
+  const specs = TROPHIES.filter(t => t.scope === scope);
+
   if (loading) {
     return (
       <div className="pb-6 pb-safe-bottom">
@@ -88,30 +92,50 @@ export default function Trophies() {
           </p>
         </div>
 
+        {/* Scope switcher */}
+        <div className="inline-flex rounded-xl border border-border p-1 bg-card">
+          {(['daily', 'trip'] as TrophyScope[]).map(s => (
+            <button
+              key={s}
+              onClick={() => setScope(s)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                scope === s 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              }`}
+            >
+              {s === 'daily' ? 'Today' : 'Trip'}
+            </button>
+          ))}
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {TROPHIES.map((trophy: TrophySpec) => {
-            const winners = winnersById[trophy.slug] ?? [];
-            const active = isLive ? winners.length > 0 : true;
+          {specs.map((trophy: TrophySpec) => {
+            const winners = winnersById[trophy.id] ?? [];
+            const hasWinners = PROFILE === 'LIVE' ? winners.length > 0 : true;
             
             return (
               <button
-                key={trophy.slug}
-                onClick={() => active && navigate(`/trophies/${trophy.slug}`)}
+                key={trophy.id}
+                onClick={() => hasWinners && navigate(`/trophies/${trophy.id}`)}
                 className={`rounded-2xl border bg-card p-4 text-left transition-all hover:shadow-md ${
-                  active ? 'hover:bg-accent/50 cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                  hasWinners ? 'hover:bg-accent/50 cursor-pointer' : 'opacity-60 cursor-not-allowed'
                 }`}
-                disabled={!active}
+                disabled={!hasWinners}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <div className="text-lg font-semibold mb-1">{trophy.title}</div>
-                    <div className="text-sm text-muted-foreground">{trophy.description}</div>
+                    <div className="text-lg font-semibold mb-1 flex items-center">
+                      {trophy.title}
+                      <InfoPopover text={trophy.info} />
+                    </div>
+                    <div className="text-sm text-muted-foreground">{trophy.subtitle}</div>
                   </div>
-                  {!active && <Lock className="h-5 w-5 text-muted-foreground ml-2" />}
+                  {!hasWinners && <Lock className="h-5 w-5 text-muted-foreground ml-2" />}
                 </div>
                 
                 <div className="mt-3">
-                  {active ? (
+                  {hasWinners ? (
                     <ul className="space-y-2">
                       {winners.slice(0, 3).map((w, i) => (
                         <li key={w.user_login} className="flex items-center justify-between text-sm">
@@ -120,7 +144,7 @@ export default function Trophies() {
                             <span>{w.user_login}</span>
                           </span>
                           <span className="font-semibold text-primary">
-                            {w.value ?? w.unique_species}
+                            {w.value ?? w.unique_species}{trophy.metric ? ` ${trophy.metric}` : ''}
                           </span>
                         </li>
                       ))}
