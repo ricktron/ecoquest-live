@@ -6,16 +6,16 @@ export function BingoTile({ tile }: { tile: BingoTile }) {
     <Popover>
       <PopoverTrigger asChild>
         <button
-          className="group aspect-[5/6] sm:aspect-square rounded-2xl border border-border grid place-items-center bg-card p-1 sm:p-2 relative overflow-hidden hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring/50"
+          className="group aspect-square rounded-2xl border border-border grid place-items-center bg-card p-1 sm:p-2 relative overflow-hidden hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring/50"
           aria-label={`${tile.label} details`}
           title="Tap for details"
         >
           <div className="grid gap-1 place-items-center">
-            <span className="leading-none text-[clamp(28px,9vw,48px)] sm:text-4xl md:text-5xl">
+            <span className="leading-none text-[clamp(24px,7.5vw,48px)] sm:text-4xl md:text-5xl">
               {tile.emoji}
             </span>
             <span
-              className={`max-w-[92%] text-[11px] sm:text-xs md:text-sm font-medium text-foreground text-center leading-tight break-words ${
+              className={`max-w-[92%] text-[10px] sm:text-xs md:text-sm font-medium text-foreground text-center leading-tight break-words ${
                 tile.slug === "free" ? "uppercase font-bold" : ""
               }`}
             >

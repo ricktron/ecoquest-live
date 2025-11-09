@@ -22,7 +22,7 @@ export default function BingoBoard() {
         </p>
       </header>
 
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 sm:gap-2 md:gap-3 max-w-full px-2 sm:px-3 sm:max-w-3xl mx-auto">
+      <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3 max-w-full px-2 sm:px-3 sm:max-w-3xl mx-auto">
         {tiles.map((t) => (
           <BingoTile key={t.slug + t.position} tile={t} />
         ))}
