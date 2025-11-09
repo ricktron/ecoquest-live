@@ -4,7 +4,8 @@ import { FLAGS } from '@/env';
 import { Crown, Lock } from 'lucide-react';
 import Legend from '@/components/Legend';
 import TrophyDetail from './TrophyDetail';
-import { TROPHIES, TrophySpec, TrophyScope } from '@/lib/trophies/registry';
+import { TrophySpec, TrophyScope } from '@/lib/trophies/registry';
+import { loadCatalog } from '@/lib/trophies/loadCatalog';
 import { PROFILE } from '@/lib/config/profile';
 import { InfoPopover } from '@/components/InfoPopover';
 
@@ -16,6 +17,7 @@ export default function Trophies() {
   
   // ALL HOOKS AT TOP - unconditional
   const [scope, setScope] = useState<TrophyScope>('daily');
+  const [catalog, setCatalog] = useState<TrophySpec[]>([]);
   const [winnersById, setWinnersById] = useState<Record<string, Winner[]>>({});
   const [loading, setLoading] = useState(true);
 
@@ -23,8 +25,11 @@ export default function Trophies() {
     let cancelled = false;
     (async () => {
       try {
+        const cat = await loadCatalog();
+        if (!cancelled) setCatalog(cat);
+        
         const { supabase } = await import('@/lib/supabaseClient');
-        const withViews = TROPHIES.filter(t => !!t.view);
+        const withViews = cat.filter(t => !!t.view);
         const results = await Promise.all(withViews.map(async t => {
           const { data, error } = await supabase()
             .from(t.view as any)
@@ -67,7 +72,7 @@ export default function Trophies() {
     );
   }
 
-  const specs = TROPHIES.filter(t => t.scope === scope);
+  const specs = catalog.filter(t => t.scope === scope);
 
   if (loading) {
     return (
@@ -82,14 +87,19 @@ export default function Trophies() {
   return (
     <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Crown className="h-8 w-8 text-primary" />
-            Trophies
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Recognition for outstanding field observations
-          </p>
+        <div className="mb-2 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Crown className="h-8 w-8 text-primary" />
+              Trophies
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Recognition for outstanding field observations
+            </p>
+          </div>
+          <a href="/cabinet" className="text-sm rounded-lg border border-border px-3 py-1.5 hover:bg-muted transition-colors">
+            View Trophy Cabinet
+          </a>
         </div>
 
         {/* Scope switcher */}

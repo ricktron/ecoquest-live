@@ -21,6 +21,7 @@ import Compare from './pages/Compare';
 import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
 import BingoBoard from './features/bingo/BingoBoard';
+import Cabinet from './pages/Cabinet';
 import { FLAGS } from './env';
 import { fetchHeaderTexts } from './lib/api';
 
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/bingo" element={<BingoBoard />} />
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
+            {FLAGS.TROPHIES_ENABLED && <Route path="/cabinet" element={<Cabinet />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/gallery" element={<Gallery />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/rarity" element={<Rarity />} />}
             <Route path="/daily" element={<Daily />} />
