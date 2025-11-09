@@ -30,6 +30,26 @@ export default function Trophies() {
     return buildScoringContext(observations);
   }, [observations]);
 
+  // Early return for empty state in LIVE mode
+  if (isLive && observations.length === 0 && !loading) {
+    return (
+      <div className="pb-6 pb-safe-bottom">
+        <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Crown className="h-8 w-8 text-yellow-500" />
+              Trophies
+            </h1>
+          </div>
+          <div className="text-center py-12 bg-muted/30 rounded-lg">
+            <p className="text-lg font-semibold text-muted-foreground mb-2">No winners yet</p>
+            <p className="text-sm text-muted-foreground">Winners appear after the first scoring run completes.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [tripTrophies, setTripTrophies] = useState<TrophyWithResults[]>([]);
   const [dayTrophies, setDayTrophies] = useState<TrophyWithResults[]>([]);
 

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
-import { useAppState } from '@/lib/state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
@@ -40,14 +39,11 @@ function MapInvalidator() {
 
 export default function Map() {
   const navigate = useNavigate();
-  const { loading, initialize } = useAppState();
   const [bbox, setBbox] = useState<{ swlat: number; swlng: number; nelat: number; nelng: number } | null>(null);
   const [observations, setObservations] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    initialize();
-    
     async function loadMapData() {
       setDataLoading(true);
       
@@ -68,24 +64,11 @@ export default function Map() {
         });
       }
       
-      // Fetch latest run id
-      const { data: latest }: any = await supabase
-        .from('latest_run_v' as any)
-        .select('run_id')
-        .maybeSingle();
-      
-      const latestRun = latest?.run_id ?? null;
-      
-      // Fetch observations filtered by latest run
-      if (latestRun) {
-        const { data: points }: any = await supabase
-          .from('observations' as any)
-          .select('*')
-          .eq('run_id', latestRun);
-        setObservations(points || []);
-      } else {
-        setObservations([]);
-      }
+      // Fetch observations from observations_latest_run_v
+      const { data: points }: any = await supabase
+        .from('observations_latest_run_v' as any)
+        .select('inat_obs_id,lat,lng,observed_at,user_login,taxon_name');
+      setObservations(points || []);
       
       setDataLoading(false);
     }
@@ -129,7 +112,7 @@ export default function Map() {
                 .filter(obs => obs.lat && obs.lng)
                 .map(obs => (
                   <CircleMarker
-                    key={obs.id}
+                    key={obs.inat_obs_id}
                     center={[obs.lat!, obs.lng!]}
                     radius={6}
                     fillColor="#22c55e"
@@ -137,18 +120,18 @@ export default function Map() {
                     weight={2}
                     fillOpacity={0.7}
                   >
-                    <Popup>
+                  <Popup>
                       <div className="text-sm space-y-1">
-                        <div className="font-semibold">{obs.taxonName || 'Unknown'}</div>
-                        <div className="text-muted-foreground">by {obs.userLogin}</div>
+                        <div className="font-semibold">{obs.taxon_name || 'Unknown'}</div>
+                        <div className="text-muted-foreground">by {obs.user_login}</div>
                         <div className="text-xs text-muted-foreground">
-                          {obs.timeObservedAt || obs.observedOn}
+                          {obs.observed_at}
                         </div>
                         <div className="flex gap-2 mt-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => window.open(`https://www.inaturalist.org/observations/${obs.id}`, '_blank')}
+                            onClick={() => window.open(`https://www.inaturalist.org/observations/${obs.inat_obs_id}`, '_blank')}
                           >
                             <ExternalLink className="h-3 w-3 mr-1" />
                             iNat
@@ -156,7 +139,7 @@ export default function Map() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => navigate(`/obs/${obs.id}`)}
+                            onClick={() => navigate(`/obs/${obs.inat_obs_id}`)}
                           >
                             Details
                           </Button>

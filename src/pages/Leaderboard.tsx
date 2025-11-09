@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { fetchLeaderboard, fetchDisplayFlags, type LeaderRow } from '@/lib/api';
 import { DEFAULT_AID } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
+import { isLive } from '@/lib/config/profile';
 
 export default function Leaderboard() {
   const navigate = useNavigate();
@@ -96,7 +97,14 @@ export default function Leaderboard() {
             )}
             {!rows || rows.length === 0 ? (
               <div className="text-center py-12 bg-muted/30 rounded-lg">
-                <p className="text-muted-foreground">No leaderboard rows for the latest run.</p>
+                <p className="text-lg font-semibold text-muted-foreground mb-2">
+                  {isLive ? 'No leaderboard rows yet' : 'No leaderboard rows for the latest run.'}
+                </p>
+                {isLive && (
+                  <p className="text-sm text-muted-foreground">
+                    First scoring run will populate this.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

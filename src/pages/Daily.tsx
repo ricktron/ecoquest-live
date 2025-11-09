@@ -1,54 +1,43 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppState } from '@/lib/state';
-import { getActiveTrip } from '@/trips';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ChevronRight } from 'lucide-react';
-import { formatPoints } from '@/lib/scoring';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Daily() {
   const navigate = useNavigate();
-  const { loading, aggregated, initialize } = useAppState();
-  const trip = getActiveTrip();
+  const [loading, setLoading] = useState(true);
   const [d1, setD1] = useState<string | null>(null);
   const [d2, setD2] = useState<string | null>(null);
+  const [dayScores, setDayScores] = useState<any[]>([]);
 
   useEffect(() => {
-    initialize();
-    // Fetch date range from config_filters
-    supabase
-      .from('config_filters')
-      .select('d1,d2')
-      .eq('id', true)
-      .single()
-      .then(({ data }: any) => {
-        if (data) {
-          setD1(data.d1);
-          setD2(data.d2);
-        }
-      });
-  }, []);
-
-  const dayScores = useMemo(() => {
-    if (!aggregated) return [];
-    
-    const allDays = new Set<string>();
-    trip.dayRanges.forEach(range => {
-      let current = new Date(range.start);
-      const end = new Date(range.end);
-      while (current <= end) {
-        allDays.add(current.toISOString().split('T')[0]);
-        current = new Date(current.getTime() + 86400000);
+    const loadData = async () => {
+      setLoading(true);
+      
+      // Fetch date range from trip_window_v
+      const { data: win }: any = await supabase
+        .from('trip_window_v' as any)
+        .select('d1,d2')
+        .single();
+      
+      if (win) {
+        setD1(win.d1);
+        setD2(win.d2);
       }
-    });
+
+      // Fetch daily scores from daily_latest_run_v
+      const { data: days }: any = await supabase
+        .from('daily_latest_run_v' as any)
+        .select('day,obs,species,people')
+        .order('day', { ascending: false });
+      
+      setDayScores(days || []);
+      setLoading(false);
+    };
     
-    const scores = Array.from(aggregated.byDay.values())
-      .filter(day => allDays.has(day.date))
-      .sort((a, b) => b.date.localeCompare(a.date));
-    
-    return scores;
-  }, [aggregated, trip]);
+    loadData();
+  }, []);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '';
@@ -91,29 +80,28 @@ export default function Daily() {
           <div className="space-y-3">
             {dayScores.map(day => (
               <div 
-                key={day.date} 
+                key={day.day} 
                 className="p-4 bg-card border rounded-lg space-y-2 cursor-pointer hover:shadow-lg transition-shadow group"
-                onClick={() => navigate(`/daily/${day.date}`)}
+                onClick={() => navigate(`/daily/${day.day}`)}
               >
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold text-lg">{day.date}</div>
+                  <div className="font-semibold text-lg">{day.day}</div>
                   <div className="flex items-center gap-2">
-                    <div className="text-xl font-bold text-primary">{formatPoints(day.points)}</div>
                     <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
                     <div className="text-muted-foreground">Obs</div>
-                    <div className="font-medium">{day.obsCount}</div>
+                    <div className="font-medium">{day.obs}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Species</div>
-                    <div className="font-medium">{day.speciesCount}</div>
+                    <div className="font-medium">{day.species}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">People</div>
-                    <div className="font-medium">{day.participants.size}</div>
+                    <div className="font-medium">{day.people}</div>
                   </div>
                 </div>
               </div>

@@ -97,11 +97,10 @@ export default function Debug() {
       setMemberCount(logins.length);
       setMemberLogins(logins);
     });
-    // Fetch config_filters
+    // Fetch trip window from trip_window_v
     supabase
-      .from('config_filters')
+      .from('trip_window_v' as any)
       .select('d1,d2')
-      .eq('id', true)
       .single()
       .then(({ data }: any) => {
         if (data) {
@@ -121,14 +120,20 @@ export default function Debug() {
     return { total: observations.length, uniqueSpecies, uniqueUsers };
   }, [observations]);
 
-  const perDayCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    observations.forEach(o => {
-      const day = o.observedOn;
-      counts.set(day, (counts.get(day) || 0) + 1);
-    });
-    return Array.from(counts.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [observations]);
+  const [perDayCounts, setPerDayCounts] = useState<[string, number][]>([]);
+
+  useEffect(() => {
+    // Fetch daily counts from daily_latest_run_v
+    supabase
+      .from('daily_latest_run_v' as any)
+      .select('day,obs')
+      .order('day', { ascending: false })
+      .then(({ data }: any) => {
+        if (data) {
+          setPerDayCounts(data.map((d: any) => [d.day, d.obs]));
+        }
+      });
+  }, []);
 
   const setProfile = (p: 'LIVE' | 'TEST') => {
     localStorage.setItem('eql:profile', p);
