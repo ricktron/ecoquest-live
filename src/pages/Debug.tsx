@@ -92,29 +92,48 @@ type LiveTripConfig = {
 export default function Debug() {
   const { loading, observations, aggregated, lastInatSync, initialize } = useAppState();
   const trip = getActiveTrip();
-  const [memberCount, setMemberCount] = useState<number>(0);
-  const [memberLogins, setMemberLogins] = useState<string[]>([]);
   const [liveTripConfig, setLiveTripConfig] = useState<LiveTripConfig | null>(null);
   const [trophyPoints, setTrophyPoints] = useState<Array<{ user_login: string; points: number }>>([]);
+  const [totalObs, setTotalObs] = useState<number>(0);
+  const [uniqueSpecies, setUniqueSpecies] = useState<number>(0);
+  const [students, setStudents] = useState<string[]>([]);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [perDayCounts, setPerDayCounts] = useState<Array<{ day: string; obs: number; species: number; people: number }>>([]);
+  const [sampleObs, setSampleObs] = useState<Array<{ inat_obs_id: number; taxon_name: string | null; user_login: string; observed_on: string }>>([]);
 
   useEffect(() => {
     initialize();
-    // Fetch members from unified view
-    fetchMembers().then(logins => {
-      setMemberCount(logins.length);
-      setMemberLogins(logins);
-    });
+    
     // Fetch trophy points
     fetchTrophyPoints().then(points => {
       setTrophyPoints(points);
     });
-    // Fetch live trip config from config_filters
+    
+    // Fetch all data in parallel
     (async () => {
-      const { data: cfg }: any = await supabase
-        .from('config_filters' as any)
-        .select('mode,d1,d2,flags')
-        .eq('id', true)
-        .single();
+      const [cfgRes, latestRes, dailyRes, headRes, samplesRes] = await Promise.all([
+        supabase.from('config_filters' as any).select('mode,d1,d2,flags').eq('id', true).single(),
+        supabase.from('latest_run_v' as any).select('run_id,awarded_at').maybeSingle(),
+        supabase.from('daily_latest_run_v' as any).select('day,obs,species,people').order('day', { ascending: false }),
+        supabase.from('debug_observations_latest_run_v' as any).select('*', { count: 'exact', head: true }),
+        supabase.from('debug_observations_latest_run_v' as any)
+          .select('inat_obs_id,taxon_name,user_login,observed_on')
+          .order('observed_on', { ascending: false, nullsFirst: true })
+          .limit(5),
+      ]);
+      
+      const totalObsCount = headRes?.count ?? 0;
+      setTotalObs(totalObsCount);
+      
+      const uniqueSpeciesHead = await supabase
+        .from('debug_observations_latest_run_v' as any)
+        .select('taxon_id', { count: 'exact', head: true });
+      setUniqueSpecies(uniqueSpeciesHead?.count ?? 0);
+      
+      const cfg = cfgRes.data as any;
+      const latest = latestRes.data as any;
+      const daily = dailyRes.data as any;
+      const samples = samplesRes.data as any;
       
       if (cfg) {
         const flags = (cfg?.flags ?? {}) as any;
@@ -122,6 +141,8 @@ export default function Debug() {
         const members: string[] = (flags.student_logins ?? []).slice().sort();
         const tripId = cfg?.mode === 'TRIP' ? 'LIVE' : 'DEMO';
         const title = cfg?.mode === 'TRIP' ? 'Trip Mode' : 'Demo Mode';
+        
+        setStudents(members);
         setLiveTripConfig({
           tripId,
           title,
@@ -130,6 +151,18 @@ export default function Debug() {
           d1: cfg?.d1,
           d2: cfg?.d2
         });
+        
+        if (latest?.awarded_at) {
+          setLastSync(new Date(latest.awarded_at).toLocaleString('en-US', { timeZone: tz }));
+        }
+      }
+      
+      if (daily) {
+        setPerDayCounts(daily);
+      }
+      
+      if (samples) {
+        setSampleObs(samples);
       }
     })();
   }, []);
@@ -142,20 +175,6 @@ export default function Debug() {
     return { total: observations.length, uniqueSpecies, uniqueUsers };
   }, [observations]);
 
-  const [perDayCounts, setPerDayCounts] = useState<[string, number][]>([]);
-
-  useEffect(() => {
-    // Fetch daily counts from daily_latest_run_v
-    supabase
-      .from('daily_latest_run_v' as any)
-      .select('day,obs')
-      .order('day', { ascending: false })
-      .then(({ data }: any) => {
-        if (data) {
-          setPerDayCounts(data.map((d: any) => [d.day, d.obs]));
-        }
-      });
-  }, []);
 
   const setProfile = (p: 'LIVE' | 'TEST') => {
     localStorage.setItem('eql:profile', p);
@@ -294,31 +313,30 @@ export default function Debug() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Observations</p>
-                    <p className="text-2xl font-bold">{observations.length}</p>
+                    <p className="text-2xl font-bold">{totalObs}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-sm text-muted-foreground">Members</p>
-                    <p className="text-2xl font-bold">{memberCount}</p>
-                    {memberLogins.length > 0 && (
+                    <p className="text-2xl font-bold">{students.length}</p>
+                    {students.length > 0 && (
                       <details className="text-sm mt-2">
                         <summary className="cursor-pointer text-muted-foreground hover:text-primary">
-                          Show first 10 logins
+                          Show all members
                         </summary>
                         <div className="mt-2 text-xs font-mono text-muted-foreground">
-                          {memberLogins.slice(0, 10).join(', ')}
-                          {memberLogins.length > 10 && '...'}
+                          {students.join(', ')}
                         </div>
                       </details>
                     )}
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Unique Species</p>
-                    <p className="text-2xl font-bold">{aggregated ? Array.from(aggregated.byUser.values()).reduce((max, u) => Math.max(max, u.speciesCount), 0) : 0}</p>
+                    <p className="text-2xl font-bold">{uniqueSpecies}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Last Sync</p>
                     <p className="text-sm font-mono">
-                      {lastInatSync ? new Date(lastInatSync).toLocaleString() : 'Never'}
+                      {lastSync || 'Never'}
                     </p>
                   </div>
                 </div>
@@ -326,12 +344,16 @@ export default function Debug() {
                 <div className="mt-6 border-t pt-4">
                   <p className="text-sm font-semibold mb-2">Observations Per Day</p>
                   <div className="space-y-1">
-                    {perDayCounts.slice(0, 10).map(([day, count]) => (
-                      <div key={day} className="text-xs font-mono bg-muted/50 p-2 rounded flex justify-between">
-                        <span>{day}</span>
-                        <span className="font-bold">{count}</span>
-                      </div>
-                    ))}
+                    {perDayCounts.length > 0 ? (
+                      perDayCounts.slice(0, 10).map((d) => (
+                        <div key={d.day} className="text-xs font-mono bg-muted/50 p-2 rounded flex justify-between">
+                          <span>{d.day}</span>
+                          <span className="font-bold">{d.obs} obs • {d.species} spp • {d.people} people</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No daily data yet</p>
+                    )}
                   </div>
                 </div>
 
@@ -354,11 +376,15 @@ export default function Debug() {
                 <div className="mt-6 border-t pt-4">
                   <p className="text-sm font-semibold mb-2">Sample Observations</p>
                   <div className="space-y-2">
-                    {observations.slice(0, 5).map(o => (
-                      <div key={o.id} className="text-xs font-mono bg-muted/50 p-2 rounded">
-                        {o.id}: {o.taxonName || 'Unknown'} by {o.userLogin} on {o.observedOn}
-                      </div>
-                    ))}
+                    {sampleObs.length > 0 ? (
+                      sampleObs.map(o => (
+                        <div key={o.inat_obs_id} className="text-xs font-mono bg-muted/50 p-2 rounded">
+                          {o.inat_obs_id}: {o.taxon_name || 'Unknown'} by {o.user_login} on {o.observed_on}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No observations yet</p>
+                    )}
                   </div>
                 </div>
               </>
@@ -393,28 +419,6 @@ export default function Debug() {
           </CardContent>
         </Card>
 
-        {/* Data Preview */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Preview</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Our Observations</span>
-              <span className="font-mono">{observations.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Unique Species</span>
-              <span className="font-mono">
-                {new Set(observations.map(o => o.taxonId).filter(Boolean)).size}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Baseline Local Obs</span>
-              <span className="font-mono text-muted-foreground">Not loaded (stub)</span>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
