@@ -111,8 +111,8 @@ export default function Debug() {
     
     // Fetch all data in parallel
     (async () => {
-      const [cfgRes, latestRes, dailyRes, headRes, samplesRes] = await Promise.all([
-        supabase.from('config_filters' as any).select('mode,d1,d2,flags').eq('id', true).single(),
+      const [membersRes, latestRes, dailyRes, headRes, samplesRes, cfgRes] = await Promise.all([
+        supabase.from('trip_members_v' as any).select('user_login'),
         supabase.from('latest_run_v' as any).select('run_id,awarded_at').maybeSingle(),
         supabase.from('daily_latest_run_v' as any).select('day,obs,species,people').order('day', { ascending: false }),
         supabase.from('debug_observations_latest_run_v' as any).select('*', { count: 'exact', head: true }),
@@ -120,8 +120,10 @@ export default function Debug() {
           .select('inat_obs_id,taxon_name,user_login,observed_on')
           .order('observed_on', { ascending: false, nullsFirst: true })
           .limit(5),
+        supabase.from('config_filters' as any).select('mode,d1,d2,flags').eq('id', true).single(),
       ]);
       
+      const memberLogins = (membersRes.data ?? []).map((m: any) => m.user_login).sort();
       const totalObsCount = headRes?.count ?? 0;
       setTotalObs(totalObsCount);
       
@@ -134,27 +136,29 @@ export default function Debug() {
       const latest = latestRes.data as any;
       const daily = dailyRes.data as any;
       const samples = samplesRes.data as any;
+      const tz = ((cfg?.flags ?? {}) as any).tz ?? 'America/Costa_Rica';
+      
+      setStudents(memberLogins);
       
       if (cfg) {
         const flags = (cfg?.flags ?? {}) as any;
-        const tz = flags.tz ?? 'America/Costa_Rica';
-        const members: string[] = (flags.student_logins ?? []).slice().sort();
         const tripId = cfg?.mode === 'TRIP' ? 'LIVE' : 'DEMO';
         const title = cfg?.mode === 'TRIP' ? 'Trip Mode' : 'Demo Mode';
         
-        setStudents(members);
         setLiveTripConfig({
           tripId,
           title,
           tz,
-          members,
+          members: memberLogins,
           d1: cfg?.d1,
           d2: cfg?.d2
         });
-        
-        if (latest?.awarded_at) {
-          setLastSync(new Date(latest.awarded_at).toLocaleString('en-US', { timeZone: tz }));
-        }
+      }
+      
+      if (latest?.awarded_at) {
+        setLastSync(new Date(latest.awarded_at).toLocaleString('en-US', { timeZone: tz }));
+      } else {
+        setLastSync(null);
       }
       
       if (daily) {
@@ -336,7 +340,7 @@ export default function Debug() {
                   <div>
                     <p className="text-sm text-muted-foreground">Last Sync</p>
                     <p className="text-sm font-mono">
-                      {lastSync || 'Never'}
+                      {lastSync || 'No scoring runs yet'}
                     </p>
                   </div>
                 </div>
