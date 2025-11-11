@@ -5,11 +5,14 @@ import { Trophy, Info, Clock } from 'lucide-react';
 import { formatPoints } from '@/lib/scoring';
 import Legend from '@/components/Legend';
 import {
-  getTripLeaderboard,
-  getTripBasePoints,
+  fetchLeaderboardCR2025,
+  fetchRosterCR2025,
   fetchDisplayFlags,
+  lastUpdatedCR2025,
   type TripLeaderboardRow,
+  type TripRosterEntry,
 } from '@/lib/api';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatDistanceToNow } from 'date-fns';
 import { isLive } from '@/lib/config/profile';
 
@@ -24,7 +27,7 @@ type RankSnapshot = {
   ranks: Record<string, number>;
 };
 
-const RANK_STORAGE_KEY = 'cr2025_rank_snapshot';
+const RANK_STORAGE_KEY = 'ecoqlb:cr2025';
 const RANK_STALE_WINDOW_MS = 60 * 60 * 1000;
 
 export default function Leaderboard() {
@@ -34,7 +37,8 @@ export default function Leaderboard() {
   const [error, setError] = useState<{ message?: string } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
-  const [rgByLogin, setRgByLogin] = useState<Record<string, number>>({});
+  const [displayNameMap, setDisplayNameMap] = useState<Record<string, string>>({});
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const computeRankedRows = (rows: TripLeaderboardRow[]): RankedLeaderboardRow[] => {
     const sorted = [...rows]
@@ -124,42 +128,43 @@ export default function Leaderboard() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [leaderboardResult, baseResult, flags] = await Promise.all([
-          getTripLeaderboard(),
-          getTripBasePoints(),
+        const [leaderboardResult, rosterResult, flags, updatedResult] = await Promise.all([
+          fetchLeaderboardCR2025(),
+          fetchRosterCR2025(),
           fetchDisplayFlags(),
+          lastUpdatedCR2025(),
         ]);
+
         setLeaderboardData(computeRankedRows(leaderboardResult.data));
 
-        const rgCounts = (baseResult.data ?? []).reduce<Record<string, { total: number; research: number }>>((acc, row) => {
+        const rosterMap = (rosterResult.data ?? []).reduce<Record<string, string>>((acc, row: TripRosterEntry) => {
           const key = row.user_login.toLowerCase();
-          if (!key) return acc;
-          const bucket = acc[key] ?? { total: 0, research: 0 };
-          bucket.total += 1;
-          if ((row.quality_grade ?? '').toLowerCase() === 'research') {
-            bucket.research += 1;
+          if (key) {
+            acc[key] = row.display_name ?? row.user_login;
           }
-          acc[key] = bucket;
           return acc;
         }, {});
+        setDisplayNameMap(rosterMap);
 
-        const rgPercentages = Object.entries(rgCounts).reduce<Record<string, number>>((acc, [key, value]) => {
-          if (value.total > 0) {
-            acc[key] = Math.round((value.research / value.total) * 100);
-          }
-          return acc;
-        }, {});
-        setRgByLogin(rgPercentages);
+        const warningsList: string[] = [];
+        if (leaderboardResult.missing) warningsList.push('Leaderboard view is unavailable.');
+        if (rosterResult.missing) warningsList.push('Roster view is unavailable; display names limited.');
+        if (updatedResult.missing) warningsList.push('Latest observation time fallback in use.');
+        setWarnings(warningsList);
 
         const errors: string[] = [];
         if (leaderboardResult.error?.message) errors.push(leaderboardResult.error.message);
-        if (baseResult.error?.message) errors.push(baseResult.error.message);
+        if (rosterResult.error?.message) errors.push(rosterResult.error.message);
+        if (updatedResult.error?.message) errors.push(updatedResult.error.message);
         setError(errors.length ? { message: errors.join('; ') } : null);
 
-        if (!leaderboardResult.error) {
-          setLastUpdated(new Date());
+        if (updatedResult.data) {
+          const updatedDate = new Date(updatedResult.data);
+          if (!Number.isNaN(updatedDate.valueOf())) {
+            setLastUpdated(updatedDate);
+          }
         }
-        // Check if blackout is active
+
         if (flags.score_blackout_until) {
           setIsBlackout(new Date() < new Date(flags.score_blackout_until));
         }
@@ -181,7 +186,7 @@ export default function Leaderboard() {
   const rows = leaderboardData;
   const topLeaders = rows
     .slice(0, 3)
-    .map(row => row.display_name || row.user_login)
+    .map((row) => row.user_login)
     .filter((name): name is string => Boolean(name));
 
   return (
@@ -232,6 +237,18 @@ export default function Leaderboard() {
                 </p>
               </div>
             )}
+            {warnings.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {warnings.map((message) => (
+                  <div
+                    key={message}
+                    className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md"
+                  >
+                    {message}
+                  </div>
+                ))}
+              </div>
+            )}
             {!rows || rows.length === 0 ? (
               <div className="text-center py-12 bg-muted/30 rounded-lg">
                 <p className="text-lg font-semibold text-muted-foreground mb-2">
@@ -249,19 +266,23 @@ export default function Leaderboard() {
                   const score = row.total_points;
                   const totalObservations = row.obs_count;
                   const speciesCount = row.distinct_taxa;
-                  const displayName = row.display_name || row.user_login;
                   const rowKey = row.user_login;
                   const hasIndicator = !isBlackout && row.rankIndicator !== '—' && row.rankDelta != null && row.rankDelta !== 0;
-                  const rgKey = row.user_login.toLowerCase();
-                  const rgPercent = rgByLogin[rgKey];
-                  const checkCount = typeof rgPercent === 'number' ? Math.min(5, Math.max(0, Math.round(rgPercent / 20))) : 0;
-                  const checkMarks = checkCount > 0 ? '✅'.repeat(checkCount) : '';
+                  const rgPercent = row.obs_count > 0
+                    ? Math.round((row.research_grade_count / Math.max(row.obs_count, 1)) * 100)
+                    : 0;
+                  const canonicalDisplayName = displayNameMap[row.user_login.toLowerCase()] ?? row.display_name ?? '';
+                  const showSecondaryName = Boolean(canonicalDisplayName) && canonicalDisplayName.toLowerCase() !== row.user_login.toLowerCase();
+                  const tooltip = showSecondaryName
+                    ? `${canonicalDisplayName} (${row.user_login})`
+                    : row.user_login;
 
                   return (
                     <div
                       key={rowKey}
                       className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
                       onClick={() => navigate(`/user/${row.user_login}`)}
+                      title={tooltip}
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
@@ -289,21 +310,60 @@ export default function Leaderboard() {
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <div className="font-semibold text-lg">{displayName}</div>
+                          <div className="font-semibold text-lg text-foreground">{row.user_login}</div>
+                          {showSecondaryName && (
+                            <div className="text-xs text-muted-foreground">{canonicalDisplayName}</div>
+                          )}
                           <div className="flex gap-2 flex-wrap text-sm">
-                            <span className="chip chip--info">🔍 {totalObservations}</span>
-                            <span className="chip chip--info">🌿 {speciesCount}</span>
-                            {totalObservations > 0 && typeof rgPercent === 'number' && (
-                              <span className="chip chip--muted">
-                                RG {rgPercent}%{checkMarks ? ` ${checkMarks}` : ''}
-                              </span>
-                            )}
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span className="chip chip--info" aria-label="Observations">
+                                  🔍 {totalObservations}
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent className="max-w-xs text-sm" align="start">
+                                <div className="font-medium">Observations</div>
+                                <p className="text-xs text-muted-foreground">
+                                  Every observation counts for 1 point. Adults can also award extra bonus points.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span className="chip chip--info" aria-label="Species">
+                                  🌿 {speciesCount}
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent className="max-w-xs text-sm" align="start">
+                                <div className="font-medium">Species</div>
+                                <p className="text-xs text-muted-foreground">
+                                  Species totals break ties between players with the same points.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span className="chip chip--muted" aria-label="Research grade percentage">
+                                  RG {totalObservations > 0 ? `${rgPercent}%` : '—'}
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent className="max-w-xs text-sm" align="start">
+                                <div className="font-medium">Research Grade</div>
+                                <p className="text-xs text-muted-foreground">
+                                  Each research-grade observation adds +1 bonus point to the total.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-end gap-1">
                         <div className="text-2xl font-bold text-primary">
                           {formatPoints(score)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {row.obs_count} + {row.research_grade_count}{' '}
+                          {row.bonus_points >= 0 ? `+ ${row.bonus_points}` : `- ${Math.abs(row.bonus_points)}`}
                         </div>
                       </div>
                     </div>

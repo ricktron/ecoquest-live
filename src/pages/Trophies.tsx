@@ -4,21 +4,61 @@ import { FLAGS } from '@/env';
 import { Crown } from 'lucide-react';
 import TrophyDetail from './TrophyDetail';
 import {
-  getTripTrophiesToday,
-  getTripTrophiesCumulative,
-  getTripRoster,
+  fetchTodayTrophiesCR2025,
+  fetchTripTrophiesCR2025,
+  fetchRosterCR2025,
   getTripParams,
   type TripTrophyAward,
 } from '@/lib/api';
 
-const TROPHY_META = {
-  daily_obs_leader: { title: 'Most Observations', icon: '🔍', valueLabel: 'observations' },
-  daily_variety_hero: { title: 'Most Species', icon: '🌿', valueLabel: 'species' },
-} as const;
+type TrophyDefinition = {
+  title: string;
+  icon: string;
+  valueLabel?: string;
+  category: 'core' | 'taxa';
+};
 
-type TrophyId = keyof typeof TROPHY_META;
+const TROPHY_DEFINITIONS: Record<string, TrophyDefinition> = {
+  daily_obs_leader: { title: 'Most Observations', icon: '🔍', valueLabel: 'observations', category: 'core' },
+  daily_variety_hero: { title: 'Most Species', icon: '🌿', valueLabel: 'species', category: 'core' },
+  taxa_birds_champion: { title: 'Bird Specialist', icon: '🪶', valueLabel: 'birds observed', category: 'taxa' },
+  taxa_insect_champion: { title: 'Insect Investigator', icon: '🪲', valueLabel: 'insects observed', category: 'taxa' },
+  taxa_mammal_champion: { title: 'Mammal Tracker', icon: '🐾', valueLabel: 'mammals observed', category: 'taxa' },
+  taxa_plant_champion: { title: 'Plant Whisperer', icon: '🌺', valueLabel: 'plants observed', category: 'taxa' },
+  taxa_amphibian_champion: { title: 'Amphibian Aficionado', icon: '🐸', valueLabel: 'amphibians observed', category: 'taxa' },
+};
 
-type TodayGroups = Record<TrophyId, TripTrophyAward[]>;
+const DEFAULT_TROPHY_DEFINITION: TrophyDefinition = {
+  title: 'Special Award',
+  icon: '🏆',
+  category: 'taxa',
+};
+
+const CORE_TROPHY_IDS = Object.keys(TROPHY_DEFINITIONS).filter(
+  (id) => TROPHY_DEFINITIONS[id]?.category === 'core',
+);
+
+function getTrophyDefinition(id: string): TrophyDefinition {
+  if (TROPHY_DEFINITIONS[id]) return TROPHY_DEFINITIONS[id];
+  const title = id
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+  return { ...DEFAULT_TROPHY_DEFINITION, title };
+}
+
+function sortTrophyIds(ids: string[]): string[] {
+  return [...ids].sort((a, b) => {
+    const defA = getTrophyDefinition(a);
+    const defB = getTrophyDefinition(b);
+    if (defA.category !== defB.category) {
+      return defA.category === 'core' ? -1 : 1;
+    }
+    return defA.title.localeCompare(defB.title);
+  });
+}
+
+type TodayGroups = Record<string, TripTrophyAward[]>;
 
 type TripWinner = {
   user_login: string;
@@ -27,7 +67,7 @@ type TripWinner = {
   lastAwardedAt: string | null;
 };
 
-type TripGroups = Record<TrophyId, TripWinner[]>;
+type TripGroups = Record<string, TripWinner[]>;
 
 export default function Trophies() {
   const { slug } = useParams<{ slug?: string }>();
@@ -39,6 +79,9 @@ export default function Trophies() {
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [tz, setTz] = useState<string>('UTC');
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [availableTrophyIds, setAvailableTrophyIds] = useState<string[]>([]);
+  const [awardedTrophyIds, setAwardedTrophyIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (slug) return; // Detail view handles its own data
@@ -50,7 +93,7 @@ export default function Trophies() {
       try {
         const [paramsRes, rosterRes] = await Promise.all([
           getTripParams(),
-          getTripRoster(),
+          fetchRosterCR2025(),
         ]);
 
         if (cancelled) return;
@@ -59,8 +102,8 @@ export default function Trophies() {
         setTz(tzValue);
 
         const [todayRes, tripRes] = await Promise.all([
-          getTripTrophiesToday(tzValue),
-          getTripTrophiesCumulative(),
+          fetchTodayTrophiesCR2025(tzValue),
+          fetchTripTrophiesCR2025(),
         ]);
 
         if (cancelled) return;
@@ -75,7 +118,7 @@ export default function Trophies() {
         setNameMap(rosterMap);
 
         const groupedToday = (todayRes.data ?? []).reduce<TodayGroups>((acc, award) => {
-          const id = award.trophy_id as TrophyId;
+          const id = award.trophy_id;
           if (!acc[id]) acc[id] = [];
           acc[id].push(award);
           return acc;
@@ -84,9 +127,9 @@ export default function Trophies() {
 
         type MutableWinner = TripWinner & { hasValue: boolean };
 
-        const tripAggregate = (tripRes.data ?? []).reduce<Map<TrophyId, Map<string, MutableWinner>>>(
+        const tripAggregate = (tripRes.data ?? []).reduce<Map<string, Map<string, MutableWinner>>>(
           (acc, award) => {
-            const trophyId = award.trophy_id as TrophyId;
+            const trophyId = award.trophy_id;
             const login = award.user_login;
             if (!acc.has(trophyId)) {
               acc.set(trophyId, new Map());
@@ -125,12 +168,34 @@ export default function Trophies() {
 
         setTripGroups(tripGrouped);
 
+        const seenIds = new Set<string>();
+        (todayRes.data ?? []).forEach((award) => {
+          if (award?.trophy_id) seenIds.add(award.trophy_id);
+        });
+        (tripRes.data ?? []).forEach((award) => {
+          if (award?.trophy_id) seenIds.add(award.trophy_id);
+        });
+
+        const activeSet = new Set<string>(CORE_TROPHY_IDS);
+        seenIds.forEach((id) => activeSet.add(id));
+        setAvailableTrophyIds(Array.from(activeSet));
+        setAwardedTrophyIds(Array.from(seenIds));
+
         const errors: string[] = [];
         if (paramsRes.error?.message) errors.push(paramsRes.error.message);
         if (rosterRes.error?.message) errors.push(rosterRes.error.message);
         if (todayRes.error?.message) errors.push(todayRes.error.message);
         if (tripRes.error?.message) errors.push(tripRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
+
+        const warningList: string[] = [];
+        if (rosterRes.missing) warningList.push('Roster view is unavailable; display names limited.');
+        if (todayRes.missing && tripRes.missing) {
+          warningList.push('Trophy view is unavailable.');
+        } else if (todayRes.missing || tripRes.missing) {
+          warningList.push('Some trophy data views are unavailable.');
+        }
+        setWarnings(warningList);
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to load trophies', err);
@@ -150,7 +215,19 @@ export default function Trophies() {
 
   const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
 
-  const sortedTrophyIds = Object.keys(TROPHY_META) as TrophyId[];
+  const awardedSet = new Set(awardedTrophyIds);
+  const activeIds = sortTrophyIds(
+    availableTrophyIds.length > 0 ? availableTrophyIds : CORE_TROPHY_IDS,
+  );
+  const allPossibleIds = sortTrophyIds(
+    Array.from(
+      new Set<string>([
+        ...Object.keys(TROPHY_DEFINITIONS),
+        ...availableTrophyIds,
+        ...awardedTrophyIds,
+      ]),
+    ),
+  );
 
   if (slug) {
     return <TrophyDetail />;
@@ -217,10 +294,22 @@ export default function Trophies() {
                 Trophy data error: {error}
               </div>
             )}
+            {warnings.length > 0 && (
+              <div className="space-y-2">
+                {warnings.map((message) => (
+                  <div
+                    key={message}
+                    className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md"
+                  >
+                    {message}
+                  </div>
+                ))}
+              </div>
+            )}
             {mode === 'today' ? (
               <div className="grid gap-4 md:grid-cols-2">
-                {sortedTrophyIds.map((id) => {
-                  const meta = TROPHY_META[id];
+                {activeIds.map((id) => {
+                  const meta = getTrophyDefinition(id);
                   const winners = todayGroups[id] ?? [];
                   return (
                     <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
@@ -232,17 +321,23 @@ export default function Trophies() {
                         <div className="text-sm text-muted-foreground">No winners recorded today.</div>
                       ) : (
                         <div className="space-y-3">
-                          {winners.map((winner, index) => (
-                            <div key={`${winner.user_login}-${index}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
-                              <div className="text-base font-medium">{getDisplayName(winner.user_login)}</div>
-                              <div className="text-xs text-muted-foreground">{winner.user_login}</div>
+                          {winners.map((winner, index) => {
+                            const prettyName = getDisplayName(winner.user_login);
+                            const showSecondary = prettyName.toLowerCase() !== winner.user_login.toLowerCase();
+                            return (
+                              <div key={`${winner.user_login}-${index}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                                <div className="text-base font-medium">{winner.user_login}</div>
+                                {showSecondary && (
+                                  <div className="text-xs text-muted-foreground">{prettyName}</div>
+                                )}
                               {winner.value != null && (
                                 <div className="text-xs text-muted-foreground capitalize">
                                   {meta.valueLabel ?? 'Value'}: {winner.value}
                                 </div>
                               )}
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -251,8 +346,8 @@ export default function Trophies() {
               </div>
             ) : (
               <div className="space-y-4">
-                {sortedTrophyIds.map((id) => {
-                  const meta = TROPHY_META[id];
+                {activeIds.map((id) => {
+                  const meta = getTrophyDefinition(id);
                   const winners = tripGroups[id] ?? [];
                   const sortedWinners = [...winners].sort((a, b) => {
                     const countDiff = b.count - a.count;
@@ -273,10 +368,15 @@ export default function Trophies() {
                         <div className="text-sm text-muted-foreground">No winners yet.</div>
                       ) : (
                         <div className="space-y-2">
-                          {sortedWinners.map((winner) => (
-                            <div key={winner.user_login} className="rounded-lg border border-border bg-background p-3 space-y-1">
-                              <div className="text-base font-medium">{getDisplayName(winner.user_login)}</div>
-                              <div className="text-xs text-muted-foreground">{winner.user_login}</div>
+                          {sortedWinners.map((winner) => {
+                            const prettyName = getDisplayName(winner.user_login);
+                            const showSecondary = prettyName.toLowerCase() !== winner.user_login.toLowerCase();
+                            return (
+                              <div key={winner.user_login} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                                <div className="text-base font-medium">{winner.user_login}</div>
+                                {showSecondary && (
+                                  <div className="text-xs text-muted-foreground">{prettyName}</div>
+                                )}
                               <div className="text-xs text-muted-foreground">Wins: {winner.count}</div>
                               {winner.totalValue != null && meta.valueLabel && (
                                 <div className="text-xs text-muted-foreground capitalize">
@@ -288,8 +388,9 @@ export default function Trophies() {
                                   Last awarded: {new Date(winner.lastAwardedAt).toLocaleString('en-US', { timeZone: tz })}
                                 </div>
                               )}
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -297,6 +398,37 @@ export default function Trophies() {
                 })}
               </div>
             )}
+
+            <div className="pt-4 space-y-3">
+              <h2 className="text-lg font-semibold">All possible trophies</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {allPossibleIds.map((id) => {
+                  const meta = getTrophyDefinition(id);
+                  const isAwarded = awardedSet.has(id);
+                  return (
+                    <div
+                      key={id}
+                      className={`rounded-xl border border-border p-4 ${
+                        isAwarded ? 'bg-card' : 'bg-muted/40 opacity-75'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold flex items-center gap-2">
+                          <span>{meta.icon}</span>
+                          {meta.title}
+                        </div>
+                        {!isAwarded && <span className="text-xs text-muted-foreground">Coming soon</span>}
+                      </div>
+                      {meta.valueLabel && (
+                        <div className="text-xs text-muted-foreground mt-2 capitalize">
+                          Tracks {meta.valueLabel}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
       </div>

@@ -326,6 +326,23 @@ html, body, #root {
   padding: 0 24px;
 }
 
+.ticker-marquee {
+  display: inline-flex;
+  will-change: transform;
+  animation-name: ticker-loop;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes ticker-loop {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 /* Trophy card styles */
 .trophy-card {
   position: relative;
