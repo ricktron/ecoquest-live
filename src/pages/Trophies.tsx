@@ -120,7 +120,11 @@ export default function Trophies() {
 
         if (cancelled) return;
 
-        const rosterMap = (rosterRes.data ?? []).reduce<Record<string, string>>((acc, row) => {
+        const rosterEntries = (rosterRes.data ?? []).map((row) => ({
+          ...row,
+          is_adult: Boolean(row.is_adult),
+        }));
+        const rosterMap = rosterEntries.reduce<Record<string, string>>((acc, row) => {
           const key = row.user_login.toLowerCase();
           if (key) {
             acc[key] = row.display_name ?? row.user_login;

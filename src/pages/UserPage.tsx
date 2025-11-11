@@ -114,7 +114,11 @@ export default function UserPage() {
         );
         setUserRow(leaderboardMatch ?? null);
 
-        const rosterMatch = (rosterRes.data ?? []).find(
+        const rosterEntries = (rosterRes.data ?? []).map((row) => ({
+          ...row,
+          is_adult: Boolean(row.is_adult),
+        })) as TripRosterEntry[];
+        const rosterMatch = rosterEntries.find(
           (row: TripRosterEntry) => row.user_login.toLowerCase() === loginKey,
         );
         setDisplayName(rosterMatch?.display_name ?? null);

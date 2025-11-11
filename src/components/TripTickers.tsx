@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react';
 
 type TickerItem = string | { text: string; href?: string; icon?: React.ReactNode };
 
@@ -10,7 +10,7 @@ type TickerProps = {
 };
 
 function renderItem(item: TickerItem, idx: number) {
-  if (typeof item === "string") return <span key={idx} className="mx-6 whitespace-nowrap">{item}</span>;
+  if (typeof item === 'string') return <span key={idx} className="mx-6 whitespace-nowrap">{item}</span>;
   const content = (
     <span className="inline-flex items-center gap-2 mx-6 whitespace-nowrap">
       {item.icon ?? null}
@@ -24,7 +24,7 @@ function renderItem(item: TickerItem, idx: number) {
   );
 }
 
-const TickerBase: React.FC<TickerProps> = ({ items = [], ariaLabel = "ticker", pauseOnHover = true, className = "" }) => {
+const TickerBase: React.FC<TickerProps> = ({ items = [], ariaLabel = 'ticker', pauseOnHover = true, className = '' }) => {
   // Simple empty state: render nothing if no items
   if (!items || items.length === 0) return null;
 
@@ -33,7 +33,7 @@ const TickerBase: React.FC<TickerProps> = ({ items = [], ariaLabel = "ticker", p
       aria-label={ariaLabel}
       className={`relative w-full overflow-hidden border-t border-b border-neutral-800 bg-neutral-950/60 ${className}`}
     >
-      <div className={`flex animate-marquee will-change-transform ${pauseOnHover ? "hover:[animation-play-state:paused]" : ""}`}>
+      <div className={`flex animate-marquee will-change-transform ${pauseOnHover ? 'hover:[animation-play-state:paused]' : ''}`}>
         {/* first loop */}
         <div className="flex shrink-0 py-2">
           {items.map(renderItem)}
@@ -62,7 +62,7 @@ const TripTickers: React.FC<{
   news?: TickerItem[];
   info?: TickerItem[];
   className?: string;
-}> = ({ news = [], info = [], className = "" }) => {
+}> = ({ news = [], info = [], className = '' }) => {
   return (
     <div className={className}>
       <TripNewsTicker items={news} />
