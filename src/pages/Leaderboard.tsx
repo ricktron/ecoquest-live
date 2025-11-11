@@ -119,13 +119,13 @@ export default function Leaderboard() {
                       onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
                     >
                       <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <div className="text-2xl font-bold text-muted-foreground w-8">
                             #{row.rank ?? idx + 1}
                           </div>
-                          {!isBlackout && (
-                            <span className="text-muted-foreground" title="No rank change data">
-                              {trendSymbol}
+                          {!isBlackout && typeof row.prev_rank === 'number' && row.prev_rank !== (row.rank ?? idx + 1) && (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground" aria-label="rank change">
+                              {row.prev_rank > (row.rank ?? idx + 1) ? '▲' : '▼'} {Math.abs(row.prev_rank - (row.rank ?? idx + 1))}
                             </span>
                           )}
                         </div>

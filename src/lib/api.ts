@@ -4,6 +4,7 @@ export type LeaderRow = {
   user_login: string;
   display_name?: string | null;
   rank: number | null;
+  prev_rank?: number | null;
   rank_delta?: number | null;
   obs_count: number | null;
   distinct_taxa?: number | null;
