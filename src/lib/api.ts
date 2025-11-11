@@ -2,18 +2,23 @@ import { supabase } from './supabaseClient';
 
 export type LeaderRow = {
   user_login: string;
+  inat_login?: string | null;
   display_name?: string | null;
   rank: number | null;
   prev_rank?: number | null;
   rank_delta?: number | null;
-  obs_count: number | null;
+  total_points?: number | null;
+  total_obs?: number | null;
+  obs_count?: number | null;
+  unique_species?: number | null;
   distinct_taxa?: number | null;
-  bingo_points: number | null;
+  bingo_points?: number | null;
   score?: number | null;
   total_score?: number | null;
   score_total?: number | null;
   manual_points?: number | null;
   trophy_points?: number | null;
+  scored_on?: string | null;
 };
 
 export async function fetchHeaderTexts() {
@@ -23,58 +28,87 @@ export async function fetchHeaderTexts() {
   return { ticker: row.ticker_text || 'EcoQuest Live — ready to play', announce: row.announcement_text || undefined };
 }
 
+type MaskedLeaderboardRow = {
+  rank: number | null;
+  inat_login: string | null;
+  total_points: number | null;
+  total_obs: number | null;
+  unique_species: number | null;
+  scored_on: string | null;
+};
+
 export async function fetchLeaderboard() {
-  // 1) Bronze RPC (rank + bingo + manual)
-  let rows: any[] | null = null;
+  let rows: LeaderRow[] | null = null;
   let lastError: any = null;
 
-  const r1 = await supabase().rpc('get_leaderboard_bronze_v1', {}); // {} is required
-  if (!r1.error && r1.data?.length) {
-    rows = r1.data;
-  } else {
-    lastError = r1.error ?? lastError;
-    console.warn('bronze rpc failed/empty', r1.error);
-  }
+  const masked = await supabase()
+    .from('public_leaderboard_masked_v1')
+    .select('rank, inat_login, total_points, total_obs, unique_species, scored_on')
+    .order('rank', { ascending: true });
 
-  // 2) Minimal view fallback (guaranteed to exist)
-  if (!rows) {
-    const v = await supabase()
-      .from('leaderboard_overall_latest_v1')
-      .select('user_login, obs_count, distinct_taxa, first_observed_at, last_observed_at');
-    if (!v.error && v.data?.length) {
-      rows = v.data.map((x: any, i: number) => ({
-        user_login: x.user_login,
-        rank: i + 1,
-        obs_count: x.obs_count,
-        distinct_taxa: x.distinct_taxa,
+  if (!masked.error && masked.data) {
+    rows = masked.data.map((row: MaskedLeaderboardRow) => {
+      const login = row.inat_login ?? '';
+      return {
+        user_login: login,
+        inat_login: row.inat_login,
+        rank: row.rank,
+        total_points: row.total_points ?? 0,
+        total_obs: row.total_obs ?? 0,
+        obs_count: row.total_obs ?? 0,
+        unique_species: row.unique_species ?? 0,
+        distinct_taxa: row.unique_species ?? 0,
+        scored_on: row.scored_on,
         bingo_points: 0,
         manual_points: 0,
-        trophy_points: 0
-      }));
-    } else {
-      lastError = v.error ?? lastError;
-      console.error('minimal view fallback error', v.error);
-    }
+        trophy_points: 0,
+      } satisfies LeaderRow;
+    });
+  } else if (masked.error) {
+    lastError = masked.error;
+    console.error('masked leaderboard view error', masked.error);
   }
 
-  // 3) Fetch trophy points and merge
-  if (rows) {
-    const { data: trophyData } = await supabase()
-      .from('score_entries_trophies_latest_v1' as any)
-      .select('user_login, points');
-    
-    if (trophyData) {
-      const trophyMap = new Map(trophyData.map((t: any) => [t.user_login, t.points]));
-      rows.forEach(row => {
-        row.trophy_points = trophyMap.get(row.user_login) ?? 0;
+  const bronze = await supabase().rpc('get_leaderboard_bronze_v1', {}); // {} is required
+
+  if (!bronze.error && bronze.data?.length) {
+    const bronzeMap = new Map(bronze.data.map((row: any) => [row.user_login, row]));
+    if (rows) {
+      rows = rows.map(row => {
+        const extra = bronzeMap.get(row.user_login);
+        if (!extra) return row;
+        return {
+          ...row,
+          display_name: extra.display_name ?? row.display_name,
+          prev_rank: extra.prev_rank ?? row.prev_rank,
+          rank_delta: extra.rank_delta ?? row.rank_delta,
+          bingo_points: extra.bingo_points ?? row.bingo_points,
+          manual_points: extra.manual_points ?? row.manual_points,
+          trophy_points: extra.trophy_points ?? row.trophy_points,
+          score: extra.score ?? row.score,
+          total_score: extra.total_score ?? row.total_score,
+          score_total: extra.score_total ?? row.score_total,
+        } satisfies LeaderRow;
       });
+    } else {
+      rows = bronze.data as LeaderRow[];
     }
+  } else if (bronze.error) {
+    if (!rows?.length) {
+      lastError = lastError ?? bronze.error;
+    }
+    console.warn('bronze rpc failed/empty', bronze.error);
   }
 
-  if (!rows) return { data: [], error: lastError ?? new Error('No rows from RPC or view') };
-  // Always sort by rank, fallback to obs_count
-  rows.sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999) || (b.obs_count ?? 0) - (a.obs_count ?? 0));
-  return { data: rows, error: null };
+  if (!rows) return { data: [], error: lastError ?? new Error('No rows from view or RPC') };
+
+  rows.sort(
+    (a, b) =>
+      (a.rank ?? 9999) - (b.rank ?? 9999) ||
+      (b.total_points ?? b.score ?? 0) - (a.total_points ?? a.score ?? 0)
+  );
+
+  return { data: rows, error: lastError };
 }
 
 export async function pingBronze() {

@@ -51,6 +51,10 @@ export default function Leaderboard() {
   }, []);
 
   const rows = leaderboardData;
+  const topLeaders = rows
+    .slice(0, 3)
+    .map(row => row.inat_login ?? row.user_login)
+    .filter((name): name is string => Boolean(name));
 
   return (
     <div className="pb-6 pb-safe-bottom">
@@ -64,6 +68,11 @@ export default function Leaderboard() {
           {isBlackout && (
             <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
               <p className="text-sm text-primary font-medium">🔒 Final reveal after blackout.</p>
+            </div>
+          )}
+          {!loading && topLeaders.length > 0 && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700 font-medium">
+              🏅 leaders: {topLeaders.join(', ')}
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
@@ -110,13 +119,17 @@ export default function Leaderboard() {
               <div className="space-y-3">
                 {rows.map((row, idx) => {
                   const trendSymbol = '–';
-                  const score = row.obs_count ?? 0;
-                  
+                  const score = row.total_points ?? row.score ?? 0;
+                  const totalObservations = row.total_obs ?? row.obs_count ?? 0;
+                  const speciesCount = row.unique_species ?? row.distinct_taxa ?? 0;
+                  const profileSlug = row.display_name || row.user_login || row.inat_login;
+                  const rowKey = row.user_login || row.inat_login || `row-${idx}`;
+
                   return (
                     <div
-                      key={row.user_login}
+                      key={rowKey}
                       className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
-                      onClick={() => row.display_name && navigate(`/user/${row.display_name}`)}
+                      onClick={() => profileSlug && navigate(`/user/${profileSlug}`)}
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
@@ -130,43 +143,43 @@ export default function Leaderboard() {
                           )}
                         </div>
                         <div className="space-y-1">
-                          <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
+                          <div className="font-semibold text-lg">{row.display_name || row.user_login || row.inat_login}</div>
                           <div className="flex gap-2 flex-wrap">
                             <div className="relative">
-                              <button 
-                                className="chip chip--info" 
-                                aria-haspopup="dialog" 
+                              <button
+                                className="chip chip--info"
+                                aria-haspopup="dialog"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenChip(openChip === 'obs' ? null : 'obs');
                                 }}
                               >
-                                🔍 {row.obs_count ?? 0}
+                                🔍 {totalObservations}
                               </button>
                               {openChip === 'obs' && (
-                                <div className="chip-pop">Observations (headline score)</div>
+                                <div className="chip-pop">Total observations (count)</div>
                               )}
                             </div>
                             {!isBlackout && (
                               <>
                                 <div className="relative">
                                   <button 
-                                    className="chip chip--info" 
-                                    aria-haspopup="dialog" 
+                                    className="chip chip--info"
+                                    aria-haspopup="dialog"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setOpenChip(openChip === 'taxa' ? null : 'taxa');
                                     }}
                                   >
-                                    🌿 {row.distinct_taxa ?? 0}
+                                    🌿 {speciesCount}
                                   </button>
                                   {openChip === 'taxa' && (
-                                    <div className="chip-pop">Distinct taxa (info)</div>
+                                    <div className="chip-pop">Unique species (info)</div>
                                   )}
                                 </div>
                                 {(row.bingo_points ?? 0) > 0 && (
                                   <div className="relative">
-                                    <button 
+                                    <button
                                       className="chip chip--bingo" 
                                       aria-haspopup="dialog"
                                       onClick={(e) => {
