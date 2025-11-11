@@ -4,104 +4,115 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Info, Clock } from 'lucide-react';
 import { formatPoints } from '@/lib/scoring';
 import Legend from '@/components/Legend';
-import { fetchLeaderboardTrip, fetchDisplayFlags, type LeaderRow } from '@/lib/api';
+import { fetchTripLeaderboard, fetchDisplayFlags, type TripLeaderboardRow } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { isLive } from '@/lib/config/profile';
+
+type RankedLeaderboardRow = TripLeaderboardRow & {
+  rank: number;
+  rankDelta: number | null;
+  rankIndicator: '▲' | '▼' | '—';
+};
+
+type RankSnapshot = Record<string, { rank: number; ts: number }>;
+
+const RANK_STORAGE_KEY = 'rankDeltas:CR2025';
+const RANK_STALE_WINDOW_MS = 60 * 60 * 1000;
 
 export default function Leaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
+  const [leaderboardData, setLeaderboardData] = useState<RankedLeaderboardRow[]>([]);
   const [error, setError] = useState<{ message?: string } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [openChip, setOpenChip] = useState<string | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
 
-  type SnapshotStore = {
-    bucket: number;
-    rows: Record<string, number>;
-    prev?: { bucket: number; rows: Record<string, number> };
-  };
+  const computeRankedRows = (rows: TripLeaderboardRow[]): RankedLeaderboardRow[] => {
+    const sorted = [...rows]
+      .sort((a, b) => {
+        const pointDiff = b.total_points - a.total_points;
+        if (pointDiff !== 0) return pointDiff;
+        const taxaDiff = b.distinct_taxa - a.distinct_taxa;
+        if (taxaDiff !== 0) return taxaDiff;
+        const obsDiff = b.obs_count - a.obs_count;
+        if (obsDiff !== 0) return obsDiff;
+        return a.user_login.localeCompare(b.user_login);
+      })
+      .map((row, idx) => ({
+        ...row,
+        rank: idx + 1,
+        rankDelta: null,
+        rankIndicator: '—' as const,
+      }));
 
-  const annotateRankChanges = (rows: LeaderRow[]): LeaderRow[] => {
-    if (typeof window === 'undefined') return rows;
+    if (typeof window === 'undefined') {
+      return sorted;
+    }
 
-    const bucket = Math.floor(Date.now() / 600000);
-    const storageKey = 'eql-leaderboard-snapshot';
-    let parsed: SnapshotStore | null = null;
-
+    let snapshot: RankSnapshot = {};
     try {
-      const raw = window.localStorage.getItem(storageKey);
+      const raw = window.localStorage.getItem(RANK_STORAGE_KEY);
       if (raw) {
-        parsed = JSON.parse(raw) as SnapshotStore;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          snapshot = parsed as RankSnapshot;
+        }
       }
     } catch (err) {
-      console.warn('leaderboard snapshot parse error', err);
+      console.warn('rank snapshot parse error', err);
     }
 
-    let baseline: Record<string, number> | null = null;
-    if (parsed) {
-      if (parsed.bucket === bucket) {
-        baseline = parsed.prev?.rows ?? null;
-      } else {
-        baseline = parsed.rows ?? null;
-      }
-    }
+    const now = Date.now();
 
-    const withDelta = rows.map((row, index) => {
-      const login = (row.user_login || row.inat_login || '').toLowerCase();
-      const rank = row.rank ?? index + 1;
+    const annotated = sorted.map((row) => {
+      const key = row.user_login.toLowerCase();
+      const prev = snapshot[key];
       let rankDelta: number | null = null;
-      if (login && baseline && typeof baseline[login] === 'number') {
-        rankDelta = baseline[login] - rank;
+      let rankIndicator: '▲' | '▼' | '—' = '—';
+
+      if (prev && typeof prev.rank === 'number') {
+        rankDelta = prev.rank - row.rank;
+        const isFresh = typeof prev.ts === 'number' && now - prev.ts <= RANK_STALE_WINDOW_MS;
+        if (isFresh) {
+          if (row.rank < prev.rank) {
+            rankIndicator = '▲';
+          } else if (row.rank > prev.rank) {
+            rankIndicator = '▼';
+          }
+        }
       }
-      return {
-        ...row,
-        rank,
-        rankDelta,
-        rank_delta: rankDelta,
-      };
+
+      return { ...row, rankDelta, rankIndicator };
     });
 
-    const snapshot: SnapshotStore = {
-      bucket,
-      rows: withDelta.reduce<Record<string, number>>((acc, row) => {
-        const login = (row.user_login || row.inat_login || '').toLowerCase();
-        if (login) {
-          acc[login] = row.rank ?? 0;
-        }
-        return acc;
-      }, {}),
-    };
-
-    if (parsed) {
-      if (parsed.bucket === bucket && parsed.prev) {
-        snapshot.prev = parsed.prev;
-      } else if (parsed.bucket !== bucket) {
-        snapshot.prev = { bucket: parsed.bucket, rows: parsed.rows };
+    const nextSnapshot = annotated.reduce<RankSnapshot>((acc, row) => {
+      const key = row.user_login.toLowerCase();
+      if (key) {
+        acc[key] = { rank: row.rank, ts: now };
       }
-    }
+      return acc;
+    }, {});
 
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+      window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(nextSnapshot));
     } catch (err) {
-      console.warn('leaderboard snapshot store error', err);
+      console.warn('rank snapshot store error', err);
     }
 
-    return withDelta;
+    return annotated;
   };
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [result, flags] = await Promise.all([
-          fetchLeaderboardTrip(),
+        const [leaderboardResult, flags] = await Promise.all([
+          fetchTripLeaderboard(),
           fetchDisplayFlags()
         ]);
-        setLeaderboardData(annotateRankChanges(result.data));
-        setError(result.error);
-        if (!result.error) {
+        setLeaderboardData(computeRankedRows(leaderboardResult.data));
+        setError(leaderboardResult.error ? { message: leaderboardResult.error.message } : null);
+        if (!leaderboardResult.error) {
           setLastUpdated(new Date());
         }
         // Check if blackout is active
@@ -126,7 +137,7 @@ export default function Leaderboard() {
   const rows = leaderboardData;
   const topLeaders = rows
     .slice(0, 3)
-    .map(row => row.inat_login ?? row.user_login)
+    .map(row => row.display_name || row.user_login)
     .filter((name): name is string => Boolean(name));
 
   return (
@@ -190,128 +201,50 @@ export default function Leaderboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {rows.map((row, idx) => {
-                  const trendSymbol = '–';
-                  const score = row.total_points ?? row.score ?? 0;
-                  const totalObservations = row.total_obs ?? row.obs_count ?? 0;
-                  const speciesCount = row.unique_species ?? row.distinct_taxa ?? 0;
-                  const profileSlug = row.display_name || row.user_login || row.inat_login;
-                  const rowKey = row.user_login || row.inat_login || `row-${idx}`;
+                {rows.map((row) => {
+                  const score = row.total_points;
+                  const totalObservations = row.obs_count;
+                  const speciesCount = row.distinct_taxa;
+                  const displayName = row.display_name || row.user_login;
+                  const rowKey = row.user_login;
+                  const hasIndicator = !isBlackout && row.rankIndicator !== '—' && row.rankDelta != null && row.rankDelta !== 0;
 
                   return (
                     <div
                       key={rowKey}
                       className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
-                      onClick={() => profileSlug && navigate(`/user/${profileSlug}`)}
+                      onClick={() => navigate(`/user/${row.user_login}`)}
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="text-2xl font-bold text-muted-foreground w-8">
-                            #{row.rank ?? idx + 1}
+                          <div className="text-2xl font-bold text-muted-foreground">
+                            #{row.rank}
                           </div>
-                          {!isBlackout && typeof row.rankDelta === 'number' && row.rankDelta !== 0 && (
-                            <span
-                              className={`rank-change text-xs font-medium ${row.rankDelta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}
-                              aria-label="rank change"
-                            >
-                              <span>{row.rankDelta > 0 ? '▲' : '▼'}</span>
-                              <span>{Math.abs(row.rankDelta)}</span>
-                            </span>
-                          )}
-                          {!isBlackout && typeof row.rankDelta === 'number' && row.rankDelta === 0 && (
-                            <span className="rank-change text-xs text-muted-foreground" aria-label="no rank change">
-                              <span>–</span>
-                            </span>
-                          )}
+                          <span
+                            className={`rank-change text-xs font-medium ${
+                              hasIndicator
+                                ? row.rankIndicator === '▲'
+                                  ? 'text-emerald-600'
+                                  : 'text-rose-600'
+                                : 'text-muted-foreground'
+                            }`}
+                            aria-label="rank change"
+                          >
+                            {hasIndicator ? (
+                              <>
+                                <span>{row.rankIndicator}</span>
+                                <span>{Math.abs(row.rankDelta ?? 0)}</span>
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </span>
                         </div>
                         <div className="space-y-1">
-                          <div className="font-semibold text-lg">{row.display_name || row.user_login || row.inat_login}</div>
-                          <div className="flex gap-2 flex-wrap">
-                            <div className="relative">
-                              <button
-                                className="chip chip--info"
-                                aria-haspopup="dialog"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenChip(openChip === 'obs' ? null : 'obs');
-                                }}
-                              >
-                                🔍 {totalObservations}
-                              </button>
-                              {openChip === 'obs' && (
-                                <div className="chip-pop">Total observations (count)</div>
-                              )}
-                            </div>
-                            {!isBlackout && (
-                              <>
-                                <div className="relative">
-                                  <button 
-                                    className="chip chip--info"
-                                    aria-haspopup="dialog"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenChip(openChip === 'taxa' ? null : 'taxa');
-                                    }}
-                                  >
-                                    🌿 {speciesCount}
-                                  </button>
-                                  {openChip === 'taxa' && (
-                                    <div className="chip-pop">Unique species (info)</div>
-                                  )}
-                                </div>
-                                {(row.bingo_points ?? 0) > 0 && (
-                                  <div className="relative">
-                                    <button
-                                      className="chip chip--bingo" 
-                                      aria-haspopup="dialog"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setOpenChip(openChip === 'bingo' ? null : 'bingo');
-                                      }}
-                                    >
-                                      🎯 {row.bingo_points}
-                                    </button>
-                                    {openChip === 'bingo' && (
-                                      <div className="chip-pop">Bingo points (tie-breaker)</div>
-                                    )}
-                                  </div>
-                                )}
-                                {Number(row.manual_points ?? 0) !== 0 && (
-                                  <div className="relative">
-                                    <button 
-                                      className="chip chip--bonus" 
-                                      aria-haspopup="dialog"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setOpenChip(openChip === 'manual' ? null : 'manual');
-                                      }}
-                                    >
-                                      ⭐ {row.manual_points}
-                                    </button>
-                                    {openChip === 'manual' && (
-                                      <div className="chip-pop">Manual points (admin; tie-breaker)</div>
-                                    )}
-                                  </div>
-                                )}
-                                {(row.trophy_points ?? 0) > 0 && (
-                                  <div className="relative">
-                                    <button 
-                                      className="chip chip--trophy" 
-                                      aria-haspopup="dialog"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setOpenChip(openChip === 'trophy' ? null : 'trophy');
-                                      }}
-                                    >
-                                      🏆 +{row.trophy_points}
-                                    </button>
-                                    {openChip === 'trophy' && (
-                                      <div className="chip-pop">Points from trophies this trip</div>
-                                    )}
-                                  </div>
-                                )}
-                              </>
-                            )}
+                          <div className="font-semibold text-lg">{displayName}</div>
+                          <div className="flex gap-2 flex-wrap text-sm">
+                            <span className="chip chip--info">🔍 {totalObservations}</span>
+                            <span className="chip chip--info">🌿 {speciesCount}</span>
                           </div>
                         </div>
                       </div>

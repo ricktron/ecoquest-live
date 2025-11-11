@@ -5,16 +5,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { fetchTripMapPoints } from '@/lib/api';
+import { fetchTripMapPoints, getTripLeaderboardNameMap } from '@/lib/api';
 
 type MapObservation = {
   inat_obs_id: number;
   user_login: string;
   latitude: number;
   longitude: number;
-  taxon_name: string | null;
-  observed_at_utc: string | null;
-  photo_url?: string | null;
 };
 
 // Helper component to invalidate map size when container changes
@@ -52,18 +49,23 @@ export default function Map() {
   const [bbox, setBbox] = useState<{ swlat: number; swlng: number; nelat: number; nelng: number } | null>(null);
   const [observations, setObservations] = useState<MapObservation[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [nameMap, setNameMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function loadMapData() {
       setDataLoading(true);
       try {
-        const result = await fetchTripMapPoints();
+        const [result, displayMap] = await Promise.all([
+          fetchTripMapPoints(),
+          getTripLeaderboardNameMap(),
+        ]);
         const points = result.data ?? [];
 
         if (result.error) {
           console.warn('trip map points error', result.error);
         }
 
+        setNameMap(displayMap);
         setObservations(points);
 
         if (points.length > 0) {
@@ -89,6 +91,8 @@ export default function Map() {
 
     loadMapData();
   }, []);
+
+  const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
 
   return (
     <div className="pb-6">
@@ -122,45 +126,41 @@ export default function Map() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {observations
-                .map((obs) => (
-                  <CircleMarker
-                    key={obs.inat_obs_id}
-                    center={[Number(obs.latitude), Number(obs.longitude)]}
-                    radius={6}
-                    fillColor="#22c55e"
-                    color="#fff"
-                    weight={2}
-                    fillOpacity={0.7}
-                  >
+              {observations.map((obs) => (
+                <CircleMarker
+                  key={obs.inat_obs_id}
+                  center={[Number(obs.latitude), Number(obs.longitude)]}
+                  radius={6}
+                  fillColor="#22c55e"
+                  color="#fff"
+                  weight={2}
+                  fillOpacity={0.7}
+                >
                   <Popup>
-                      <div className="text-sm space-y-1">
-                        <div className="font-semibold">{obs.taxon_name || 'Unknown'}</div>
-                        <div className="text-muted-foreground">by {obs.user_login}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {obs.observed_at_utc ? new Date(obs.observed_at_utc).toLocaleString() : 'Unknown date'}
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(`https://www.inaturalist.org/observations/${obs.inat_obs_id}`, '_blank')}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            iNat
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/obs/${obs.inat_obs_id}`)}
-                          >
-                            Details
-                          </Button>
-                        </div>
+                    <div className="text-sm space-y-1">
+                      <div className="font-semibold">{getDisplayName(obs.user_login)}</div>
+                      <div className="text-xs text-muted-foreground">{obs.user_login}</div>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(`https://www.inaturalist.org/observations/${obs.inat_obs_id}`, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          iNat
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/obs/${obs.inat_obs_id}`)}
+                        >
+                          Details
+                        </Button>
                       </div>
-                    </Popup>
-                  </CircleMarker>
-                ))}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
             </MapContainer>
           </div>
         )}

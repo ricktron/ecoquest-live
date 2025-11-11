@@ -1,428 +1,355 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAppState } from '@/lib/state';
-import { getActiveTrip } from '@/trips';
-import { TROPHIES } from '@/trophies';
+import {
+  fetchTripLeaderboard,
+  fetchTripDailySummary,
+  fetchTripTrophiesAllDays,
+  fetchTripMapPoints,
+  fetchTripDailyDetail,
+  type TripLeaderboardRow,
+  type TripDailySummaryRow,
+  type TripDailyDetailRow,
+  type TripTrophyRow,
+  type TripMapPointRow,
+} from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CheckCircle2, XCircle, AlertCircle, ChevronDown } from 'lucide-react';
-import { ENV, FLAGS } from '@/env';
-import { fetchMembers, fetchTrophyPoints } from '@/lib/api';
-import { PROFILE } from '@/lib/config/profile';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-type SelfCheckResult = {
-  name: string;
-  status: 'pass' | 'warn' | 'fail';
-  message: string;
+const TROPHY_LABELS: Record<string, string> = {
+  daily_obs_leader: 'Most Observations',
+  daily_variety_hero: 'Most Species',
 };
 
-function runSelfCheck(observations: any[]): SelfCheckResult[] {
-  const trip = getActiveTrip();
-  const results: SelfCheckResult[] = [];
-
-  // ENV present
-  results.push({
-    name: 'Environment Config',
-    status: trip ? 'pass' : 'fail',
-    message: trip ? `Active profile: ${trip.id}` : 'No trip profile loaded',
-  });
-
-  // Profile selected
-  results.push({
-    name: 'Trip Profile',
-    status: trip.id ? 'pass' : 'fail',
-    message: trip.id ? `${trip.title} (${trip.timezone})` : 'No profile selected',
-  });
-
-  // Members count
-  results.push({
-    name: 'Member Logins',
-    status: trip.memberLogins.length > 0 ? 'pass' : 'warn',
-    message: trip.memberLogins.length > 0 
-      ? `${trip.memberLogins.length} members configured` 
-      : 'No members (showing all users)',
-  });
-
-  // Day ranges valid
-  const hasValidRanges = trip.dayRanges.length > 0 && trip.dayRanges.every(r => r.start && r.end);
-  results.push({
-    name: 'Day Ranges',
-    status: hasValidRanges ? 'pass' : 'fail',
-    message: hasValidRanges 
-      ? `${trip.dayRanges.length} range(s): ${trip.dayRanges[0].start} to ${trip.dayRanges[trip.dayRanges.length - 1].end}`
-      : 'Invalid day ranges',
-  });
-
-  // Trophy slugs map to routes
-  const trophySlugs = Object.keys(TROPHIES);
-  results.push({
-    name: 'Trophy Registry',
-    status: trophySlugs.length > 0 ? 'pass' : 'fail',
-    message: `${trophySlugs.length} trophies registered`,
-  });
-
-  // Post-filter counts
-  results.push({
-    name: 'Filtered Observations',
-    status: observations.length >= 0 ? 'pass' : 'warn',
-    message: `${observations.length} observations after filters`,
-  });
-
-  // Trend baseline
-  results.push({
-    name: 'Trend Data',
-    status: 'pass',
-    message: 'Baseline computed (graceful fallback to "—" if missing)',
-  });
-
-  return results;
+function formatDisplayDate(key: string): string {
+  const date = new Date(`${key}T12:00:00-06:00`);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Costa_Rica',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(date);
 }
 
-type LiveTripConfig = {
-  tripId: string;
-  title: string;
-  tz: string;
-  members: string[];
-  d1: string;
-  d2: string;
+function getCostaRicaDateKey(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Costa_Rica',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+type DetailState = {
+  rows: TripDailyDetailRow[];
+  loading: boolean;
+  error: string | null;
 };
 
 export default function Debug() {
-  const { loading, observations, aggregated, lastInatSync, initialize } = useAppState();
-  const trip = getActiveTrip();
-  const [liveTripConfig, setLiveTripConfig] = useState<LiveTripConfig | null>(null);
-  const [trophyPoints, setTrophyPoints] = useState<Array<{ user_login: string; points: number }>>([]);
-  const [totalObs, setTotalObs] = useState<number>(0);
-  const [uniqueSpecies, setUniqueSpecies] = useState<number>(0);
-  const [students, setStudents] = useState<string[]>([]);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [perDayCounts, setPerDayCounts] = useState<Array<{ day: string; obs: number; species: number; people: number }>>([]);
-  const [sampleObs, setSampleObs] = useState<Array<{ inat_obs_id: number; taxon_name: string | null; user_login: string; observed_on: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [leaderboard, setLeaderboard] = useState<TripLeaderboardRow[]>([]);
+  const [dailySummary, setDailySummary] = useState<TripDailySummaryRow[]>([]);
+  const [trophies, setTrophies] = useState<TripTrophyRow[]>([]);
+  const [mapPoints, setMapPoints] = useState<TripMapPointRow[]>([]);
+  const [dailyDetail, setDailyDetail] = useState<Record<string, DetailState>>({});
+  const [selectedDay, setSelectedDay] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    initialize();
-    
-    // Fetch trophy points
-    fetchTrophyPoints().then(points => {
-      setTrophyPoints(points);
-    });
-    
-    // Fetch all data in parallel
+    let cancelled = false;
+
     (async () => {
-      const [membersRes, latestRes, dailyRes, headRes, samplesRes, cfgRes] = await Promise.all([
-        supabase.from('trip_members_v' as any).select('user_login'),
-        supabase.from('latest_run_v' as any).select('run_id,awarded_at').maybeSingle(),
-        supabase.from('daily_latest_run_v' as any).select('day,obs,species,people').order('day', { ascending: false }),
-        supabase.from('debug_observations_latest_run_v' as any).select('*', { count: 'exact', head: true }),
-        supabase.from('debug_observations_latest_run_v' as any)
-          .select('inat_obs_id,taxon_name,user_login,observed_on')
-          .order('observed_on', { ascending: false, nullsFirst: true })
-          .limit(5),
-        supabase.from('config_filters' as any).select('mode,d1,d2,flags').eq('id', true).single(),
-      ]);
-      
-      const memberLogins = (membersRes.data ?? []).map((m: any) => m.user_login).sort();
-      const totalObsCount = headRes?.count ?? 0;
-      setTotalObs(totalObsCount);
-      
-      const uniqueSpeciesHead = await supabase
-        .from('debug_observations_latest_run_v' as any)
-        .select('taxon_id', { count: 'exact', head: true });
-      setUniqueSpecies(uniqueSpeciesHead?.count ?? 0);
-      
-      const cfg = cfgRes.data as any;
-      const latest = latestRes.data as any;
-      const daily = dailyRes.data as any;
-      const samples = samplesRes.data as any;
-      const tz = ((cfg?.flags ?? {}) as any).tz ?? 'America/Costa_Rica';
-      
-      setStudents(memberLogins);
-      
-      if (cfg) {
-        const flags = (cfg?.flags ?? {}) as any;
-        const tripId = cfg?.mode === 'TRIP' ? 'LIVE' : 'DEMO';
-        const title = cfg?.mode === 'TRIP' ? 'Trip Mode' : 'Demo Mode';
-        
-        setLiveTripConfig({
-          tripId,
-          title,
-          tz,
-          members: memberLogins,
-          d1: cfg?.d1,
-          d2: cfg?.d2
-        });
-      }
-      
-      if (latest?.awarded_at) {
-        setLastSync(new Date(latest.awarded_at).toLocaleString('en-US', { timeZone: tz }));
-      } else {
-        setLastSync(null);
-      }
-      
-      if (daily) {
-        setPerDayCounts(daily);
-      }
-      
-      if (samples) {
-        setSampleObs(samples);
+      setLoading(true);
+      try {
+        const [leaderboardRes, dailyRes, trophiesRes, mapRes] = await Promise.all([
+          fetchTripLeaderboard(),
+          fetchTripDailySummary(),
+          fetchTripTrophiesAllDays(),
+          fetchTripMapPoints(),
+        ]);
+
+        if (cancelled) return;
+
+        setLeaderboard(leaderboardRes.data ?? []);
+        setDailySummary(dailyRes.data ?? []);
+        setTrophies(trophiesRes.data ?? []);
+        setMapPoints(mapRes.data ?? []);
+        setSelectedDay((prev) => prev || dailyRes.data?.[0]?.day_local || '');
+
+        const errors: string[] = [];
+        if (leaderboardRes.error?.message) errors.push(leaderboardRes.error.message);
+        if (dailyRes.error?.message) errors.push(dailyRes.error.message);
+        if (trophiesRes.error?.message) errors.push(trophiesRes.error.message);
+        if (mapRes.error?.message) errors.push(mapRes.error.message);
+        setError(errors.length ? errors.join('; ') : null);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load debug data', err);
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const selfCheck = useMemo(() => runSelfCheck(observations), [observations]);
+  const detailState = selectedDay ? dailyDetail[selectedDay] : undefined;
 
-  const dataPreview = useMemo(() => {
-    const uniqueSpecies = new Set(observations.map(o => o.taxonId).filter(Boolean)).size;
-    const uniqueUsers = new Set(observations.map(o => o.userLogin)).size;
-    return { total: observations.length, uniqueSpecies, uniqueUsers };
-  }, [observations]);
+  useEffect(() => {
+    if (!selectedDay) return;
+    const current = dailyDetail[selectedDay];
+    if (current && (current.loading || current.rows.length > 0 || current.error)) {
+      return;
+    }
 
+    let cancelled = false;
+    setDailyDetail((prev) => ({
+      ...prev,
+      [selectedDay]: { loading: true, rows: [], error: null },
+    }));
 
-  const setProfile = (p: 'LIVE' | 'TEST') => {
-    localStorage.setItem('eql:profile', p);
-    window.location.reload();
-  };
+    (async () => {
+      try {
+        const detailRes = await fetchTripDailyDetail(selectedDay);
+        if (cancelled) return;
+        setDailyDetail((prev) => ({
+          ...prev,
+          [selectedDay]: {
+            loading: false,
+            rows: detailRes.data ?? [],
+            error: detailRes.error?.message ?? null,
+          },
+        }));
+      } catch (err) {
+        if (!cancelled) {
+          setDailyDetail((prev) => ({
+            ...prev,
+            [selectedDay]: {
+              loading: false,
+              rows: [],
+              error: err instanceof Error ? err.message : String(err),
+            },
+          }));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDay, dailyDetail]);
+
+  const totalPoints = useMemo(
+    () => leaderboard.reduce((acc, row) => acc + (row.total_points ?? 0), 0),
+    [leaderboard],
+  );
+
+  const totalObservations = useMemo(
+    () => leaderboard.reduce((acc, row) => acc + (row.obs_count ?? 0), 0),
+    [leaderboard],
+  );
+
+  const totalSpecies = useMemo(
+    () => leaderboard.reduce((acc, row) => acc + (row.distinct_taxa ?? 0), 0),
+    [leaderboard],
+  );
+
+  const trophiesByDate = useMemo(() => {
+    const map = new Map<string, TripTrophyRow[]>();
+    trophies
+      .filter((row) => row.place === 1)
+      .forEach((row) => {
+        const key = getCostaRicaDateKey(row.awarded_at);
+        if (!key) return;
+        const list = map.get(key) ?? [];
+        list.push(row);
+        map.set(key, list);
+      });
+    return map;
+  }, [trophies]);
+
+  const days = useMemo(() => dailySummary.map((row) => row.day_local), [dailySummary]);
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
-        <h1 className="text-3xl font-bold">Debug Info</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Debug Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Live data pulled from the same trip views powering the app tabs.
+          </p>
+        </div>
 
-        {/* Profile Config */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Environment Config</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Active Profile</p>
-                <p className="text-lg font-bold font-mono">{PROFILE}</p>
-              </div>
-              {liveTripConfig && (
-                <div className="col-span-2">
-                  <p className="text-sm text-muted-foreground">Trip Window (from config_filters)</p>
-                  <p className="text-sm font-mono">
-                    {new Date(liveTripConfig.d1).toLocaleDateString()} → {new Date(liveTripConfig.d2).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="border-t pt-3">
-              <p className="text-sm text-muted-foreground mb-2">Developer Toggle</p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant={PROFILE === 'LIVE' ? 'default' : 'outline'}
-                  onClick={() => setProfile('LIVE')}
-                >
-                  Switch to LIVE
-                </Button>
-                <Button
-                  size="sm"
-                  variant={PROFILE === 'TEST' ? 'default' : 'outline'}
-                  onClick={() => setProfile('TEST')}
-                >
-                  Switch to TEST
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Self-Check */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Self-Check</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {selfCheck.map((check, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                {check.status === 'pass' && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                {check.status === 'warn' && <AlertCircle className="h-5 w-5 text-yellow-600" />}
-                {check.status === 'fail' && <XCircle className="h-5 w-5 text-red-600" />}
-                <div className="flex-1">
-                  <div className="font-semibold text-sm">{check.name}</div>
-                  <div className="text-xs text-muted-foreground">{check.message}</div>
-                </div>
-              </div>
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-32 w-full" />
             ))}
-          </CardContent>
-        </Card>
-
-        {/* Trip Config */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Trip Configuration</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {liveTripConfig ? (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Trip ID</p>
-                    <p className="text-lg font-bold font-mono">{liveTripConfig.tripId}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Title</p>
-                    <p className="text-lg font-bold">{liveTripConfig.title}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Timezone</p>
-                    <p className="text-lg font-mono">{liveTripConfig.tz}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm text-muted-foreground mb-1">Members</p>
-                    {liveTripConfig.members.length > 0 ? (
-                      <details className="text-sm">
-                        <summary className="cursor-pointer text-foreground hover:text-primary font-medium">
-                          {liveTripConfig.members.length} members configured
-                        </summary>
-                        <ul className="mt-2 ml-4 space-y-1 list-disc">
-                          {liveTripConfig.members.map(login => (
-                            <li key={login} className="text-muted-foreground">{login}</li>
-                          ))}
-                        </ul>
-                      </details>
-                    ) : (
-                      <p className="text-lg font-bold">All users</p>
-                    )}
-                  </div>
-                </div>
-                <div className="border-t pt-3">
-                  <p className="text-sm text-muted-foreground mb-2">Day Ranges</p>
-                  <div className="text-xs font-mono bg-muted/50 p-2 rounded">
-                    {liveTripConfig.d1} to {liveTripConfig.d2}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <Skeleton className="h-32 w-full" />
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                {error}
+              </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Data Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loading ? (
-              <Skeleton className="h-20 w-full" />
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Observations</p>
-                    <p className="text-2xl font-bold">{totalObs}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm text-muted-foreground">Members</p>
-                    <p className="text-2xl font-bold">{students.length}</p>
-                    {students.length > 0 && (
-                      <details className="text-sm mt-2">
-                        <summary className="cursor-pointer text-muted-foreground hover:text-primary">
-                          Show all members
-                        </summary>
-                        <div className="mt-2 text-xs font-mono text-muted-foreground">
-                          {students.join(', ')}
-                        </div>
-                      </details>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Unique Species</p>
-                    <p className="text-2xl font-bold">{uniqueSpecies}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Last Sync</p>
-                    <p className="text-sm font-mono">
-                      {lastSync || 'No scoring runs yet'}
-                    </p>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Leaderboard Snapshot</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  {leaderboard.length} participants · {totalObservations} observations · {totalSpecies} species · {totalPoints}{' '}
+                  total points
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-muted-foreground">
+                        <th className="py-2 pr-3 font-medium">Participant</th>
+                        <th className="py-2 pr-3 font-medium">Points</th>
+                        <th className="py-2 pr-3 font-medium">Observations</th>
+                        <th className="py-2 pr-3 font-medium">Species</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((row) => (
+                        <tr key={row.user_login} className="border-t">
+                          <td className="py-2 pr-3 font-medium">{row.display_name || row.user_login}</td>
+                          <td className="py-2 pr-3">{row.total_points}</td>
+                          <td className="py-2 pr-3">{row.obs_count}</td>
+                          <td className="py-2 pr-3">{row.distinct_taxa}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle>Daily Summary</CardTitle>
+                <Select value={selectedDay} onValueChange={setSelectedDay} disabled={days.length === 0}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Select day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {days.map((day) => (
+                      <SelectItem key={day} value={day}>
+                        {formatDisplayDate(day)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-muted-foreground">
+                        <th className="py-2 pr-3 font-medium">Date</th>
+                        <th className="py-2 pr-3 font-medium">Observations</th>
+                        <th className="py-2 pr-3 font-medium">Species</th>
+                        <th className="py-2 pr-3 font-medium">People</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailySummary.map((row) => (
+                        <tr key={row.day_local} className="border-t">
+                          <td className="py-2 pr-3 font-medium">{formatDisplayDate(row.day_local)}</td>
+                          <td className="py-2 pr-3">{row.obs_count}</td>
+                          <td className="py-2 pr-3">{row.distinct_taxa}</td>
+                          <td className="py-2 pr-3">{row.people_count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
-                <div className="mt-6 border-t pt-4">
-                  <p className="text-sm font-semibold mb-2">Observations Per Day</p>
-                  <div className="space-y-1">
-                    {perDayCounts.length > 0 ? (
-                      perDayCounts.slice(0, 10).map((d) => (
-                        <div key={d.day} className="text-xs font-mono bg-muted/50 p-2 rounded flex justify-between">
-                          <span>{d.day}</span>
-                          <span className="font-bold">{d.obs} obs • {d.species} spp • {d.people} people</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No daily data yet</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6 border-t pt-4">
-                  <p className="text-sm font-semibold mb-2">Trophy Points (computed)</p>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {trophyPoints.length > 0 ? (
-                      trophyPoints.map(tp => (
-                        <div key={tp.user_login} className="text-xs font-mono bg-muted/50 p-2 rounded flex justify-between">
-                          <span>{tp.user_login}</span>
-                          <span className="font-bold">🏆 {tp.points}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No trophy points data</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6 border-t pt-4">
-                  <p className="text-sm font-semibold mb-2">Sample Observations</p>
+                {selectedDay && (
                   <div className="space-y-2">
-                    {sampleObs.length > 0 ? (
-                      sampleObs.map(o => (
-                        <div key={o.inat_obs_id} className="text-xs font-mono bg-muted/50 p-2 rounded">
-                          {o.inat_obs_id}: {o.taxon_name || 'Unknown'} by {o.user_login} on {o.observed_on}
-                        </div>
-                      ))
+                    <h3 className="text-sm font-semibold">Participants on {formatDisplayDate(selectedDay)}</h3>
+                    {detailState?.loading ? (
+                      <Skeleton className="h-20 w-full" />
+                    ) : detailState?.error ? (
+                      <div className="text-sm text-destructive">{detailState.error}</div>
+                    ) : detailState && detailState.rows.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-muted-foreground">
+                              <th className="py-2 pr-3 font-medium">Participant</th>
+                              <th className="py-2 pr-3 font-medium">Observations</th>
+                              <th className="py-2 pr-3 font-medium">Species</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detailState.rows.map((row) => (
+                              <tr key={row.user_login} className="border-t">
+                                <td className="py-2 pr-3">{row.user_login}</td>
+                                <td className="py-2 pr-3">{row.obs_count}</td>
+                                <td className="py-2 pr-3">{row.distinct_taxa}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">No observations yet</p>
+                      <div className="text-sm text-muted-foreground">No participant records for this day.</div>
                     )}
                   </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Environment Variables */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Environment Variables (Parsed)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-xs font-mono">
-            <div className="grid grid-cols-2 gap-2">
-              <span className="text-muted-foreground">TRIP_PROFILE</span>
-              <span>{trip.id}</span>
-              <span className="text-muted-foreground">TZ</span>
-              <span>{ENV.TZ}</span>
-              <span className="text-muted-foreground">TICKER_SPEED_MS</span>
-              <span>{ENV.TICKER_SPEED_MS}</span>
-              <span className="text-muted-foreground">RARITY_GROUP_WEIGHT</span>
-              <span>{ENV.RARITY_GROUP_WEIGHT}</span>
-              <span className="text-muted-foreground">RARITY_LOCAL_WEIGHT</span>
-              <span>{ENV.RARITY_LOCAL_WEIGHT}</span>
-              <span className="text-muted-foreground">BASELINE_YEARS</span>
-              <span>{ENV.BASELINE_YEARS}</span>
-              <span className="text-muted-foreground">BASELINE_MONTHS</span>
-              <span>{ENV.BASELINE_MONTHS}</span>
-              <span className="text-muted-foreground">ENABLE_COMPARE</span>
-              <span>{FLAGS.ENABLE_COMPARE ? 'true' : 'false'}</span>
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Trophies</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {Array.from(trophiesByDate.entries())
+                  .sort((a, b) => b[0].localeCompare(a[0]))
+                  .map(([dateKey, rows]) => (
+                    <div key={dateKey} className="rounded-lg border border-border bg-background p-4 space-y-2">
+                      <div className="text-sm font-semibold text-muted-foreground">{formatDisplayDate(dateKey)}</div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {rows.map((row, idx) => (
+                          <div key={`${row.trophy_id}-${idx}`} className="rounded-lg border border-border bg-card p-3 space-y-1">
+                            <div className="text-sm font-semibold">
+                              {TROPHY_LABELS[row.trophy_id] ?? row.trophy_id}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{row.user_login}</div>
+                            {row.value != null && (
+                              <div className="text-xs text-muted-foreground">Value: {row.value}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
 
+            <Card>
+              <CardHeader>
+                <CardTitle>Map Points</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                {mapPoints.length} observations with map coordinates.
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );
