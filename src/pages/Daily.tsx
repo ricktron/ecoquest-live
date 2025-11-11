@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ChevronDown } from 'lucide-react';
 import {
-  getTripDailySummary,
+  fetchDailySummaryCR2025,
   getTripBasePoints,
-  getTripRoster,
+  fetchRosterCR2025,
   type TripDailySummaryRow,
 } from '@/lib/api';
 
@@ -39,6 +39,7 @@ export default function Daily() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const currentDetail = useMemo(() => (expandedDay ? details[expandedDay] : undefined), [expandedDay, details]);
 
@@ -49,8 +50,8 @@ export default function Daily() {
       setLoading(true);
       try {
         const [summaryRes, rosterRes] = await Promise.all([
-          getTripDailySummary(),
-          getTripRoster(),
+          fetchDailySummaryCR2025(),
+          fetchRosterCR2025(),
         ]);
 
         if (cancelled) return;
@@ -72,6 +73,11 @@ export default function Daily() {
           return acc;
         }, {});
         setNameMap(rosterMap);
+
+        const warningsList: string[] = [];
+        if (summaryRes.missing) warningsList.push('Daily summary view is unavailable.');
+        if (rosterRes.missing) warningsList.push('Roster view is unavailable; display names limited.');
+        setWarnings(warningsList);
 
         const errors: string[] = [];
         if (summaryRes.error?.message) errors.push(summaryRes.error.message);
@@ -197,6 +203,18 @@ export default function Daily() {
                 Daily data error: {error}
               </div>
             )}
+            {warnings.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {warnings.map((message) => (
+                  <div
+                    key={message}
+                    className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md"
+                  >
+                    {message}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="space-y-3">
               {days.map((day) => {
                 const summary = summaryByDay[day] ?? {
@@ -255,13 +273,22 @@ export default function Daily() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {detailRows.map((row) => (
-                                  <tr key={row.user_login} className="border-t">
-                                    <td className="py-2 pr-4 font-medium">{getDisplayName(row.user_login)}</td>
-                                    <td className="py-2 pr-4">{row.obs_count}</td>
-                                    <td className="py-2 pr-4">{row.distinct_taxa}</td>
-                                  </tr>
-                                ))}
+                                {detailRows.map((row) => {
+                                  const prettyName = getDisplayName(row.user_login);
+                                  const showSecondary = prettyName.toLowerCase() !== row.user_login.toLowerCase();
+                                  return (
+                                    <tr key={row.user_login} className="border-t">
+                                      <td className="py-2 pr-4">
+                                        <div className="font-semibold text-sm text-foreground">{row.user_login}</div>
+                                        {showSecondary && (
+                                          <div className="text-xs text-muted-foreground">{prettyName}</div>
+                                        )}
+                                      </td>
+                                      <td className="py-2 pr-4">{row.obs_count}</td>
+                                      <td className="py-2 pr-4">{row.distinct_taxa}</td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>

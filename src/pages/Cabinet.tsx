@@ -1,17 +1,37 @@
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  getTripRoster,
-  getTripTrophiesCumulative,
+  fetchRosterCR2025,
+  fetchTripTrophiesCR2025,
   getTripParams,
   type TripRosterEntry,
   type TripTrophyAward,
 } from '@/lib/api';
 
-const TROPHY_LABELS: Record<string, { title: string; icon: string; valueLabel?: string }> = {
+type TrophyDefinition = {
+  title: string;
+  icon: string;
+  valueLabel?: string;
+};
+
+const TROPHY_DEFINITIONS: Record<string, TrophyDefinition> = {
   daily_obs_leader: { title: 'Most Observations', icon: '🔍', valueLabel: 'observations' },
   daily_variety_hero: { title: 'Most Species', icon: '🌿', valueLabel: 'species' },
+  taxa_birds_champion: { title: 'Bird Specialist', icon: '🪶', valueLabel: 'birds observed' },
+  taxa_insect_champion: { title: 'Insect Investigator', icon: '🪲', valueLabel: 'insects observed' },
+  taxa_mammal_champion: { title: 'Mammal Tracker', icon: '🐾', valueLabel: 'mammals observed' },
+  taxa_plant_champion: { title: 'Plant Whisperer', icon: '🌺', valueLabel: 'plants observed' },
+  taxa_amphibian_champion: { title: 'Amphibian Aficionado', icon: '🐸', valueLabel: 'amphibians observed' },
 };
+
+function getTrophyDefinition(id: string): TrophyDefinition {
+  if (TROPHY_DEFINITIONS[id]) return TROPHY_DEFINITIONS[id];
+  const title = id
+    .split('_')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+  return { title, icon: '🏆' };
+}
 
 export default function Cabinet() {
   const [participants, setParticipants] = useState<TripRosterEntry[]>([]);
@@ -19,6 +39,7 @@ export default function Cabinet() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tz, setTz] = useState<string>('UTC');
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,8 +48,8 @@ export default function Cabinet() {
       setLoading(true);
       try {
         const [rosterRes, trophiesRes, paramsRes] = await Promise.all([
-          getTripRoster(),
-          getTripTrophiesCumulative(),
+          fetchRosterCR2025(),
+          fetchTripTrophiesCR2025(),
           getTripParams(),
         ]);
 
@@ -60,6 +81,11 @@ export default function Cabinet() {
         if (trophiesRes.error?.message) errors.push(trophiesRes.error.message);
         if (paramsRes.error?.message) errors.push(paramsRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
+
+        const warningList: string[] = [];
+        if (rosterRes.missing) warningList.push('Roster view is unavailable; display names limited.');
+        if (trophiesRes.missing) warningList.push('Trophy view is unavailable.');
+        setWarnings(warningList);
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to load trophy cabinet', err);
@@ -123,6 +149,18 @@ export default function Cabinet() {
                 Trophy cabinet error: {error}
               </div>
             )}
+            {warnings.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {warnings.map((message) => (
+                  <div
+                    key={message}
+                    className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md"
+                  >
+                    {message}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="space-y-6">
               {sortedParticipants.map((participant) => {
                 const login = participant.user_login;
@@ -132,15 +170,17 @@ export default function Cabinet() {
                 return (
                   <div key={login} className="rounded-2xl border border-border bg-card p-5 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                      <div className="text-lg font-semibold">{displayName}</div>
-                      <div className="text-xs text-muted-foreground">{login}</div>
+                      <div className="text-lg font-semibold">{login}</div>
+                      {displayName.toLowerCase() !== login.toLowerCase() && (
+                        <div className="text-xs text-muted-foreground">{displayName}</div>
+                      )}
                     </div>
                     {trophies.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No trophies earned yet.</div>
                     ) : (
                       <div className="space-y-3">
                         {trophies.map((row, idx) => {
-                          const meta = TROPHY_LABELS[row.trophy_id] ?? { title: row.trophy_id, icon: '🏆' };
+                          const meta = getTrophyDefinition(row.trophy_id);
                           return (
                             <div key={`${row.trophy_id}-${idx}`} className="rounded-xl border border-border bg-background p-3 space-y-1">
                               <div className="text-sm font-semibold flex items-center gap-2">

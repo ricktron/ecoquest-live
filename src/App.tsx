@@ -24,6 +24,7 @@ import BingoBoard from './features/bingo/BingoBoard';
 import Cabinet from './pages/Cabinet';
 import { FLAGS } from './env';
 import { fetchHeaderTexts } from './lib/api';
+import { TripNewsTicker, TripInfoTicker } from './components/TripTickers';
 
 export default function App() {
   const [tickerText, setTicker] = useState<string>();
@@ -44,10 +45,12 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <HeaderStack tabs={<TabNav />} tickerText={tickerText} announceText={announceText}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/leaderboard" replace />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/bingo" element={<BingoBoard />} />
+          <>
+            <TripNewsTicker />
+            <Routes>
+              <Route path="/" element={<Navigate to="/leaderboard" replace />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/bingo" element={<BingoBoard />} />
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies" element={<Trophies />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/trophies/:slug" element={<TrophyDetail />} />}
             {FLAGS.TROPHIES_ENABLED && <Route path="/cabinet" element={<Cabinet />} />}
@@ -62,11 +65,13 @@ export default function App() {
             <Route path="/about/scoring" element={<ScoringInfo />} />
             <Route path="/guide" element={<Guide />} />
             {FLAGS.ENABLE_COMPARE && <Route path="/compare" element={<Compare />} />}
-            <Route path="/debug" element={<Debug />} />
-            <Route path="*" element={<Navigate to="/leaderboard" replace />} />
-          </Routes>
+              <Route path="/debug" element={<Debug />} />
+              <Route path="*" element={<Navigate to="/leaderboard" replace />} />
+            </Routes>
+          </>
         </HeaderStack>
         {localStorage.getItem('admin_token') && <ConfigButton />}
+        <TripInfoTicker />
         <BottomNav />
         {import.meta.env.DEV && (
           <div 
