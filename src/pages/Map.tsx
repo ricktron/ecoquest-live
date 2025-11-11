@@ -8,7 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   fetchObsLatest10CR2025,
   fetchObsAllCR2025,
-  fetchRosterCR2025,
+  getRosterCR2025,
   getTripParams,
   type TripLatestObservationRow,
   type TripParams,
@@ -21,6 +21,11 @@ type MapObservation = {
   longitude: number;
   observed_at_utc: string | null;
 };
+
+const TORTUGUERO_BOUNDS: [[number, number], [number, number]] = [
+  [10.3, -83.9],
+  [10.7, -83.4],
+];
 
 // Helper component to invalidate map size when container changes
 function MapInvalidator() {
@@ -79,7 +84,7 @@ export default function Map() {
         const [baseResult, paramsResult, rosterResult, latestResult] = await Promise.all([
           fetchObsAllCR2025(),
           getTripParams(),
-          fetchRosterCR2025(),
+          getRosterCR2025(),
           fetchObsLatest10CR2025(),
         ]);
 
@@ -110,7 +115,7 @@ export default function Map() {
         const rosterMap = (rosterResult.data ?? []).reduce<Record<string, string>>((acc, row) => {
           const key = row.user_login.toLowerCase();
           if (key) {
-            acc[key] = row.display_name ?? row.user_login;
+            acc[key] = row.nameForUi;
           }
           return acc;
         }, {});
@@ -144,7 +149,7 @@ export default function Map() {
   }, []);
 
   const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
-  const latestBounds = latestWindow.length > 0
+  const latestBounds = latestWindow.length >= 10
     ? ([
         [
           Math.min(...latestWindow.map((obs) => Number(obs.latitude))),
@@ -157,12 +162,7 @@ export default function Map() {
       ] as [[number, number], [number, number]])
     : null;
 
-  const fallbackBounds = params
-    ? ([
-        [params.lat_min, params.lon_min] as [number, number],
-        [params.lat_max, params.lon_max] as [number, number],
-      ] as [[number, number], [number, number]])
-    : null;
+  const fallbackBounds = latestBounds ? null : TORTUGUERO_BOUNDS;
 
   const bounds = latestBounds ?? fallbackBounds;
 

@@ -6,7 +6,7 @@ import TrophyDetail from './TrophyDetail';
 import {
   fetchTodayTrophiesCR2025,
   fetchTripTrophiesCR2025,
-  fetchRosterCR2025,
+  getRosterCR2025,
   fetchTrophiesCatalogCR2025,
   getTripParams,
   type TripTrophyAward,
@@ -96,7 +96,7 @@ export default function Trophies() {
       try {
         const [paramsRes, rosterRes, catalogRes] = await Promise.all([
           getTripParams(),
-          fetchRosterCR2025(),
+          getRosterCR2025(),
           fetchTrophiesCatalogCR2025(),
         ]);
 
@@ -120,14 +120,11 @@ export default function Trophies() {
 
         if (cancelled) return;
 
-        const rosterEntries = (rosterRes.data ?? []).map((row) => ({
-          ...row,
-          is_adult: Boolean(row.is_adult),
-        }));
+        const rosterEntries = rosterRes.data ?? [];
         const rosterMap = rosterEntries.reduce<Record<string, string>>((acc, row) => {
           const key = row.user_login.toLowerCase();
           if (key) {
-            acc[key] = row.display_name ?? row.user_login;
+            acc[key] = row.nameForUi;
           }
           return acc;
         }, {});

@@ -6,8 +6,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   fetchUserObsCR2025,
-  fetchLeaderboardCR2025,
-  fetchRosterCR2025,
+  getLeaderboardCR2025,
+  getRosterCR2025,
   type TripUserObservationRow,
   type TripLeaderboardRow,
   type TripRosterEntry,
@@ -99,8 +99,8 @@ export default function UserPage() {
       try {
         const [obsRes, leaderboardRes, rosterRes] = await Promise.all([
           fetchUserObsCR2025(safeLogin),
-          fetchLeaderboardCR2025(),
-          fetchRosterCR2025(),
+          getLeaderboardCR2025(),
+          getRosterCR2025(),
         ]);
 
         if (cancelled) return;
@@ -114,14 +114,12 @@ export default function UserPage() {
         );
         setUserRow(leaderboardMatch ?? null);
 
-        const rosterEntries = (rosterRes.data ?? []).map((row) => ({
-          ...row,
-          is_adult: Boolean(row.is_adult),
-        })) as TripRosterEntry[];
+        const rosterEntries = (rosterRes.data ?? []) as TripRosterEntry[];
         const rosterMatch = rosterEntries.find(
           (row: TripRosterEntry) => row.user_login.toLowerCase() === loginKey,
         );
-        setDisplayName(rosterMatch?.display_name ?? null);
+        const rosterName = rosterMatch?.nameForUi ?? null;
+        setDisplayName(rosterName && rosterName.toLowerCase() !== loginKey ? rosterName : null);
 
         const errors: string[] = [];
         if (obsRes.error?.message) errors.push(obsRes.error.message);
@@ -201,13 +199,19 @@ export default function UserPage() {
   const speciesGroups = useMemo(() => {
     const map = new Map<
       string,
-      { taxonId: number | null; iconic: string | null; items: TripUserObservationRow[] }
+      {
+        taxonId: number | null;
+        commonName: string | null;
+        scientificName: string | null;
+        items: TripUserObservationRow[];
+      }
     >();
     observations.forEach((obs) => {
       const key = obs.taxon_id != null ? obs.taxon_id.toString() : 'unknown';
       const bucket = map.get(key) ?? {
         taxonId: obs.taxon_id != null ? Number(obs.taxon_id) : null,
-        iconic: obs.iconic_taxon_name ?? null,
+        commonName: obs.taxon_common_name ?? null,
+        scientificName: obs.taxon_scientific_name ?? null,
         items: [],
       };
       bucket.items.push(obs);
@@ -222,7 +226,9 @@ export default function UserPage() {
         }
         if (a.taxonId != null) return -1;
         if (b.taxonId != null) return 1;
-        return (a.iconic ?? '').localeCompare(b.iconic ?? '');
+        const nameA = (a.commonName ?? a.scientificName ?? '').toLowerCase();
+        const nameB = (b.commonName ?? b.scientificName ?? '').toLowerCase();
+        return nameA.localeCompare(nameB);
       });
   }, [observations]);
 
@@ -406,10 +412,33 @@ export default function UserPage() {
               {speciesGroups.map((group, index) => (
                 <div key={`${group.taxonId ?? 'unknown'}-${index}`} className="rounded-2xl border border-border bg-card p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border border-border capitalize">
-                        {formatTaxonLabel(group.iconic, group.taxonId)}
-                      </span>
+                    <div className="space-y-1">
+                      {group.commonName ? (
+                        <div className="text-base font-semibold text-foreground">{group.commonName}</div>
+                      ) : null}
+                      <div className="text-xs text-muted-foreground">
+                        {group.commonName ? (
+                          <>
+                            {group.scientificName ? (
+                              <span className="italic">{group.scientificName}</span>
+                            ) : null}
+                            {group.scientificName ? ' • ' : null}
+                            <span>
+                              Taxon #{group.taxonId != null ? group.taxonId : 'pending'}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="italic">
+                              {group.scientificName ?? 'Scientific name pending'}
+                            </span>
+                            {' • '}
+                            <span>
+                              Taxon #{group.taxonId != null ? group.taxonId : 'pending'}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <span className="text-xs text-muted-foreground">{group.items.length} observations</span>
                   </div>

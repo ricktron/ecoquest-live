@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { fetchBingo, fetchLeaderboardCR2025, fetchRosterCR2025, type TripRosterEntry } from '../lib/api';
+import { fetchBingo, getLeaderboardCR2025, getRosterCR2025, type TripRosterEntry } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -153,8 +153,8 @@ export default function Bingo() {
       setParticipantsLoading(true);
       try {
         const [rosterResult, leaderboardResult] = await Promise.all([
-          fetchRosterCR2025(),
-          fetchLeaderboardCR2025(),
+          getRosterCR2025(),
+          getLeaderboardCR2025(),
         ]);
 
         if (!mounted) return;
@@ -162,7 +162,7 @@ export default function Bingo() {
         const options = (rosterResult.data ?? [])
           .map((row: TripRosterEntry) => ({
             login: row.user_login,
-            label: row.display_name || row.user_login,
+            label: row.nameForUi || row.user_login,
           }))
           .sort((a, b) => a.label.localeCompare(b.label));
         setParticipants(options);

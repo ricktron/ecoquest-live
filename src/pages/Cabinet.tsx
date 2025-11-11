@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  fetchRosterCR2025,
+  getRosterCR2025,
   fetchCabinetCR2025,
   fetchTrophiesCatalogCR2025,
   getTripParams,
   type TripCabinetDayGroup,
   type TripTrophyCatalogRow,
-  type TripRosterEntry,
 } from '@/lib/api';
 
 type TrophyDefinition = {
@@ -51,7 +50,7 @@ export default function Cabinet() {
       setLoading(true);
       try {
         const [rosterRes, cabinetRes, catalogRes, paramsRes] = await Promise.all([
-          fetchRosterCR2025(),
+          getRosterCR2025(),
           fetchCabinetCR2025(),
           fetchTrophiesCatalogCR2025(),
           getTripParams(),
@@ -59,10 +58,10 @@ export default function Cabinet() {
 
         if (cancelled) return;
 
-        const rosterMap = (rosterRes.data ?? []).reduce<Record<string, string>>((acc, row: TripRosterEntry) => {
+        const rosterMap = (rosterRes.data ?? []).reduce<Record<string, string>>((acc, row) => {
           const key = row.user_login.toLowerCase();
           if (key) {
-            acc[key] = row.display_name ?? row.user_login;
+            acc[key] = row.nameForUi;
           }
           return acc;
         }, {});
