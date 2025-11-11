@@ -7,11 +7,9 @@ import {
   fetchTodayTrophiesCR2025,
   fetchTripTrophiesCR2025,
   fetchRosterCR2025,
-  fetchTaxaTrophiesTodayCR2025,
   fetchTrophiesCatalogCR2025,
   getTripParams,
   type TripTrophyAward,
-  type TripTaxaTrophyRow,
   type TripTrophyCatalogRow,
 } from '@/lib/api';
 
@@ -79,7 +77,6 @@ export default function Trophies() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<'today' | 'trip'>('today');
   const [todayGroups, setTodayGroups] = useState<TodayGroups>({});
-  const [taxaTodayGroups, setTaxaTodayGroups] = useState<Record<string, TripTaxaTrophyRow[]>>({});
   const [tripGroups, setTripGroups] = useState<TripGroups>({});
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [catalogLabels, setCatalogLabels] = useState<Record<string, string>>({});
@@ -116,10 +113,9 @@ export default function Trophies() {
         }, {});
         setCatalogLabels(catalogMap);
 
-        const [todayRes, tripRes, taxaRes] = await Promise.all([
+        const [todayRes, tripRes] = await Promise.all([
           fetchTodayTrophiesCR2025(tzValue),
           fetchTripTrophiesCR2025(),
-          fetchTaxaTrophiesTodayCR2025(),
         ]);
 
         if (cancelled) return;
@@ -140,14 +136,6 @@ export default function Trophies() {
           return acc;
         }, {} as TodayGroups);
         setTodayGroups(groupedToday);
-
-        const groupedTaxa = (taxaRes.data ?? []).reduce<Record<string, TripTaxaTrophyRow[]>>((acc, award) => {
-          const id = award.trophy_id;
-          if (!acc[id]) acc[id] = [];
-          acc[id].push(award);
-          return acc;
-        }, {});
-        setTaxaTodayGroups(groupedTaxa);
 
         type MutableWinner = TripWinner & { hasValue: boolean };
 
@@ -199,9 +187,6 @@ export default function Trophies() {
         (tripRes.data ?? []).forEach((award) => {
           if (award?.trophy_id) seenIds.add(award.trophy_id);
         });
-        (taxaRes.data ?? []).forEach((award) => {
-          if (award?.trophy_id) seenIds.add(award.trophy_id);
-        });
 
         const activeSet = new Set<string>(CORE_TROPHY_IDS);
         seenIds.forEach((id) => activeSet.add(id));
@@ -214,19 +199,17 @@ export default function Trophies() {
         if (catalogRes.error?.message) errors.push(catalogRes.error.message);
         if (todayRes.error?.message) errors.push(todayRes.error.message);
         if (tripRes.error?.message) errors.push(tripRes.error.message);
-        if (taxaRes.error?.message) errors.push(taxaRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
 
         const warningList: string[] = [];
         if (rosterRes.missing) warningList.push('Roster view is unavailable; display names limited.');
         if (catalogRes.missing) warningList.push('Trophy catalog view is unavailable; labels may be limited.');
-        if (todayRes.missing && tripRes.missing && taxaRes.missing) {
+        if (todayRes.missing && tripRes.missing) {
           warningList.push('Trophy view is unavailable.');
         } else {
           const partialWarnings: string[] = [];
           if (todayRes.missing) partialWarnings.push('daily leaders');
           if (tripRes.missing) partialWarnings.push('trip totals');
-          if (taxaRes.missing) partialWarnings.push('taxa badges');
           if (partialWarnings.length > 0) {
             warningList.push(`Some trophy data views are unavailable (${partialWarnings.join(', ')}).`);
           }
@@ -270,17 +253,19 @@ export default function Trophies() {
     const label = catalogLabels[id];
     return label ? { ...base, title: label } : base;
   };
+  const todayIds = sortTrophyIds(Object.keys(todayGroups));
   const leaderIds = sortTrophyIds(
     Array.from(
       new Set<string>([
         ...CORE_TROPHY_IDS,
-        ...Object.keys(todayGroups).filter((id) => getTrophyDefinition(id).category === 'core'),
+        ...todayIds.filter((id) => getTrophyDefinition(id).category === 'core'),
       ]),
     ),
   );
   const taxaIds = sortTrophyIds(
-    Object.keys(taxaTodayGroups).filter((id) => getTrophyDefinition(id).category !== 'core'),
+    todayIds.filter((id) => getTrophyDefinition(id).category !== 'core'),
   );
+  const hasAnyTodayWinners = Object.values(todayGroups).some((winners) => (winners?.length ?? 0) > 0);
 
   if (slug) {
     return <TrophyDetail />;
@@ -361,6 +346,11 @@ export default function Trophies() {
             )}
             {mode === 'today' ? (
               <div className="space-y-6">
+                {!hasAnyTodayWinners && (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    No trophies yet today.
+                  </div>
+                )}
                 <div className="space-y-3">
                   <h2 className="text-lg font-semibold">Daily Leaders</h2>
                   <div className="grid gap-4 md:grid-cols-2">
@@ -411,7 +401,7 @@ export default function Trophies() {
                     <div className="grid gap-4 md:grid-cols-2">
                       {taxaIds.map((id) => {
                         const meta = getMeta(id);
-                        const winners = taxaTodayGroups[id] ?? [];
+                        const winners = todayGroups[id] ?? [];
                         return (
                           <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
                             <div className="text-sm font-semibold flex items-center gap-2">

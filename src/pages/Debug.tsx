@@ -1,22 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   fetchLeaderboardCR2025,
   fetchDailySummaryCR2025,
   fetchRosterCR2025,
+  fetchObsAllCR2025,
+  fetchObsLatest10CR2025,
+  fetchTodayTrophiesCR2025,
+  fetchTripTrophiesCR2025,
+  fetchCabinetCR2025,
+  submitAdultPoints,
   getTripParams,
   lastUpdatedCR2025,
+  type TripLeaderboardPayload,
   type TripLeaderboardRow,
   type TripDailySummaryRow,
   type TripParams,
   type TripRosterEntry,
 } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const TROPHY_LABELS: Record<string, string> = {
-  daily_obs_leader: 'Most Observations',
-  daily_variety_hero: 'Most Species',
-};
 
 export default function Debug() {
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,22 @@ export default function Debug() {
   const [tz, setTz] = useState<string>('UTC');
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [viewCounts, setViewCounts] = useState({
+    roster: 0,
+    observations: 0,
+    latestWindow: 0,
+    leaderboard: 0,
+    dailySummary: 0,
+    trophiesToday: 0,
+    trophiesTrip: 0,
+    cabinetDays: 0,
+  });
+  const [hasSilver, setHasSilver] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [adultForm, setAdultForm] = useState({ login: '', points: '', reason: '' });
+  const [adultStatus, setAdultStatus] = useState<string | null>(null);
+  const [adultError, setAdultError] = useState<string | null>(null);
+  const adultPointsEnabled = import.meta.env.VITE_FEATURE_ADULT_POINTS === '1';
 
   useEffect(() => {
     let cancelled = false;
@@ -35,12 +54,28 @@ export default function Debug() {
     (async () => {
       setLoading(true);
       try {
-        const [paramsRes, rosterRes, leaderboardRes, dailyRes, updatedRes] = await Promise.all([
+        const [
+          paramsRes,
+          rosterRes,
+          leaderboardRes,
+          dailyRes,
+          updatedRes,
+          obsRes,
+          latestRes,
+          trophiesTodayRes,
+          trophiesTripRes,
+          cabinetRes,
+        ] = await Promise.all([
           getTripParams(),
           fetchRosterCR2025(),
           fetchLeaderboardCR2025(),
           fetchDailySummaryCR2025(),
           lastUpdatedCR2025(),
+          fetchObsAllCR2025(),
+          fetchObsLatest10CR2025(),
+          fetchTodayTrophiesCR2025(),
+          fetchTripTrophiesCR2025(),
+          fetchCabinetCR2025(),
         ]);
 
         if (cancelled) return;
@@ -49,9 +84,26 @@ export default function Debug() {
         setParams(paramsRes.data ?? null);
         setTz(tzValue);
         setRoster(rosterRes.data ?? []);
-        setLeaderboard(leaderboardRes.data ?? []);
+        const leaderboardPayload: TripLeaderboardPayload = leaderboardRes.data ?? {
+          rows: [],
+          hasSilver: false,
+          silverByLogin: {},
+        };
+        setHasSilver(Boolean(leaderboardPayload.hasSilver));
+        setLeaderboard(leaderboardPayload.rows ?? []);
         setDailySummary(dailyRes.data ?? []);
         setLastUpdated(updatedRes.data ?? null);
+
+        setViewCounts({
+          roster: (rosterRes.data ?? []).length,
+          observations: (obsRes.data ?? []).length,
+          latestWindow: (latestRes.data ?? []).length,
+          leaderboard: (leaderboardPayload.rows ?? []).length,
+          dailySummary: (dailyRes.data ?? []).length,
+          trophiesToday: (trophiesTodayRes.data ?? []).length,
+          trophiesTrip: (trophiesTripRes.data ?? []).length,
+          cabinetDays: (cabinetRes.data ?? []).length,
+        });
 
         const errors: string[] = [];
         if (paramsRes.error?.message) errors.push(paramsRes.error.message);
@@ -59,6 +111,11 @@ export default function Debug() {
         if (leaderboardRes.error?.message) errors.push(leaderboardRes.error.message);
         if (dailyRes.error?.message) errors.push(dailyRes.error.message);
         if (updatedRes.error?.message) errors.push(updatedRes.error.message);
+        if (obsRes.error?.message) errors.push(obsRes.error.message);
+        if (latestRes.error?.message) errors.push(latestRes.error.message);
+        if (trophiesTodayRes.error?.message) errors.push(trophiesTodayRes.error.message);
+        if (trophiesTripRes.error?.message) errors.push(trophiesTripRes.error.message);
+        if (cabinetRes.error?.message) errors.push(cabinetRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
 
         const warningList: string[] = [];
@@ -66,6 +123,11 @@ export default function Debug() {
         if (leaderboardRes.missing) warningList.push('Leaderboard view is unavailable.');
         if (dailyRes.missing) warningList.push('Daily summary view is unavailable.');
         if (updatedRes.missing) warningList.push('Latest observation time unavailable; fallback in use.');
+        if (obsRes.missing) warningList.push('Observation base view is unavailable.');
+        if (latestRes.missing) warningList.push('Latest observation window view is unavailable.');
+        if (trophiesTodayRes.missing) warningList.push('Today trophy view is unavailable.');
+        if (trophiesTripRes.missing) warningList.push('Trip trophy view is unavailable.');
+        if (cabinetRes.missing) warningList.push('Cabinet view is unavailable.');
         setWarnings(warningList);
       } catch (err) {
         if (!cancelled) {
@@ -82,7 +144,7 @@ export default function Debug() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
   const participantsCount = useMemo(() => roster.length, [roster]);
 
@@ -130,6 +192,37 @@ export default function Debug() {
     });
   }, [lastUpdated, tz]);
 
+  const handleAdultSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAdultStatus(null);
+    setAdultError(null);
+
+    const login = adultForm.login.trim();
+    const pointsValue = Number.parseInt(adultForm.points, 10);
+    if (!login) {
+      setAdultError('Select a participant.');
+      return;
+    }
+    if (Number.isNaN(pointsValue)) {
+      setAdultError('Points must be an integer.');
+      return;
+    }
+
+    const result = await submitAdultPoints(login, pointsValue, adultForm.reason);
+    if ('missingTable' in result && result.missingTable) {
+      setAdultError('Adult points table is not available yet. Ask the backend team to enable it.');
+      return;
+    }
+    if (!result.ok) {
+      setAdultError(result.error?.message ?? 'Failed to submit adult points.');
+      return;
+    }
+
+    setAdultStatus('Adult points submitted.');
+    setAdultForm({ login: '', points: '', reason: '' });
+    setReloadToken((prev) => prev + 1);
+  };
+
   return (
     <div className="pb-6 pb-safe-bottom">
       <div className="max-w-screen-lg mx-auto px-3 md:px-6 py-6 space-y-6">
@@ -165,6 +258,55 @@ export default function Debug() {
                 ))}
               </div>
             )}
+            <Card>
+              <CardHeader>
+                <CardTitle>View Health</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground space-y-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="flex items-center justify-between">
+                    <span>Roster</span>
+                    <span>{viewCounts.roster}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Observations (base)</span>
+                    <span>{viewCounts.observations}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Latest window</span>
+                    <span>{viewCounts.latestWindow}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Leaderboard rows</span>
+                    <span>{viewCounts.leaderboard}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Daily summary days</span>
+                    <span>{viewCounts.dailySummary}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Trophies today</span>
+                    <span>{viewCounts.trophiesToday}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Trophies trip</span>
+                    <span>{viewCounts.trophiesTrip}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Cabinet days</span>
+                    <span>{viewCounts.cabinetDays}</span>
+                  </div>
+                </div>
+                <div>
+                  Silver scoring view:{' '}
+                  {hasSilver ? (
+                    <span className="text-emerald-600 font-medium">available</span>
+                  ) : (
+                    <span className="text-muted-foreground">not detected (falling back to base totals)</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Trip Parameters</CardTitle>
@@ -326,6 +468,63 @@ export default function Debug() {
                 )}
               </CardContent>
             </Card>
+
+            {adultPointsEnabled && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Adult-awarded Points</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-3" onSubmit={handleAdultSubmit}>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="text-xs font-medium uppercase text-muted-foreground">
+                        Participant
+                        <select
+                          className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                          value={adultForm.login}
+                          onChange={(event) => setAdultForm((prev) => ({ ...prev, login: event.target.value }))}
+                        >
+                          <option value="" disabled>
+                            Select participant
+                          </option>
+                          {roster.map((entry) => (
+                            <option key={entry.user_login} value={entry.user_login}>
+                              {entry.display_name || entry.user_login}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs font-medium uppercase text-muted-foreground">
+                        Points
+                        <input
+                          className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                          type="number"
+                          value={adultForm.points}
+                          onChange={(event) => setAdultForm((prev) => ({ ...prev, points: event.target.value }))}
+                          placeholder="e.g. 5"
+                        />
+                      </label>
+                      <div className="hidden sm:block" />
+                    </div>
+                    <label className="block text-xs font-medium uppercase text-muted-foreground">
+                      Reason
+                      <input
+                        className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                        type="text"
+                        value={adultForm.reason}
+                        onChange={(event) => setAdultForm((prev) => ({ ...prev, reason: event.target.value }))}
+                        placeholder="Teamwork, extra effort, etc."
+                      />
+                    </label>
+                    {adultStatus && <div className="text-xs text-emerald-600">{adultStatus}</div>}
+                    {adultError && <div className="text-xs text-destructive">{adultError}</div>}
+                    <Button type="submit" size="sm">
+                      Submit adult points
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>

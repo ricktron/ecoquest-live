@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import {
-  fetchLatest10CR2025,
+  fetchObsLatest10CR2025,
+  fetchObsAllCR2025,
   fetchRosterCR2025,
-  getTripBasePoints,
   getTripParams,
   type TripLatestObservationRow,
   type TripParams,
@@ -77,10 +77,10 @@ export default function Map() {
       setDataLoading(true);
       try {
         const [baseResult, paramsResult, rosterResult, latestResult] = await Promise.all([
-          getTripBasePoints(),
+          fetchObsAllCR2025(),
           getTripParams(),
           fetchRosterCR2025(),
-          fetchLatest10CR2025(),
+          fetchObsLatest10CR2025(),
         ]);
 
         const filteredBase = (baseResult.data ?? [])

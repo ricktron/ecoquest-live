@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { fetchBingo, fetchRosterCR2025, type TripRosterEntry } from '../lib/api';
+import { fetchBingo, fetchLeaderboardCR2025, fetchRosterCR2025, type TripRosterEntry } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,9 +21,6 @@ type ParticipantOption = {
   login: string;
   label: string;
 };
-
-const ALL_OPTION = '__ALL__';
-const TRIP_SCOPE_LOGIN = 'trip';
 
 const CELL_INFO: Record<string, CellInfo> = {
   'early_bird': {
@@ -121,7 +118,8 @@ const CELL_INFO: Record<string, CellInfo> = {
 export default function Bingo() {
   const [participants, setParticipants] = useState<ParticipantOption[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<string>(ALL_OPTION);
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [defaultUser, setDefaultUser] = useState<string>('');
   const [cells, setCells] = useState<BingoCell[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
@@ -141,7 +139,7 @@ export default function Bingo() {
   const handleUserChange = (value: string) => {
     setSelectedUser(value);
     const params = new URLSearchParams(searchParams);
-    if (value === ALL_OPTION) {
+    if (!value) {
       params.delete('u');
     } else {
       params.set('u', value);
@@ -154,15 +152,30 @@ export default function Bingo() {
     (async () => {
       setParticipantsLoading(true);
       try {
-        const result = await fetchRosterCR2025();
+        const [rosterResult, leaderboardResult] = await Promise.all([
+          fetchRosterCR2025(),
+          fetchLeaderboardCR2025(),
+        ]);
+
         if (!mounted) return;
-        const options = (result.data ?? [])
+
+        const options = (rosterResult.data ?? [])
           .map((row: TripRosterEntry) => ({
             login: row.user_login,
             label: row.display_name || row.user_login,
           }))
           .sort((a, b) => a.label.localeCompare(b.label));
         setParticipants(options);
+
+        const leaderboardRows = leaderboardResult.data?.rows ?? [];
+        const observedSet = new Set(
+          leaderboardRows
+            .filter((row) => row.obs_count > 0)
+            .map((row) => row.user_login.toLowerCase()),
+        );
+        const fallbackLogin = options[0]?.login ?? '';
+        const firstObserved = options.find((option) => observedSet.has(option.login.toLowerCase()))?.login ?? fallbackLogin;
+        setDefaultUser(firstObserved);
       } finally {
         if (mounted) {
           setParticipantsLoading(false);
@@ -178,15 +191,16 @@ export default function Bingo() {
     const matched = participants.find((p) => p.login.toLowerCase() === normalizedParam);
     if (matched) {
       setSelectedUser((prev) => (prev === matched.login ? prev : matched.login));
-    } else {
-      setSelectedUser((prev) => (prev === ALL_OPTION ? prev : ALL_OPTION));
-      if (paramLogin) {
-        const params = new URLSearchParams(searchParams);
-        params.delete('u');
-        setSearchParams(params, { replace: true });
-      }
+      return;
     }
-  }, [participants, paramLogin, searchParams, setSearchParams]);
+
+    if (!defaultUser) return;
+
+    setSelectedUser((prev) => (prev === defaultUser ? prev : defaultUser));
+    const params = new URLSearchParams(searchParams);
+    params.set('u', defaultUser);
+    setSearchParams(params, { replace: true });
+  }, [participants, paramLogin, defaultUser, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -194,8 +208,7 @@ export default function Bingo() {
     setLoading(true);
     setSelectedCell(null);
     (async () => {
-      const targetUser = selectedUser === ALL_OPTION ? TRIP_SCOPE_LOGIN : selectedUser;
-      const data = await fetchBingo(targetUser);
+      const data = await fetchBingo(selectedUser);
       if (!mounted) return;
       setCells(data);
       setLoading(false);
@@ -226,7 +239,6 @@ export default function Bingo() {
               <SelectValue placeholder={participantsLoading ? 'Loading participants…' : 'Select participant'} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL_OPTION}>All / Trip</SelectItem>
               {participants.map((participant) => (
                 <SelectItem key={participant.login} value={participant.login}>
                   {participant.label}
