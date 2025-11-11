@@ -149,7 +149,7 @@ export default function Leaderboard() {
         const warningsList: string[] = [];
         if (leaderboardResult.missing) warningsList.push('Leaderboard view is unavailable.');
         if (rosterResult.missing) warningsList.push('Roster view is unavailable; display names limited.');
-        if (updatedResult.missing) warningsList.push('Latest observation time fallback in use.');
+        if (updatedResult.missing) warningsList.push('Latest observation window unavailable; timestamp hidden.');
         setWarnings(warningsList);
 
         const errors: string[] = [];
@@ -162,7 +162,11 @@ export default function Leaderboard() {
           const updatedDate = new Date(updatedResult.data);
           if (!Number.isNaN(updatedDate.valueOf())) {
             setLastUpdated(updatedDate);
+          } else {
+            setLastUpdated(null);
           }
+        } else {
+          setLastUpdated(null);
         }
 
         if (flags.score_blackout_until) {
@@ -358,13 +362,34 @@ export default function Leaderboard() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <div className="text-2xl font-bold text-primary">
-                          {formatPoints(score)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {row.obs_count} + {row.research_grade_count}{' '}
-                          {row.bonus_points >= 0 ? `+ ${row.bonus_points}` : `- ${Math.abs(row.bonus_points)}`}
-                        </div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 rounded-md px-1 text-right text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              aria-label="Show point breakdown"
+                            >
+                              <span className="text-2xl font-bold leading-none">{formatPoints(score)}</span>
+                              <Info className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-64 text-sm space-y-2">
+                            <div className="font-semibold text-foreground">
+                              Points = Observations + Research Grade + Adult bonus
+                            </div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {row.obs_count} + {row.research_grade_count} + {row.bonus_points} ={' '}
+                              {row.obs_count + row.research_grade_count + row.bonus_points}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <span className="chip chip--info">Obs {row.obs_count}</span>
+                              <span className="chip chip--info">RG {row.research_grade_count}</span>
+                              <span className="chip chip--muted">Bonus {row.bonus_points}</span>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
                   );

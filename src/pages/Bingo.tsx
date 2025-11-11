@@ -20,8 +20,10 @@ type CellInfo = {
 type ParticipantOption = {
   login: string;
   label: string;
-  isAdult: boolean;
 };
+
+const ALL_OPTION = '__ALL__';
+const TRIP_SCOPE_LOGIN = 'trip';
 
 const CELL_INFO: Record<string, CellInfo> = {
   'early_bird': {
@@ -119,7 +121,7 @@ const CELL_INFO: Record<string, CellInfo> = {
 export default function Bingo() {
   const [participants, setParticipants] = useState<ParticipantOption[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<string>(ALL_OPTION);
   const [cells, setCells] = useState<BingoCell[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
@@ -136,6 +138,17 @@ export default function Bingo() {
     };
   };
 
+  const handleUserChange = (value: string) => {
+    setSelectedUser(value);
+    const params = new URLSearchParams(searchParams);
+    if (value === ALL_OPTION) {
+      params.delete('u');
+    } else {
+      params.set('u', value);
+    }
+    setSearchParams(params, { replace: true });
+  };
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -147,7 +160,6 @@ export default function Bingo() {
           .map((row: TripRosterEntry) => ({
             login: row.user_login,
             label: row.display_name || row.user_login,
-            isAdult: row.is_adult,
           }))
           .sort((a, b) => a.label.localeCompare(b.label));
         setParticipants(options);
@@ -164,17 +176,15 @@ export default function Bingo() {
     if (participants.length === 0) return;
     const normalizedParam = (paramLogin ?? '').toLowerCase();
     const matched = participants.find((p) => p.login.toLowerCase() === normalizedParam);
-    const fallbackOption = participants.find((p) => !p.isAdult) ?? participants[0];
-    const next = matched ? matched.login : fallbackOption?.login ?? '';
-
-    if (!next) return;
-
-    setSelectedUser((prev) => (prev === next ? prev : next));
-
-    if (!matched) {
-      const params = new URLSearchParams(searchParams);
-      params.set('u', next);
-      setSearchParams(params, { replace: true });
+    if (matched) {
+      setSelectedUser((prev) => (prev === matched.login ? prev : matched.login));
+    } else {
+      setSelectedUser((prev) => (prev === ALL_OPTION ? prev : ALL_OPTION));
+      if (paramLogin) {
+        const params = new URLSearchParams(searchParams);
+        params.delete('u');
+        setSearchParams(params, { replace: true });
+      }
     }
   }, [participants, paramLogin, searchParams, setSearchParams]);
 
@@ -184,7 +194,8 @@ export default function Bingo() {
     setLoading(true);
     setSelectedCell(null);
     (async () => {
-      const data = await fetchBingo(selectedUser);
+      const targetUser = selectedUser === ALL_OPTION ? TRIP_SCOPE_LOGIN : selectedUser;
+      const data = await fetchBingo(targetUser);
       if (!mounted) return;
       setCells(data);
       setLoading(false);
@@ -194,40 +205,36 @@ export default function Bingo() {
 
   return (
     <div className="page">
-      <div className="flex items-center gap-2 mb-4">
-        <h1 className="text-2xl font-bold">Field Bingo</h1>
-        <button
-          onClick={() => setShowHelp(true)}
-          className="p-1 rounded-full hover:bg-muted transition-colors"
-          aria-label="Show bingo rules"
-        >
-          <HelpCircle className="h-5 w-5 text-muted-foreground" />
-        </button>
-      </div>
-      
-      <div className="mb-6 space-y-2">
-        <label className="block text-sm font-medium">Participant</label>
-        <Select
-          value={selectedUser}
-          onValueChange={(value) => {
-            setSelectedUser(value);
-            const params = new URLSearchParams(searchParams);
-            params.set('u', value);
-            setSearchParams(params, { replace: true });
-          }}
-          disabled={participantsLoading || participants.length === 0}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={participantsLoading ? 'Loading participants…' : 'Select participant'} />
-          </SelectTrigger>
-          <SelectContent>
-            {participants.map((participant) => (
-              <SelectItem key={participant.login} value={participant.login}>
-                {participant.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Field Bingo</h1>
+          <button
+            onClick={() => setShowHelp(true)}
+            className="p-1 rounded-full hover:bg-muted transition-colors"
+            aria-label="Show bingo rules"
+          >
+            <HelpCircle className="h-5 w-5 text-muted-foreground" />
+          </button>
+        </div>
+        <div className="w-full md:w-64">
+          <Select
+            value={selectedUser}
+            onValueChange={handleUserChange}
+            disabled={participantsLoading || participants.length === 0}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={participantsLoading ? 'Loading participants…' : 'Select participant'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_OPTION}>All / Trip</SelectItem>
+              {participants.map((participant) => (
+                <SelectItem key={participant.login} value={participant.login}>
+                  {participant.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {loading ? (
@@ -311,8 +318,8 @@ export default function Bingo() {
                 <div>
                   <h4 className="font-semibold mb-2">How to Play</h4>
                   <p className="text-sm text-muted-foreground">
-                    Complete challenges by recording observations on iNaturalist. 
-                    Tap any square to see what's required to earn it. 
+                    Complete challenges by recording observations on iNaturalist.
+                    Tap any square to see what's required to earn it.
                     Bingo points are used as tie-breakers on the leaderboard.
                   </p>
                 </div>
@@ -321,6 +328,10 @@ export default function Bingo() {
           </Dialog>
         </>
       )}
+
+      <p className="mt-4 text-xs text-muted-foreground">
+        Bingo isn’t scored; it’s a challenge checklist.
+      </p>
     </div>
   );
 }

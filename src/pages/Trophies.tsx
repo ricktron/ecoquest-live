@@ -7,8 +7,12 @@ import {
   fetchTodayTrophiesCR2025,
   fetchTripTrophiesCR2025,
   fetchRosterCR2025,
+  fetchTaxaTrophiesTodayCR2025,
+  fetchTrophiesCatalogCR2025,
   getTripParams,
   type TripTrophyAward,
+  type TripTaxaTrophyRow,
+  type TripTrophyCatalogRow,
 } from '@/lib/api';
 
 type TrophyDefinition = {
@@ -75,8 +79,10 @@ export default function Trophies() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<'today' | 'trip'>('today');
   const [todayGroups, setTodayGroups] = useState<TodayGroups>({});
+  const [taxaTodayGroups, setTaxaTodayGroups] = useState<Record<string, TripTaxaTrophyRow[]>>({});
   const [tripGroups, setTripGroups] = useState<TripGroups>({});
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
+  const [catalogLabels, setCatalogLabels] = useState<Record<string, string>>({});
   const [tz, setTz] = useState<string>('UTC');
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -91,9 +97,10 @@ export default function Trophies() {
     (async () => {
       setLoading(true);
       try {
-        const [paramsRes, rosterRes] = await Promise.all([
+        const [paramsRes, rosterRes, catalogRes] = await Promise.all([
           getTripParams(),
           fetchRosterCR2025(),
+          fetchTrophiesCatalogCR2025(),
         ]);
 
         if (cancelled) return;
@@ -101,9 +108,18 @@ export default function Trophies() {
         const tzValue = paramsRes.data?.tz ?? 'UTC';
         setTz(tzValue);
 
-        const [todayRes, tripRes] = await Promise.all([
+        const catalogMap = (catalogRes.data ?? []).reduce<Record<string, string>>((acc, row: TripTrophyCatalogRow) => {
+          if (row.trophy_id) {
+            acc[row.trophy_id] = row.label;
+          }
+          return acc;
+        }, {});
+        setCatalogLabels(catalogMap);
+
+        const [todayRes, tripRes, taxaRes] = await Promise.all([
           fetchTodayTrophiesCR2025(tzValue),
           fetchTripTrophiesCR2025(),
+          fetchTaxaTrophiesTodayCR2025(),
         ]);
 
         if (cancelled) return;
@@ -124,6 +140,14 @@ export default function Trophies() {
           return acc;
         }, {} as TodayGroups);
         setTodayGroups(groupedToday);
+
+        const groupedTaxa = (taxaRes.data ?? []).reduce<Record<string, TripTaxaTrophyRow[]>>((acc, award) => {
+          const id = award.trophy_id;
+          if (!acc[id]) acc[id] = [];
+          acc[id].push(award);
+          return acc;
+        }, {});
+        setTaxaTodayGroups(groupedTaxa);
 
         type MutableWinner = TripWinner & { hasValue: boolean };
 
@@ -175,6 +199,9 @@ export default function Trophies() {
         (tripRes.data ?? []).forEach((award) => {
           if (award?.trophy_id) seenIds.add(award.trophy_id);
         });
+        (taxaRes.data ?? []).forEach((award) => {
+          if (award?.trophy_id) seenIds.add(award.trophy_id);
+        });
 
         const activeSet = new Set<string>(CORE_TROPHY_IDS);
         seenIds.forEach((id) => activeSet.add(id));
@@ -184,16 +211,25 @@ export default function Trophies() {
         const errors: string[] = [];
         if (paramsRes.error?.message) errors.push(paramsRes.error.message);
         if (rosterRes.error?.message) errors.push(rosterRes.error.message);
+        if (catalogRes.error?.message) errors.push(catalogRes.error.message);
         if (todayRes.error?.message) errors.push(todayRes.error.message);
         if (tripRes.error?.message) errors.push(tripRes.error.message);
+        if (taxaRes.error?.message) errors.push(taxaRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
 
         const warningList: string[] = [];
         if (rosterRes.missing) warningList.push('Roster view is unavailable; display names limited.');
-        if (todayRes.missing && tripRes.missing) {
+        if (catalogRes.missing) warningList.push('Trophy catalog view is unavailable; labels may be limited.');
+        if (todayRes.missing && tripRes.missing && taxaRes.missing) {
           warningList.push('Trophy view is unavailable.');
-        } else if (todayRes.missing || tripRes.missing) {
-          warningList.push('Some trophy data views are unavailable.');
+        } else {
+          const partialWarnings: string[] = [];
+          if (todayRes.missing) partialWarnings.push('daily leaders');
+          if (tripRes.missing) partialWarnings.push('trip totals');
+          if (taxaRes.missing) partialWarnings.push('taxa badges');
+          if (partialWarnings.length > 0) {
+            warningList.push(`Some trophy data views are unavailable (${partialWarnings.join(', ')}).`);
+          }
         }
         setWarnings(warningList);
       } catch (err) {
@@ -225,8 +261,25 @@ export default function Trophies() {
         ...Object.keys(TROPHY_DEFINITIONS),
         ...availableTrophyIds,
         ...awardedTrophyIds,
+        ...Object.keys(catalogLabels),
       ]),
     ),
+  );
+  const getMeta = (id: string) => {
+    const base = getTrophyDefinition(id);
+    const label = catalogLabels[id];
+    return label ? { ...base, title: label } : base;
+  };
+  const leaderIds = sortTrophyIds(
+    Array.from(
+      new Set<string>([
+        ...CORE_TROPHY_IDS,
+        ...Object.keys(todayGroups).filter((id) => getTrophyDefinition(id).category === 'core'),
+      ]),
+    ),
+  );
+  const taxaIds = sortTrophyIds(
+    Object.keys(taxaTodayGroups).filter((id) => getTrophyDefinition(id).category !== 'core'),
   );
 
   if (slug) {
@@ -307,47 +360,103 @@ export default function Trophies() {
               </div>
             )}
             {mode === 'today' ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {activeIds.map((id) => {
-                  const meta = getTrophyDefinition(id);
-                  const winners = todayGroups[id] ?? [];
-                  return (
-                    <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
-                      <div className="text-sm font-semibold flex items-center gap-2">
-                        <span>{meta.icon}</span>
-                        {meta.title}
-                      </div>
-                      {winners.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">No winners recorded today.</div>
-                      ) : (
-                        <div className="space-y-3">
-                          {winners.map((winner, index) => {
-                            const prettyName = getDisplayName(winner.user_login);
-                            const showSecondary = prettyName.toLowerCase() !== winner.user_login.toLowerCase();
-                            return (
-                              <div key={`${winner.user_login}-${index}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
-                                <div className="text-base font-medium">{winner.user_login}</div>
-                                {showSecondary && (
-                                  <div className="text-xs text-muted-foreground">{prettyName}</div>
-                                )}
-                              {winner.value != null && (
-                                <div className="text-xs text-muted-foreground capitalize">
-                                  {meta.valueLabel ?? 'Value'}: {winner.value}
-                                </div>
-                              )}
-                              </div>
-                            );
-                          })}
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold">Daily Leaders</h2>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {leaderIds.map((id) => {
+                      const meta = getMeta(id);
+                      const winners = todayGroups[id] ?? [];
+                      return (
+                        <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
+                          <div className="text-sm font-semibold flex items-center gap-2">
+                            <span>{meta.icon}</span>
+                            {meta.title}
+                          </div>
+                          {winners.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">No winners recorded today.</div>
+                          ) : (
+                            <div className="space-y-3">
+                              {winners.map((winner, index) => {
+                                const prettyName = getDisplayName(winner.user_login);
+                                const showSecondary = prettyName.toLowerCase() !== winner.user_login.toLowerCase();
+                                return (
+                                  <div key={`${winner.user_login}-${index}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                                    <div className="text-base font-medium">{winner.user_login}</div>
+                                    {showSecondary && (
+                                      <div className="text-xs text-muted-foreground">{prettyName}</div>
+                                    )}
+                                    {winner.value != null && (
+                                      <div className="text-xs text-muted-foreground capitalize">
+                                        {meta.valueLabel ?? 'Value'}: {winner.value}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold">Taxa Badges</h2>
+                  {taxaIds.length === 0 ? (
+                    <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
+                      No taxa badges awarded today.
                     </div>
-                  );
-                })}
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {taxaIds.map((id) => {
+                        const meta = getMeta(id);
+                        const winners = taxaTodayGroups[id] ?? [];
+                        return (
+                          <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
+                            <div className="text-sm font-semibold flex items-center gap-2">
+                              <span>{meta.icon}</span>
+                              {meta.title}
+                            </div>
+                            {winners.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">No badges awarded today.</div>
+                            ) : (
+                              <div className="space-y-3">
+                                {winners.map((winner, index) => {
+                                  const prettyName = getDisplayName(winner.user_login);
+                                  const showSecondary = prettyName.toLowerCase() !== winner.user_login.toLowerCase();
+                                  const awardedAt = winner.awarded_at
+                                    ? new Date(winner.awarded_at).toLocaleString('en-US', {
+                                        timeZone: tz,
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })
+                                    : null;
+                                  return (
+                                    <div key={`${winner.user_login}-${index}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                                      <div className="text-base font-medium">{winner.user_login}</div>
+                                      {showSecondary && (
+                                        <div className="text-xs text-muted-foreground">{prettyName}</div>
+                                      )}
+                                      {awardedAt && (
+                                        <div className="text-[11px] text-muted-foreground">Awarded at {awardedAt}</div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
                 {activeIds.map((id) => {
-                  const meta = getTrophyDefinition(id);
+                  const meta = getMeta(id);
                   const winners = tripGroups[id] ?? [];
                   const sortedWinners = [...winners].sort((a, b) => {
                     const countDiff = b.count - a.count;
@@ -403,7 +512,7 @@ export default function Trophies() {
               <h2 className="text-lg font-semibold">All possible trophies</h2>
               <div className="grid gap-3 md:grid-cols-2">
                 {allPossibleIds.map((id) => {
-                  const meta = getTrophyDefinition(id);
+                  const meta = getMeta(id);
                   const isAwarded = awardedSet.has(id);
                   return (
                     <div

@@ -3,9 +3,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ChevronDown } from 'lucide-react';
 import {
   fetchDailySummaryCR2025,
-  getTripBasePoints,
+  fetchDayPeopleCR2025,
   fetchRosterCR2025,
   type TripDailySummaryRow,
+  type TripDayPeopleRow,
 } from '@/lib/api';
 
 function formatCostaRicaDate(day: string): string {
@@ -19,16 +20,11 @@ function formatCostaRicaDate(day: string): string {
   }).format(date);
 }
 
-type DetailRow = {
-  user_login: string;
-  obs_count: number;
-  distinct_taxa: number;
-};
-
 type DetailState = {
   loading: boolean;
-  rows: DetailRow[];
+  rows: TripDayPeopleRow[];
   error: string | null;
+  missing?: boolean;
 };
 
 export default function Daily() {
@@ -102,48 +98,32 @@ export default function Daily() {
 
   useEffect(() => {
     if (!expandedDay) return;
-    if (currentDetail && (currentDetail.loading || currentDetail.rows.length > 0 || currentDetail.error)) {
+    if (currentDetail && (currentDetail.loading || currentDetail.rows.length > 0 || currentDetail.error || currentDetail.missing)) {
       return;
     }
 
     let cancelled = false;
     setDetails((prev) => ({
       ...prev,
-      [expandedDay]: { loading: true, rows: [], error: null },
+      [expandedDay]: { loading: true, rows: [], error: null, missing: false },
     }));
 
     (async () => {
       try {
-        const result = await getTripBasePoints({ day: expandedDay });
+        const result = await fetchDayPeopleCR2025(expandedDay);
         if (cancelled) return;
 
-        const aggregated = (result.data ?? []).reduce<Record<string, { obs: number; taxa: Set<number> }>>((acc, row) => {
-          const login = row.user_login;
-          if (!login) return acc;
-          const bucket = acc[login] ?? { obs: 0, taxa: new Set<number>() };
-          bucket.obs += 1;
-          if (row.taxon_id != null) {
-            bucket.taxa.add(Number(row.taxon_id));
-          }
-          acc[login] = bucket;
-          return acc;
-        }, {});
-
-        const detailRows = Object.entries(aggregated).map(([login, bucket]) => ({
-          user_login: login,
-          obs_count: bucket.obs,
-          distinct_taxa: bucket.taxa.size,
-        } satisfies DetailRow));
-
-        detailRows.sort((a, b) => {
-          const obsDiff = b.obs_count - a.obs_count;
-          if (obsDiff !== 0) return obsDiff;
-          const taxaDiff = b.distinct_taxa - a.distinct_taxa;
-          if (taxaDiff !== 0) return taxaDiff;
-          const nameA = getDisplayName(a.user_login).toLowerCase();
-          const nameB = getDisplayName(b.user_login).toLowerCase();
-          return nameA.localeCompare(nameB);
-        });
+        const detailRows = (result.data ?? [])
+          .slice(0, 3)
+          .sort((a, b) => {
+            const obsDiff = b.obs_count - a.obs_count;
+            if (obsDiff !== 0) return obsDiff;
+            const taxaDiff = b.distinct_taxa - a.distinct_taxa;
+            if (taxaDiff !== 0) return taxaDiff;
+            const nameA = getDisplayName(a.user_login).toLowerCase();
+            const nameB = getDisplayName(b.user_login).toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
 
         setDetails((prev) => ({
           ...prev,
@@ -151,6 +131,7 @@ export default function Daily() {
             loading: false,
             rows: detailRows,
             error: result.error?.message ?? null,
+            missing: result.missing ?? false,
           },
         }));
       } catch (err) {
@@ -161,6 +142,7 @@ export default function Daily() {
             loading: false,
             rows: [],
             error: err instanceof Error ? err.message : String(err),
+            missing: false,
           },
         }));
       }
@@ -228,6 +210,7 @@ export default function Daily() {
                 const detailRows = detail?.rows ?? [];
                 const detailLoading = detail?.loading;
                 const detailError = detail?.error;
+                const detailMissing = detail?.missing;
 
                 return (
                   <div key={day} className="border rounded-xl bg-card overflow-hidden">
@@ -258,6 +241,10 @@ export default function Daily() {
                           <div className="mt-3 text-sm text-destructive">
                             Failed to load participant details: {detailError}
                           </div>
+                        ) : detailMissing ? (
+                          <div className="mt-3 text-sm text-muted-foreground">
+                            Participant detail view is currently unavailable.
+                          </div>
                         ) : detailRows.length === 0 ? (
                           <div className="mt-3 text-sm text-muted-foreground">
                             No participant observations recorded for this day yet.
@@ -270,6 +257,7 @@ export default function Daily() {
                                   <th className="py-2 pr-4 font-medium">Participant</th>
                                   <th className="py-2 pr-4 font-medium">Observations</th>
                                   <th className="py-2 pr-4 font-medium">Species</th>
+                                  <th className="py-2 pr-4 font-medium">Research Grade</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -286,6 +274,7 @@ export default function Daily() {
                                       </td>
                                       <td className="py-2 pr-4">{row.obs_count}</td>
                                       <td className="py-2 pr-4">{row.distinct_taxa}</td>
+                                      <td className="py-2 pr-4">{row.research_grade_count}</td>
                                     </tr>
                                   );
                                 })}
