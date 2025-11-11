@@ -276,14 +276,25 @@ export async function getTripParams(): Promise<ApiResult<TripParams | null>> {
 }
 
 export async function fetchRosterCR2025(): Promise<ApiResult<TripRosterEntry[]>> {
-  const { data, error } = await supabase()
+  const baseQuery = supabase()
     .from('trip_members_roster_cr2025_v1')
     .select('user_login, display_name, is_adult')
     .order('display_name', { ascending: true, nullsFirst: false })
     .order('user_login', { ascending: true, nullsFirst: false });
 
+  let { data, error } = await baseQuery;
+  let missing = false;
+
   if (isMissingView(error)) {
-    return { data: [], error: null, missing: true };
+    missing = true;
+    const fallback = await supabase()
+      .from('trip_members_roster_v1')
+      .select('user_login, display_name')
+      .order('display_name', { ascending: true, nullsFirst: false })
+      .order('user_login', { ascending: true, nullsFirst: false });
+
+    data = fallback.data as RawTripRosterRow[] | null;
+    error = fallback.error;
   }
 
   const rawRows = (data ?? []) as RawTripRosterRow[];
@@ -294,12 +305,12 @@ export async function fetchRosterCR2025(): Promise<ApiResult<TripRosterEntry[]>>
       return {
         user_login,
         display_name: row.display_name ?? null,
-        ...(row.is_adult != null ? { is_adult: Boolean(row.is_adult) } : {}),
+        is_adult: row.is_adult != null ? Boolean(row.is_adult) : false,
       } satisfies TripRosterEntry;
     })
     .filter((row): row is TripRosterEntry => Boolean(row));
 
-  return { data: rows, error };
+  return { data: rows, error, ...(missing ? { missing: true } : {}) };
 }
 
 export async function getTripRoster(): Promise<ApiResult<TripRosterEntry[]>> {

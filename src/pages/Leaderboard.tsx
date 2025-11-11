@@ -18,21 +18,14 @@ import {
 } from '@/lib/api';
 import { isLive } from '@/lib/config/profile';
 
-type RankSnapshot = {
-  timestamp: number;
-  ranks: Record<string, number>;
-};
+const SNAP_KEY = 'rankSnapshot:cr2025:v1';
+type RankSnap = { ts: number; order: string[] };
 
 type RankedRow = TripLeaderboardRow & {
   rank: number;
-  rankDelta: number | null;
-  rankIndicator: '▲' | '▼' | '—';
   effectiveTotal: number;
-  silver?: TripSilverBreakdown;
+  silverBreakdown: TripSilverBreakdown | null;
 };
-
-const RANK_STORAGE_KEY = 'cr2025-rank-snapshot-v1';
-const RANK_STALE_WINDOW_MS = 10 * 60 * 1000;
 
 function mergeRosterAndLeaderboard(
   roster: TripRosterEntry[],
@@ -90,14 +83,13 @@ function computeRankedRows(
   const decorated = rows.map((row) => {
     const key = row.user_login.toLowerCase();
     const silver = hasSilver ? silverByLogin[key] : undefined;
-    const effectiveTotal = silver ? silver.total_points : row.total_points;
+    const silverBreakdown = silver ? { ...silver } : null;
+    const effectiveTotal = silverBreakdown?.total_points ?? row.total_points;
     return {
       ...row,
-      silver,
+      silverBreakdown,
       effectiveTotal,
       rank: 0,
-      rankDelta: null,
-      rankIndicator: '—' as const,
     } satisfies RankedRow;
   });
 
@@ -108,71 +100,17 @@ function computeRankedRows(
     return a.user_login.localeCompare(b.user_login);
   });
 
-  const now = typeof window !== 'undefined' ? Date.now() : 0;
-  let snapshot: RankSnapshot | null = null;
-
-  if (typeof window !== 'undefined') {
-    try {
-      const raw = window.localStorage.getItem(RANK_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as RankSnapshot;
-        if (parsed && typeof parsed.timestamp === 'number' && parsed.ranks && typeof parsed.ranks === 'object') {
-          snapshot = parsed;
-        }
-      }
-    } catch (err) {
-      console.warn('rank snapshot parse error', err);
-    }
-  }
-
-  const fresh = snapshot ? now - snapshot.timestamp <= RANK_STALE_WINDOW_MS : false;
-
-  const ranked = decorated.map((row, index) => {
-    const key = row.user_login.toLowerCase();
-    const prevRank = snapshot?.ranks?.[key];
-    let rankDelta: number | null = null;
-    let rankIndicator: '▲' | '▼' | '—' = '—';
-
-    if (typeof prevRank === 'number') {
-      rankDelta = prevRank - (index + 1);
-      if (fresh && rankDelta !== 0) {
-        rankIndicator = rankDelta > 0 ? '▲' : '▼';
-      }
-    }
-
-    return {
-      ...row,
-      rank: index + 1,
-      rankDelta,
-      rankIndicator,
-    } satisfies RankedRow;
-  });
-
-  if (typeof window !== 'undefined') {
-    const nextSnapshot: RankSnapshot = {
-      timestamp: now,
-      ranks: {},
-    };
-    ranked.forEach((row) => {
-      const key = row.user_login.toLowerCase();
-      if (key) {
-        nextSnapshot.ranks[key] = row.rank;
-      }
-    });
-    try {
-      window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(nextSnapshot));
-    } catch (err) {
-      console.warn('rank snapshot store error', err);
-    }
-  }
-
-  return ranked;
+  return decorated.map((row, index) => ({
+    ...row,
+    rank: index + 1,
+  }));
 }
 
 export default function Leaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<RankedRow[]>([]);
+  const [rankDeltas, setRankDeltas] = useState<Record<string, number>>({});
   const [displayNameMap, setDisplayNameMap] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -259,19 +197,58 @@ export default function Leaderboard() {
     [rows],
   );
 
+  const rankOrderKey = useMemo(() => rows.map((row) => row.user_login).join('|'), [rows]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!rankOrderKey) {
+      setRankDeltas({});
+      return;
+    }
+
+    const now = Date.now();
+    const currOrder = rankOrderKey.split('|').filter((value) => value.length > 0);
+    const raw = window.localStorage.getItem(SNAP_KEY);
+    let snap: RankSnap | null = null;
+    try {
+      snap = raw ? (JSON.parse(raw) as RankSnap) : null;
+    } catch {
+      snap = null;
+    }
+
+    const prevIdx = new Map((snap?.order ?? []).map((u, i) => [u, i] as const));
+    const deltas: Record<string, number> = {};
+    currOrder.forEach((u, i) => {
+      const j = prevIdx.get(u);
+      deltas[u] = j == null ? 0 : j - i;
+    });
+    setRankDeltas(deltas);
+
+    const hasNewUser = currOrder.length !== (snap?.order?.length ?? 0) || currOrder.some((u) => !prevIdx.has(u));
+
+    if (!snap || now - snap.ts > 10 * 60 * 1000 || hasNewUser) {
+      try {
+        window.localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: now, order: currOrder } satisfies RankSnap));
+      } catch {
+        // Ignore quota/storage errors
+      }
+    }
+    // also refresh when the set of users changes (new roster member)
+  }, [rankOrderKey]);
+
   const renderScoreBreakdown = (row: RankedRow) => {
     const baseTotal = row.obs_count + row.research_grade_count + row.bonus_points;
 
-    if (row.silver) {
+    if (row.silverBreakdown) {
       const segments: { label: string; value: number }[] = [
-        { label: 'Base observations', value: row.silver.base_obs },
-        { label: 'Trip novelty', value: row.silver.novelty_trip },
-        { label: 'Daily novelty', value: row.silver.novelty_day },
-        { label: 'Rarity bonus', value: row.silver.rarity },
-        { label: 'Research grade', value: row.silver.research },
-        { label: 'Multiplier delta', value: row.silver.multipliers_delta },
+        { label: 'Base observations', value: row.silverBreakdown.base_obs },
+        { label: 'Trip novelty', value: row.silverBreakdown.novelty_trip },
+        { label: 'Daily novelty', value: row.silverBreakdown.novelty_day },
+        { label: 'Rarity bonus', value: row.silverBreakdown.rarity },
+        { label: 'Research grade', value: row.silverBreakdown.research },
+        { label: 'Multiplier delta', value: row.silverBreakdown.multipliers_delta },
       ];
-      const total = row.silver.total_points;
+      const total = row.silverBreakdown.total_points;
 
       return (
         <div className="space-y-3">
@@ -385,7 +362,10 @@ export default function Leaderboard() {
                   const canonicalDisplay = displayNameMap[loginKey] ?? row.display_name ?? row.user_login;
                   const showSecondary = canonicalDisplay.toLowerCase() !== row.user_login.toLowerCase();
                   const scoreValue = row.effectiveTotal;
-                  const hasIndicator = !isBlackout && row.rankIndicator !== '—' && (row.rankDelta ?? 0) !== 0;
+                  const delta = rankDeltas[row.user_login] ?? 0;
+                  const indicator = delta > 0 ? '▲' : delta < 0 ? '▼' : '—';
+                  const hasIndicator = !isBlackout && delta !== 0;
+                  const indicatorMagnitude = Math.abs(delta);
 
                   const handleRowClick = () => {
                     navigate(`/user/${row.user_login}`);
@@ -411,7 +391,7 @@ export default function Leaderboard() {
                           <span
                             className={`rank-change text-xs font-medium ${
                               hasIndicator
-                                ? row.rankIndicator === '▲'
+                                ? indicator === '▲'
                                   ? 'text-emerald-600'
                                   : 'text-rose-600'
                                 : 'text-muted-foreground'
@@ -420,8 +400,8 @@ export default function Leaderboard() {
                           >
                             {hasIndicator ? (
                               <>
-                                <span>{row.rankIndicator}</span>
-                                <span>{Math.abs(row.rankDelta ?? 0)}</span>
+                                <span>{indicator}</span>
+                                <span>{indicatorMagnitude}</span>
                               </>
                             ) : (
                               '—'
