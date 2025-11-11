@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { fetchBingo, fetchMembers } from '../lib/api';
+import { fetchBingo, fetchTripLeaderboard, type TripLeaderboardRow } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type BingoCell = {
   label: string;
@@ -14,6 +15,11 @@ type CellInfo = {
   short: string;
   description: string;
   howToEarn: string;
+};
+
+type ParticipantOption = {
+  login: string;
+  label: string;
 };
 
 const CELL_INFO: Record<string, CellInfo> = {
@@ -110,7 +116,8 @@ const CELL_INFO: Record<string, CellInfo> = {
 };
 
 export default function Bingo() {
-  const [userLogins, setUserLogins] = useState<string[]>([]);
+  const [participants, setParticipants] = useState<ParticipantOption[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [cells, setCells] = useState<BingoCell[]>([]);
   const [loading, setLoading] = useState(false);
@@ -131,32 +138,47 @@ export default function Bingo() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const roster = await fetchMembers();
-      if (!mounted) return;
-      setUserLogins(roster.map(login => login.toLowerCase()));
+      setParticipantsLoading(true);
+      try {
+        const result = await fetchTripLeaderboard();
+        if (!mounted) return;
+        const options = (result.data ?? [])
+          .map((row: TripLeaderboardRow) => ({
+            login: row.user_login,
+            label: row.display_name || row.user_login,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label));
+        setParticipants(options);
+      } finally {
+        if (mounted) {
+          setParticipantsLoading(false);
+        }
+      }
     })();
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
-    if (userLogins.length === 0) return;
+    if (participants.length === 0) return;
     const normalizedParam = (paramLogin ?? '').toLowerCase();
-    const hasParam = normalizedParam && userLogins.includes(normalizedParam);
-    const fallback = hasParam ? normalizedParam : userLogins[0];
+    const matched = participants.find((p) => p.login.toLowerCase() === normalizedParam);
+    const fallback = participants[0]?.login ?? '';
+    const next = matched ? matched.login : fallback;
 
-    setSelectedUser(prev => (prev === fallback ? prev : fallback));
+    setSelectedUser((prev) => (prev === next ? prev : next));
 
-    if (!hasParam && fallback) {
+    if (!matched && fallback) {
       const params = new URLSearchParams(searchParams);
       params.set('u', fallback);
       setSearchParams(params, { replace: true });
     }
-  }, [userLogins, paramLogin, searchParams, setSearchParams]);
+  }, [participants, paramLogin, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!selectedUser) return;
     let mounted = true;
     setLoading(true);
+    setSelectedCell(null);
     (async () => {
       const data = await fetchBingo(selectedUser);
       if (!mounted) return;
@@ -179,28 +201,29 @@ export default function Bingo() {
         </button>
       </div>
       
-      <div className="mb-6">
-        <label htmlFor="user-select" className="block text-sm font-medium mb-2">
-          Select User
-        </label>
-        <select
-          id="user-select"
-          className="w-full p-2 border rounded-lg"
+      <div className="mb-6 space-y-2">
+        <label className="block text-sm font-medium">Participant</label>
+        <Select
           value={selectedUser}
-          onChange={(e) => {
-            const login = e.target.value;
-            setSelectedUser(login);
+          onValueChange={(value) => {
+            setSelectedUser(value);
             const params = new URLSearchParams(searchParams);
-            params.set('u', login);
+            params.set('u', value);
             setSearchParams(params, { replace: true });
           }}
+          disabled={participantsLoading || participants.length === 0}
         >
-          {userLogins.map((login) => (
-            <option key={login} value={login}>
-              {login}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger>
+            <SelectValue placeholder={participantsLoading ? 'Loading participants…' : 'Select participant'} />
+          </SelectTrigger>
+          <SelectContent>
+            {participants.map((participant) => (
+              <SelectItem key={participant.login} value={participant.login}>
+                {participant.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
