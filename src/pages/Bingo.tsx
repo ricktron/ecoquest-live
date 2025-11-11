@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { fetchBingo, fetchTripLeaderboard, type TripLeaderboardRow } from '../lib/api';
+import { fetchBingo, getTripRoster, type TripRosterEntry } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -118,13 +118,14 @@ const CELL_INFO: Record<string, CellInfo> = {
 export default function Bingo() {
   const [participants, setParticipants] = useState<ParticipantOption[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<string>('all');
   const [cells, setCells] = useState<BingoCell[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const paramLogin = useMemo(() => searchParams.get('u'), [searchParams]);
+  const ALL_VALUE = 'all';
 
   const getCellInfo = (label: string): CellInfo => {
     return CELL_INFO[label] || {
@@ -140,15 +141,15 @@ export default function Bingo() {
     (async () => {
       setParticipantsLoading(true);
       try {
-        const result = await fetchTripLeaderboard();
+        const result = await getTripRoster();
         if (!mounted) return;
         const options = (result.data ?? [])
-          .map((row: TripLeaderboardRow) => ({
+          .map((row: TripRosterEntry) => ({
             login: row.user_login,
             label: row.display_name || row.user_login,
           }))
           .sort((a, b) => a.label.localeCompare(b.label));
-        setParticipants(options);
+        setParticipants([{ login: ALL_VALUE, label: 'All' }, ...options]);
       } finally {
         if (mounted) {
           setParticipantsLoading(false);
@@ -160,9 +161,9 @@ export default function Bingo() {
 
   useEffect(() => {
     if (participants.length === 0) return;
-    const normalizedParam = (paramLogin ?? '').toLowerCase();
+    const normalizedParam = (paramLogin ?? ALL_VALUE).toLowerCase();
     const matched = participants.find((p) => p.login.toLowerCase() === normalizedParam);
-    const fallback = participants[0]?.login ?? '';
+    const fallback = participants[0]?.login ?? ALL_VALUE;
     const next = matched ? matched.login : fallback;
 
     setSelectedUser((prev) => (prev === next ? prev : next));
@@ -180,9 +181,17 @@ export default function Bingo() {
     setLoading(true);
     setSelectedCell(null);
     (async () => {
-      const data = await fetchBingo(selectedUser);
+      const data = await fetchBingo(selectedUser === ALL_VALUE ? 'all' : selectedUser);
       if (!mounted) return;
-      setCells(data);
+      const filtered =
+        selectedUser === ALL_VALUE
+          ? data
+          : data.filter((cell: any) => {
+              if (!cell || typeof cell !== 'object') return false;
+              const owner = (cell.user_login ?? '').toString().toLowerCase();
+              return owner === selectedUser.toLowerCase();
+            });
+      setCells(filtered);
       setLoading(false);
     })();
     return () => { mounted = false; };

@@ -12,6 +12,24 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
+type ApiResult<T> = { data: T; error: PostgrestError | null };
+
+export type TripParams = {
+  tz: string;
+  start_date: string;
+  end_date: string;
+  lat_min: number;
+  lat_max: number;
+  lon_min: number;
+  lon_max: number;
+};
+
+export type TripRosterEntry = {
+  user_login: string;
+  display_name: string | null;
+  is_adult: boolean;
+};
+
 export type TripLeaderboardRow = {
   user_login: string;
   display_name: string | null;
@@ -20,81 +38,6 @@ export type TripLeaderboardRow = {
   distinct_taxa: number;
 };
 
-type TripLeaderboardCache = {
-  rows: TripLeaderboardRow[];
-  map: Record<string, string>;
-  fetchedAt: number;
-};
-
-let tripLeaderboardCache: TripLeaderboardCache | null = null;
-
-export async function fetchTripLeaderboard(): Promise<{ data: TripLeaderboardRow[]; error: PostgrestError | null }> {
-  const client = supabase();
-  const { data, error } = await client
-    .from('leaderboard_trip_points_cr2025_v1')
-    .select('user_login, display_name, total_points, obs_count, distinct_taxa')
-    .order('total_points', { ascending: false, nullsFirst: false })
-    .order('distinct_taxa', { ascending: false, nullsFirst: false })
-    .order('obs_count', { ascending: false, nullsFirst: false })
-    .order('user_login', { ascending: true, nullsFirst: false });
-
-  const rows: TripLeaderboardRow[] = (data ?? [])
-    .map((row: any) => {
-      const user_login = (row?.user_login ?? '').toString();
-      if (!user_login) return null;
-      return {
-        user_login,
-        display_name: row?.display_name ?? null,
-        total_points: toNumber(row?.total_points),
-        obs_count: toNumber(row?.obs_count),
-        distinct_taxa: toNumber(row?.distinct_taxa),
-      } satisfies TripLeaderboardRow;
-    })
-    .filter((row): row is TripLeaderboardRow => Boolean(row));
-
-  const map: Record<string, string> = rows.reduce<Record<string, string>>((acc, row) => {
-    const key = row.user_login.toLowerCase();
-    const label = row.display_name?.trim() || row.user_login;
-    if (key) {
-      acc[key] = label;
-    }
-    return acc;
-  }, {});
-
-  tripLeaderboardCache = { rows, map, fetchedAt: Date.now() };
-
-  return { data: rows, error };
-}
-
-export function getCachedTripLeaderboardNameMap(): Record<string, string> {
-  return tripLeaderboardCache?.map ?? {};
-}
-
-export async function getTripLeaderboardNameMap(): Promise<Record<string, string>> {
-  if (!tripLeaderboardCache) {
-    await fetchTripLeaderboard();
-  }
-  return getCachedTripLeaderboardNameMap();
-}
-
-export type TripDayRow = {
-  day_local: string;
-};
-
-export async function fetchTripDays(): Promise<{ data: TripDayRow[]; error: PostgrestError | null }> {
-  const client = supabase();
-  const { data, error } = await client
-    .from('trip_days_cr2025_v1')
-    .select('day_local')
-    .order('day_local', { ascending: false });
-
-  const rows: TripDayRow[] = (data ?? [])
-    .map((row: any) => ({ day_local: (row?.day_local ?? '').toString() }))
-    .filter((row) => row.day_local);
-
-  return { data: rows, error };
-}
-
 export type TripDailySummaryRow = {
   day_local: string;
   obs_count: number;
@@ -102,9 +45,180 @@ export type TripDailySummaryRow = {
   people_count: number;
 };
 
-export async function fetchTripDailySummary(): Promise<{ data: TripDailySummaryRow[]; error: PostgrestError | null }> {
+export type TripBaseObservationRow = {
+  user_login: string;
+  inat_obs_id: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  taxon_id: number | null;
+  quality_grade: string | null;
+  observed_at_utc: string | null;
+  day_local: string | null;
+};
+
+export type TripTrophyAward = {
+  trophy_id: string;
+  user_login: string;
+  value: number | null;
+  awarded_at: string | null;
+};
+
+export async function getTripParams(): Promise<ApiResult<TripParams | null>> {
+  const { data, error } = await supabase()
+    .from('trip_params_cr2025_v1')
+    .select('tz, start_date, end_date, lat_min, lat_max, lon_min, lon_max')
+    .maybeSingle();
+
+  if (!data) {
+    return { data: null, error };
+  }
+
+  return {
+    data: {
+      tz: data.tz ?? 'UTC',
+      start_date: data.start_date ?? '',
+      end_date: data.end_date ?? '',
+      lat_min: Number(data.lat_min ?? 0),
+      lat_max: Number(data.lat_max ?? 0),
+      lon_min: Number(data.lon_min ?? 0),
+      lon_max: Number(data.lon_max ?? 0),
+    },
+    error,
+  };
+}
+
+export async function getTripRoster(): Promise<ApiResult<TripRosterEntry[]>> {
+  const { data, error } = await supabase()
+    .from('trip_members_roster_v1')
+    .select('user_login, display_name, is_adult')
+    .order('display_name', { ascending: true, nullsFirst: false })
+    .order('user_login', { ascending: true, nullsFirst: false });
+
+  const rows: TripRosterEntry[] = (data ?? [])
+    .map((row: any) => {
+      const user_login = (row?.user_login ?? '').toString();
+      if (!user_login) return null;
+      return {
+        user_login,
+        display_name: row?.display_name ?? null,
+        is_adult: Boolean(row?.is_adult),
+      } satisfies TripRosterEntry;
+    })
+    .filter((row): row is TripRosterEntry => Boolean(row));
+
+  return { data: rows, error };
+}
+
+export async function getTripLeaderboard(): Promise<ApiResult<TripLeaderboardRow[]>> {
   const client = supabase();
-  const { data, error } = await client
+
+  const [rosterResponse, leaderboardResponse] = await Promise.all([
+    client
+      .from('trip_members_roster_v1')
+      .select('user_login, display_name, is_adult')
+      .order('display_name', { ascending: true, nullsFirst: false })
+      .order('user_login', { ascending: true, nullsFirst: false }),
+    client
+      .from('leaderboard_trip_points_cr2025_v1')
+      .select('user_login, display_name, total_points, obs_count, distinct_taxa'),
+  ]);
+
+  const rosterRows: TripRosterEntry[] = (rosterResponse.data ?? [])
+    .map((row: any) => {
+      const user_login = (row?.user_login ?? '').toString();
+      if (!user_login) return null;
+      return {
+        user_login,
+        display_name: row?.display_name ?? null,
+        is_adult: Boolean(row?.is_adult),
+      } satisfies TripRosterEntry;
+    })
+    .filter((row): row is TripRosterEntry => Boolean(row));
+
+  let leaderboardRows: TripLeaderboardRow[] = [];
+  let leaderboardError: PostgrestError | null = leaderboardResponse.error ?? null;
+
+  if (!leaderboardError) {
+    leaderboardRows = (leaderboardResponse.data ?? [])
+      .map((row: any) => {
+        const user_login = (row?.user_login ?? '').toString();
+        if (!user_login) return null;
+        return {
+          user_login,
+          display_name: row?.display_name ?? null,
+          total_points: toNumber(row?.total_points),
+          obs_count: toNumber(row?.obs_count),
+          distinct_taxa: toNumber(row?.distinct_taxa),
+        } satisfies TripLeaderboardRow;
+      })
+      .filter((row): row is TripLeaderboardRow => Boolean(row));
+  } else if (leaderboardError.code === '42P01') {
+    const { data: baseData, error: baseError } = await client
+      .from('trip_obs_base_cr2025_v1')
+      .select('user_login, taxon_id');
+
+    leaderboardError = baseError ?? null;
+
+    const counts = new Map<string, { obs: number; taxa: Set<number> }>();
+    (baseData ?? []).forEach((row: any) => {
+      const user_login = (row?.user_login ?? '').toString();
+      if (!user_login) return;
+      const entry = counts.get(user_login) ?? { obs: 0, taxa: new Set<number>() };
+      entry.obs += 1;
+      const taxonId = row?.taxon_id;
+      if (taxonId != null) {
+        entry.taxa.add(Number(taxonId));
+      }
+      counts.set(user_login, entry);
+    });
+
+    leaderboardRows = Array.from(counts.entries()).map(([user_login, entry]) => ({
+      user_login,
+      display_name: null,
+      total_points: entry.obs,
+      obs_count: entry.obs,
+      distinct_taxa: entry.taxa.size,
+    }));
+
+    if (leaderboardResponse.error) {
+      leaderboardError = baseError ?? null;
+    }
+  }
+
+  const rosterMap = rosterRows.reduce<Record<string, TripRosterEntry>>((acc, row) => {
+    acc[row.user_login.toLowerCase()] = row;
+    return acc;
+  }, {});
+
+  const leaderboardMap = new Map<string, TripLeaderboardRow>();
+  leaderboardRows.forEach((row) => {
+    leaderboardMap.set(row.user_login.toLowerCase(), row);
+  });
+
+  const combined: TripLeaderboardRow[] = rosterRows.map((member) => {
+    const stats = leaderboardMap.get(member.user_login.toLowerCase());
+    return {
+      user_login: member.user_login,
+      display_name: member.display_name ?? stats?.display_name ?? member.user_login,
+      total_points: stats?.total_points ?? 0,
+      obs_count: stats?.obs_count ?? 0,
+      distinct_taxa: stats?.distinct_taxa ?? 0,
+    } satisfies TripLeaderboardRow;
+  });
+
+  leaderboardRows.forEach((row) => {
+    if (!rosterMap[row.user_login.toLowerCase()]) {
+      combined.push(row);
+    }
+  });
+
+  const error = rosterResponse.error ?? leaderboardError ?? null;
+
+  return { data: combined, error };
+}
+
+export async function getTripDailySummary(): Promise<ApiResult<TripDailySummaryRow[]>> {
+  const { data, error } = await supabase()
     .from('trip_daily_summary_cr2025_v1')
     .select('day_local, obs_count, distinct_taxa, people_count')
     .order('day_local', { ascending: false });
@@ -121,88 +235,52 @@ export async function fetchTripDailySummary(): Promise<{ data: TripDailySummaryR
   return { data: rows, error };
 }
 
-export type TripDailyDetailRow = {
-  day_local: string;
-  user_login: string;
-  obs_count: number;
-  distinct_taxa: number;
-};
+export async function getTripBasePoints(options: { day?: string } = {}): Promise<ApiResult<TripBaseObservationRow[]>> {
+  let query = supabase()
+    .from('trip_obs_base_cr2025_v1')
+    .select('user_login, inat_obs_id, latitude, longitude, taxon_id, quality_grade, observed_at_utc, day_local');
 
-export async function fetchTripDailyDetail(day: string): Promise<{ data: TripDailyDetailRow[]; error: PostgrestError | null }> {
-  const client = supabase();
-  const { data, error } = await client
-    .from('trip_daily_detail_cr2025_v1')
-    .select('day_local, user_login, obs_count, distinct_taxa')
-    .eq('day_local', day)
-    .order('obs_count', { ascending: false, nullsFirst: false })
-    .order('distinct_taxa', { ascending: false, nullsFirst: false })
-    .order('user_login', { ascending: true, nullsFirst: false });
+  if (options.day) {
+    query = query.eq('day_local', options.day);
+  }
 
-  const rows: TripDailyDetailRow[] = (data ?? [])
+  const { data, error } = await query;
+
+  const rows: TripBaseObservationRow[] = (data ?? [])
     .map((row: any) => {
       const user_login = (row?.user_login ?? '').toString();
       if (!user_login) return null;
       return {
-        day_local: (row?.day_local ?? '').toString(),
         user_login,
-        obs_count: toNumber(row?.obs_count),
-        distinct_taxa: toNumber(row?.distinct_taxa),
-      } satisfies TripDailyDetailRow;
+        inat_obs_id: row?.inat_obs_id != null ? Number(row.inat_obs_id) : null,
+        latitude: row?.latitude != null ? Number(row.latitude) : null,
+        longitude: row?.longitude != null ? Number(row.longitude) : null,
+        taxon_id: row?.taxon_id != null ? Number(row.taxon_id) : null,
+        quality_grade: row?.quality_grade ?? null,
+        observed_at_utc: row?.observed_at_utc ?? null,
+        day_local: row?.day_local ?? null,
+      } satisfies TripBaseObservationRow;
     })
-    .filter((row): row is TripDailyDetailRow => Boolean(row));
+    .filter((row): row is TripBaseObservationRow => Boolean(row));
 
   return { data: rows, error };
 }
 
-export type TripMapPointRow = {
-  inat_obs_id: number;
-  user_login: string;
-  latitude: number;
-  longitude: number;
-};
-
-export async function fetchTripMapPoints(): Promise<{ data: TripMapPointRow[]; error: PostgrestError | null }> {
-  const client = supabase();
-  const { data, error } = await client
-    .from('trip_map_points_cr2025_v1')
-    .select('inat_obs_id, user_login, latitude, longitude');
-
-  const rows: TripMapPointRow[] = (data ?? [])
-    .map((row: any) => {
-      const user_login = (row?.user_login ?? '').toString();
-      const lat = row?.latitude;
-      const lon = row?.longitude;
-      if (!user_login || lat == null || lon == null) return null;
-      return {
-        inat_obs_id: toNumber(row?.inat_obs_id),
-        user_login,
-        latitude: Number(lat),
-        longitude: Number(lon),
-      } satisfies TripMapPointRow;
-    })
-    .filter((row): row is TripMapPointRow => Boolean(row));
-
-  return { data: rows, error };
-}
-
-export type TripTrophyRow = {
-  trophy_id: string;
-  user_login: string;
-  place: number;
-  value: number | null;
-  awarded_at: string | null;
-  scope: string | null;
-};
-
-export async function fetchTripTrophiesAllDays(): Promise<{ data: TripTrophyRow[]; error: PostgrestError | null }> {
-  const client = supabase();
-  const { data, error } = await client
+export async function getTripTrophiesToday(tz: string): Promise<ApiResult<TripTrophyAward[]>> {
+  const { data, error } = await supabase()
     .from('trophies_daily_trip_cr2025_v1')
-    .select('trophy_id, user_login, place, value, awarded_at, scope')
-    .order('awarded_at', { ascending: false, nullsFirst: true })
-    .order('trophy_id', { ascending: true, nullsFirst: false });
+    .select('trophy_id, user_login, value, awarded_at');
 
-  const rows: TripTrophyRow[] = (data ?? [])
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const todayKey = formatter.format(new Date());
+
+  const rows: TripTrophyAward[] = (data ?? [])
     .map((row: any) => {
       const trophy_id = (row?.trophy_id ?? '').toString();
       const user_login = (row?.user_login ?? '').toString();
@@ -210,13 +288,38 @@ export async function fetchTripTrophiesAllDays(): Promise<{ data: TripTrophyRow[
       return {
         trophy_id,
         user_login,
-        place: toNumber(row?.place),
         value: row?.value != null ? Number(row.value) : null,
         awarded_at: row?.awarded_at ?? null,
-        scope: row?.scope ?? null,
-      } satisfies TripTrophyRow;
+      } satisfies TripTrophyAward;
     })
-    .filter((row): row is TripTrophyRow => Boolean(row));
+    .filter((row): row is TripTrophyAward => {
+      if (!row) return false;
+      if (!row.awarded_at) return false;
+      const awardedKey = formatter.format(new Date(row.awarded_at));
+      return awardedKey === todayKey;
+    });
+
+  return { data: rows, error };
+}
+
+export async function getTripTrophiesCumulative(): Promise<ApiResult<TripTrophyAward[]>> {
+  const { data, error } = await supabase()
+    .from('trophies_daily_trip_cr2025_v1')
+    .select('trophy_id, user_login, value, awarded_at');
+
+  const rows: TripTrophyAward[] = (data ?? [])
+    .map((row: any) => {
+      const trophy_id = (row?.trophy_id ?? '').toString();
+      const user_login = (row?.user_login ?? '').toString();
+      if (!trophy_id || !user_login) return null;
+      return {
+        trophy_id,
+        user_login,
+        value: row?.value != null ? Number(row.value) : null,
+        awarded_at: row?.awarded_at ?? null,
+      } satisfies TripTrophyAward;
+    })
+    .filter((row): row is TripTrophyAward => Boolean(row));
 
   return { data: rows, error };
 }
@@ -241,9 +344,10 @@ export async function fetchBingo(userLogin: string) {
 
 export async function fetchMembers() {
   const { data, error } = await supabase()
-    .from('public_leaderboard_masked_v1')
+    .from('trip_members_roster_v1')
     .select('user_login')
-    .order('user_login');
+    .order('display_name', { ascending: true, nullsFirst: false })
+    .order('user_login', { ascending: true, nullsFirst: false });
   if (error) {
     console.error('fetchMembers error', error);
     return [];

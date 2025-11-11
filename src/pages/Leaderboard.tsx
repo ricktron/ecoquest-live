@@ -4,7 +4,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Info, Clock } from 'lucide-react';
 import { formatPoints } from '@/lib/scoring';
 import Legend from '@/components/Legend';
-import { fetchTripLeaderboard, fetchDisplayFlags, type TripLeaderboardRow } from '@/lib/api';
+import {
+  getTripLeaderboard,
+  getTripBasePoints,
+  fetchDisplayFlags,
+  type TripLeaderboardRow,
+} from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { isLive } from '@/lib/config/profile';
 
@@ -14,9 +19,12 @@ type RankedLeaderboardRow = TripLeaderboardRow & {
   rankIndicator: '▲' | '▼' | '—';
 };
 
-type RankSnapshot = Record<string, { rank: number; ts: number }>;
+type RankSnapshot = {
+  timestamp: number;
+  ranks: Record<string, number>;
+};
 
-const RANK_STORAGE_KEY = 'rankDeltas:CR2025';
+const RANK_STORAGE_KEY = 'cr2025_rank_snapshot';
 const RANK_STALE_WINDOW_MS = 60 * 60 * 1000;
 
 export default function Leaderboard() {
@@ -26,6 +34,7 @@ export default function Leaderboard() {
   const [error, setError] = useState<{ message?: string } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
+  const [rgByLogin, setRgByLogin] = useState<Record<string, number>>({});
 
   const computeRankedRows = (rows: TripLeaderboardRow[]): RankedLeaderboardRow[] => {
     const sorted = [...rows]
@@ -36,7 +45,9 @@ export default function Leaderboard() {
         if (taxaDiff !== 0) return taxaDiff;
         const obsDiff = b.obs_count - a.obs_count;
         if (obsDiff !== 0) return obsDiff;
-        return a.user_login.localeCompare(b.user_login);
+        const nameA = (a.display_name || a.user_login).toLowerCase();
+        const nameB = (b.display_name || b.user_login).toLowerCase();
+        return nameA.localeCompare(nameB);
       })
       .map((row, idx) => ({
         ...row,
@@ -49,13 +60,16 @@ export default function Leaderboard() {
       return sorted;
     }
 
-    let snapshot: RankSnapshot = {};
+    let snapshot: RankSnapshot | null = null;
     try {
       const raw = window.localStorage.getItem(RANK_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          snapshot = parsed as RankSnapshot;
+          const candidate = parsed as RankSnapshot;
+          if (typeof candidate.timestamp === 'number' && candidate.ranks && typeof candidate.ranks === 'object') {
+            snapshot = candidate;
+          }
         }
       }
     } catch (err) {
@@ -64,19 +78,20 @@ export default function Leaderboard() {
 
     const now = Date.now();
 
+    const isFresh = snapshot ? now - snapshot.timestamp <= RANK_STALE_WINDOW_MS : false;
+
     const annotated = sorted.map((row) => {
       const key = row.user_login.toLowerCase();
-      const prev = snapshot[key];
+      const prevRank = snapshot?.ranks?.[key];
       let rankDelta: number | null = null;
       let rankIndicator: '▲' | '▼' | '—' = '—';
 
-      if (prev && typeof prev.rank === 'number') {
-        rankDelta = prev.rank - row.rank;
-        const isFresh = typeof prev.ts === 'number' && now - prev.ts <= RANK_STALE_WINDOW_MS;
-        if (isFresh) {
-          if (row.rank < prev.rank) {
+      if (typeof prevRank === 'number') {
+        rankDelta = prevRank - row.rank;
+        if (isFresh && rankDelta !== 0) {
+          if (rankDelta > 0) {
             rankIndicator = '▲';
-          } else if (row.rank > prev.rank) {
+          } else if (rankDelta < 0) {
             rankIndicator = '▼';
           }
         }
@@ -85,13 +100,16 @@ export default function Leaderboard() {
       return { ...row, rankDelta, rankIndicator };
     });
 
-    const nextSnapshot = annotated.reduce<RankSnapshot>((acc, row) => {
+    const nextSnapshot: RankSnapshot = {
+      timestamp: now,
+      ranks: {},
+    };
+    annotated.forEach((row) => {
       const key = row.user_login.toLowerCase();
       if (key) {
-        acc[key] = { rank: row.rank, ts: now };
+        nextSnapshot.ranks[key] = row.rank;
       }
-      return acc;
-    }, {});
+    });
 
     try {
       window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(nextSnapshot));
@@ -106,12 +124,38 @@ export default function Leaderboard() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [leaderboardResult, flags] = await Promise.all([
-          fetchTripLeaderboard(),
-          fetchDisplayFlags()
+        const [leaderboardResult, baseResult, flags] = await Promise.all([
+          getTripLeaderboard(),
+          getTripBasePoints(),
+          fetchDisplayFlags(),
         ]);
         setLeaderboardData(computeRankedRows(leaderboardResult.data));
-        setError(leaderboardResult.error ? { message: leaderboardResult.error.message } : null);
+
+        const rgCounts = (baseResult.data ?? []).reduce<Record<string, { total: number; research: number }>>((acc, row) => {
+          const key = row.user_login.toLowerCase();
+          if (!key) return acc;
+          const bucket = acc[key] ?? { total: 0, research: 0 };
+          bucket.total += 1;
+          if ((row.quality_grade ?? '').toLowerCase() === 'research') {
+            bucket.research += 1;
+          }
+          acc[key] = bucket;
+          return acc;
+        }, {});
+
+        const rgPercentages = Object.entries(rgCounts).reduce<Record<string, number>>((acc, [key, value]) => {
+          if (value.total > 0) {
+            acc[key] = Math.round((value.research / value.total) * 100);
+          }
+          return acc;
+        }, {});
+        setRgByLogin(rgPercentages);
+
+        const errors: string[] = [];
+        if (leaderboardResult.error?.message) errors.push(leaderboardResult.error.message);
+        if (baseResult.error?.message) errors.push(baseResult.error.message);
+        setError(errors.length ? { message: errors.join('; ') } : null);
+
         if (!leaderboardResult.error) {
           setLastUpdated(new Date());
         }
@@ -208,6 +252,10 @@ export default function Leaderboard() {
                   const displayName = row.display_name || row.user_login;
                   const rowKey = row.user_login;
                   const hasIndicator = !isBlackout && row.rankIndicator !== '—' && row.rankDelta != null && row.rankDelta !== 0;
+                  const rgKey = row.user_login.toLowerCase();
+                  const rgPercent = rgByLogin[rgKey];
+                  const checkCount = typeof rgPercent === 'number' ? Math.min(5, Math.max(0, Math.round(rgPercent / 20))) : 0;
+                  const checkMarks = checkCount > 0 ? '✅'.repeat(checkCount) : '';
 
                   return (
                     <div
@@ -245,6 +293,11 @@ export default function Leaderboard() {
                           <div className="flex gap-2 flex-wrap text-sm">
                             <span className="chip chip--info">🔍 {totalObservations}</span>
                             <span className="chip chip--info">🌿 {speciesCount}</span>
+                            {totalObservations > 0 && typeof rgPercent === 'number' && (
+                              <span className="chip chip--muted">
+                                RG {rgPercent}%{checkMarks ? ` ${checkMarks}` : ''}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
