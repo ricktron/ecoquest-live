@@ -5,13 +5,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { supabase } from '@/lib/supabaseClient';
+import { fetchTripMapPoints } from '@/lib/api';
 
 type MapObservation = {
   inat_obs_id: number;
   user_login: string;
-  latitude: number | null;
-  longitude: number | null;
+  latitude: number;
+  longitude: number;
   taxon_name: string | null;
   observed_at_utc: string | null;
   photo_url?: string | null;
@@ -57,18 +57,13 @@ export default function Map() {
     async function loadMapData() {
       setDataLoading(true);
       try {
-        const client = supabase();
-        const { data, error } = await client
-          .from('v_trip_roster_obs_bbox')
-          .select('inat_obs_id, user_login, latitude, longitude, taxon_name, observed_at_utc, photo_url');
+        const result = await fetchTripMapPoints();
+        const points = result.data ?? [];
 
-        if (error) {
-          console.warn('v_trip_roster_obs_bbox error', error);
+        if (result.error) {
+          console.warn('trip map points error', result.error);
         }
 
-        const points = ((data as MapObservation[] | null) ?? []).filter(
-          (row): row is MapObservation => row.latitude != null && row.longitude != null
-        );
         setObservations(points);
 
         if (points.length > 0) {

@@ -5,6 +5,7 @@ import { Crown, Lock } from 'lucide-react';
 import TrophyDetail from './TrophyDetail';
 import { TrophySpec, TrophyScope } from '@/lib/trophies/registry';
 import { loadCatalog } from '@/lib/trophies/loadCatalog';
+import { fetchTripTrophiesToday } from '@/lib/api';
 import { PROFILE } from '@/lib/config/profile';
 import { InfoPopover } from '@/components/InfoPopover';
 
@@ -86,17 +87,12 @@ export default function Trophies() {
           return [t.id, list] as const;
         });
 
-        const dailyPromise = client
-          .from('trophies_daily_obs_leader_awards_v')
-          .select('trophy_id, user_login, place, value, scope')
-          .order('trophy_id', { ascending: true })
-          .order('place', { ascending: true });
-
         const results = await Promise.all(viewPromises);
-        const { data: dailyData, error: dailyError } = await dailyPromise;
+        const dailyResult = await fetchTripTrophiesToday();
+        const dailyData = dailyResult.data ?? [];
 
-        if (dailyError) {
-          console.warn('trophies_daily_obs_leader_awards_v error', dailyError);
+        if (dailyResult.error) {
+          console.warn('trophies daily awards error', dailyResult.error);
         }
 
         if (!cancelled) {

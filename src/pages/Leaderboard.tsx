@@ -2,12 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, Info, Clock } from 'lucide-react';
-import { formatPoints, computeTrends, type UserRowWithTrend, type UserRowWithRank } from '@/lib/scoring';
-import { findCloseBattles } from '@/lib/closeBattles';
-import { UI } from '@/uiConfig';
+import { formatPoints } from '@/lib/scoring';
 import Legend from '@/components/Legend';
-import { fetchLeaderboard, fetchDisplayFlags, type LeaderRow } from '@/lib/api';
-import { DEFAULT_AID } from '@/lib/supabase';
+import { fetchLeaderboardTrip, fetchDisplayFlags, type LeaderRow } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { isLive } from '@/lib/config/profile';
 
@@ -20,15 +17,89 @@ export default function Leaderboard() {
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
 
+  type SnapshotStore = {
+    bucket: number;
+    rows: Record<string, number>;
+    prev?: { bucket: number; rows: Record<string, number> };
+  };
+
+  const annotateRankChanges = (rows: LeaderRow[]): LeaderRow[] => {
+    if (typeof window === 'undefined') return rows;
+
+    const bucket = Math.floor(Date.now() / 600000);
+    const storageKey = 'eql-leaderboard-snapshot';
+    let parsed: SnapshotStore | null = null;
+
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        parsed = JSON.parse(raw) as SnapshotStore;
+      }
+    } catch (err) {
+      console.warn('leaderboard snapshot parse error', err);
+    }
+
+    let baseline: Record<string, number> | null = null;
+    if (parsed) {
+      if (parsed.bucket === bucket) {
+        baseline = parsed.prev?.rows ?? null;
+      } else {
+        baseline = parsed.rows ?? null;
+      }
+    }
+
+    const withDelta = rows.map((row, index) => {
+      const login = (row.user_login || row.inat_login || '').toLowerCase();
+      const rank = row.rank ?? index + 1;
+      let rankDelta: number | null = null;
+      if (login && baseline && typeof baseline[login] === 'number') {
+        rankDelta = baseline[login] - rank;
+      }
+      return {
+        ...row,
+        rank,
+        rankDelta,
+        rank_delta: rankDelta,
+      };
+    });
+
+    const snapshot: SnapshotStore = {
+      bucket,
+      rows: withDelta.reduce<Record<string, number>>((acc, row) => {
+        const login = (row.user_login || row.inat_login || '').toLowerCase();
+        if (login) {
+          acc[login] = row.rank ?? 0;
+        }
+        return acc;
+      }, {}),
+    };
+
+    if (parsed) {
+      if (parsed.bucket === bucket && parsed.prev) {
+        snapshot.prev = parsed.prev;
+      } else if (parsed.bucket !== bucket) {
+        snapshot.prev = { bucket: parsed.bucket, rows: parsed.rows };
+      }
+    }
+
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+    } catch (err) {
+      console.warn('leaderboard snapshot store error', err);
+    }
+
+    return withDelta;
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         const [result, flags] = await Promise.all([
-          fetchLeaderboard(),
+          fetchLeaderboardTrip(),
           fetchDisplayFlags()
         ]);
-        setLeaderboardData(result.data);
+        setLeaderboardData(annotateRankChanges(result.data));
         setError(result.error);
         if (!result.error) {
           setLastUpdated(new Date());
@@ -138,9 +209,18 @@ export default function Leaderboard() {
                           <div className="text-2xl font-bold text-muted-foreground w-8">
                             #{row.rank ?? idx + 1}
                           </div>
-                          {!isBlackout && typeof row.prev_rank === 'number' && row.prev_rank !== (row.rank ?? idx + 1) && (
-                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground" aria-label="rank change">
-                              {row.prev_rank > (row.rank ?? idx + 1) ? '▲' : '▼'} {Math.abs(row.prev_rank - (row.rank ?? idx + 1))}
+                          {!isBlackout && typeof row.rankDelta === 'number' && row.rankDelta !== 0 && (
+                            <span
+                              className={`rank-change text-xs font-medium ${row.rankDelta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+                              aria-label="rank change"
+                            >
+                              <span>{row.rankDelta > 0 ? '▲' : '▼'}</span>
+                              <span>{Math.abs(row.rankDelta)}</span>
+                            </span>
+                          )}
+                          {!isBlackout && typeof row.rankDelta === 'number' && row.rankDelta === 0 && (
+                            <span className="rank-change text-xs text-muted-foreground" aria-label="no rank change">
+                              <span>–</span>
                             </span>
                           )}
                         </div>

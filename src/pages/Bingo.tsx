@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchBingo, fetchMembers } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 
 type BingoCell = {
   label: string;
@@ -116,6 +116,8 @@ export default function Bingo() {
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramLogin = useMemo(() => searchParams.get('u'), [searchParams]);
 
   const getCellInfo = (label: string): CellInfo => {
     return CELL_INFO[label] || {
@@ -129,21 +131,27 @@ export default function Bingo() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      // Get student logins from config_filters flags
-      const { data: cfg } = await supabase
-        .from('config_filters')
-        .select('flags')
-        .eq('id', true)
-        .maybeSingle();
-
-      const studentLogins = (cfg?.flags as any)?.student_logins ?? [];
-      
+      const roster = await fetchMembers();
       if (!mounted) return;
-      setUserLogins(studentLogins);
-      if (studentLogins.length > 0) setSelectedUser(studentLogins[0]);
+      setUserLogins(roster.map(login => login.toLowerCase()));
     })();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (userLogins.length === 0) return;
+    const normalizedParam = (paramLogin ?? '').toLowerCase();
+    const hasParam = normalizedParam && userLogins.includes(normalizedParam);
+    const fallback = hasParam ? normalizedParam : userLogins[0];
+
+    setSelectedUser(prev => (prev === fallback ? prev : fallback));
+
+    if (!hasParam && fallback) {
+      const params = new URLSearchParams(searchParams);
+      params.set('u', fallback);
+      setSearchParams(params, { replace: true });
+    }
+  }, [userLogins, paramLogin, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -161,7 +169,7 @@ export default function Bingo() {
   return (
     <div className="page">
       <div className="flex items-center gap-2 mb-4">
-        <h1 className="text-2xl font-bold">Bingo</h1>
+        <h1 className="text-2xl font-bold">Field Bingo</h1>
         <button
           onClick={() => setShowHelp(true)}
           className="p-1 rounded-full hover:bg-muted transition-colors"
@@ -179,7 +187,13 @@ export default function Bingo() {
           id="user-select"
           className="w-full p-2 border rounded-lg"
           value={selectedUser}
-          onChange={(e) => setSelectedUser(e.target.value)}
+          onChange={(e) => {
+            const login = e.target.value;
+            setSelectedUser(login);
+            const params = new URLSearchParams(searchParams);
+            params.set('u', login);
+            setSearchParams(params, { replace: true });
+          }}
         >
           {userLogins.map((login) => (
             <option key={login} value={login}>

@@ -21,4 +21,8 @@ export const TROPHIES: TrophySpec[] = [
   { id: 'trip-night-owl',      title: 'Trip Night Owl',      subtitle: 'Most nighttime observations (trip)',    scope: 'trip',  metric: 'obs',         view: null, info: 'Nighttime observations across the entire trip window.' },
   { id: 'shutterbug',          title: 'Shutterbug',          subtitle: 'Most observations with photos',         scope: 'trip',  metric: 'obs',         view: null, info: 'Photo-backed observations only.' },
   { id: 'sound-scout',         title: 'Sound Scout',         subtitle: 'Most observations with sounds',         scope: 'trip',  metric: 'obs',         view: null, info: 'Sound-backed observations only.' },
+  { id: 'daily_mammal_maven',  title: 'Mammal Maven',        subtitle: '≥2 mammal species today',               scope: 'daily', metric: 'species',     view: null, info: 'Awarded for recording at least two distinct mammal species today.' },
+  { id: 'daily_bird_blitz',    title: 'Bird Blitz',          subtitle: '≥5 bird species today',                 scope: 'daily', metric: 'species',     view: null, info: 'Awarded for recording at least five distinct bird species today.' },
+  { id: 'daily_herp_hunter',   title: 'Herp Hunter',         subtitle: '≥3 reptile or amphibian species today', scope: 'daily', metric: 'species',     view: null, info: 'Awarded for recording at least three reptile or amphibian species today.' },
+  { id: 'daily_bug_bonanza',   title: 'Bug Bonanza',         subtitle: '≥6 insect species today',               scope: 'daily', metric: 'species',     view: null, info: 'Awarded for recording at least six distinct insect species today.' },
 ];

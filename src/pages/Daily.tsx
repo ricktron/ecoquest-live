@@ -1,51 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
-
+import { fetchDailyCountsCR } from '@/lib/api';
 type DailyRow = {
-  inat_login: string;
-  total_obs: number;
-  unique_species: number;
+  user_login: string;
+  display_name?: string | null;
+  obs_count: number;
+  distinct_taxa: number;
 };
 
-type ObservationRow = {
-  inat_login: string | null;
-  user_login: string | null;
-  taxon_id: number | null;
-};
-
-function getCostaRicaWindow() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(now);
-
-  const year = parts.find(p => p.type === 'year')?.value ?? '1970';
-  const month = parts.find(p => p.type === 'month')?.value ?? '01';
-  const day = parts.find(p => p.type === 'day')?.value ?? '01';
-  const dateString = `${year}-${month}-${day}`;
-
-  const start = new Date(`${dateString}T00:00:00-06:00`);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-
-  const label = new Intl.DateTimeFormat(undefined, {
+function formatCostaRicaDate(dayOffset: number) {
+  const now = new Date(Date.now() - dayOffset * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat(undefined, {
     timeZone: 'America/Costa_Rica',
     month: 'long',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
   }).format(now);
-
-  return { start, end, label };
 }
 
 export default function Daily() {
   const [loading, setLoading] = useState(true);
   const [dayScores, setDayScores] = useState<DailyRow[]>([]);
-  const [dateLabel, setDateLabel] = useState<string>('');
+  const [dayOffset, setDayOffset] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,55 +30,12 @@ export default function Daily() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const { start, end, label } = getCostaRicaWindow();
+        const result = await fetchDailyCountsCR({ dayOffset });
         if (!cancelled) {
-          setDateLabel(label);
+          setDayScores(result.data ?? []);
         }
-
-        const client = supabase();
-        const { data, error } = await client
-          .from('observations_public_v1')
-          .select('inat_login:lower(user_login), user_login, taxon_id')
-          .gte('observed_at_utc', start.toISOString())
-          .lt('observed_at_utc', end.toISOString())
-          .gte('latitude', 8.0)
-          .lte('latitude', 11.5)
-          .gte('longitude', -86.0)
-          .lte('longitude', -82.0);
-
-        if (error) {
-          console.warn('observations_public_v1 daily query error', error);
-        }
-
-        const observations = (data as ObservationRow[] | null) ?? [];
-        const aggregate = new Map<string, { login: string; total: number; taxa: Set<number> }>();
-
-        observations.forEach(row => {
-          const loginRaw = row.inat_login || row.user_login;
-          if (!loginRaw) return;
-          const login = loginRaw.toLowerCase();
-          const existing = aggregate.get(login) ?? { login: loginRaw, total: 0, taxa: new Set<number>() };
-          existing.total += 1;
-          if (row.taxon_id != null) {
-            existing.taxa.add(Number(row.taxon_id));
-          }
-          aggregate.set(login, existing);
-        });
-
-        const rows: DailyRow[] = Array.from(aggregate.values()).map(entry => ({
-          inat_login: entry.login,
-          total_obs: entry.total,
-          unique_species: entry.taxa.size,
-        }));
-
-        rows.sort((a, b) => {
-          if (b.total_obs !== a.total_obs) return b.total_obs - a.total_obs;
-          if (b.unique_species !== a.unique_species) return b.unique_species - a.unique_species;
-          return a.inat_login.localeCompare(b.inat_login);
-        });
-
-        if (!cancelled) {
-          setDayScores(rows);
+        if (result.error) {
+          console.warn('daily counts error', result.error);
         }
       } catch (err) {
         console.warn('Failed to load daily observations', err);
@@ -120,7 +54,10 @@ export default function Daily() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dayOffset]);
+
+  const label = dayOffset === 0 ? 'today' : 'yesterday';
+  const dateLabel = formatCostaRicaDate(dayOffset);
 
   return (
     <div className="pb-6">
@@ -130,11 +67,27 @@ export default function Daily() {
             <Calendar className="h-8 w-8 text-primary" />
             Daily
           </h1>
-          {dateLabel && (
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              Observations recorded today ({dateLabel}, America/Costa_Rica)
+              Observations recorded {label} (America/Costa_Rica)
             </p>
-          )}
+            <div className="text-xs text-muted-foreground">{dateLabel}</div>
+          </div>
+          <div className="inline-flex rounded-xl border border-border bg-card p-1">
+            {[0, 1].map(offset => (
+              <button
+                key={offset}
+                onClick={() => setDayOffset(offset)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  dayOffset === offset
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                }`}
+              >
+                {offset === 0 ? 'Today' : 'Yesterday'}
+              </button>
+            ))}
+          </div>
         </div>
 
 
@@ -153,16 +106,16 @@ export default function Daily() {
           <div className="space-y-3">
             {dayScores.map((row, idx) => (
               <div
-                key={row.inat_login}
+                key={row.user_login}
                 className="p-4 bg-card border rounded-lg flex items-center justify-between"
               >
                 <div className="flex items-center gap-4">
                   <div className="text-2xl font-bold text-muted-foreground w-8">#{idx + 1}</div>
                   <div className="space-y-1">
-                    <div className="font-semibold text-lg">{row.inat_login}</div>
+                    <div className="font-semibold text-lg">{row.display_name || row.user_login}</div>
                     <div className="flex gap-2 flex-wrap text-sm">
-                      <span className="chip chip--info">🔍 {row.total_obs}</span>
-                      <span className="chip chip--info">🌿 {row.unique_species}</span>
+                      <span className="chip chip--info">🔍 {row.obs_count}</span>
+                      <span className="chip chip--info">🌿 {row.distinct_taxa}</span>
                     </div>
                   </div>
                 </div>

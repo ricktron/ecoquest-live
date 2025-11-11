@@ -129,6 +129,13 @@ body.has-ticker {
   z-index: 1;
 }
 
+.rank-change {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .header-stack__content {
   flex: 1;
   overflow-x: hidden;
