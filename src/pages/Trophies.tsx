@@ -4,20 +4,12 @@ import { FLAGS } from '@/env';
 import { Crown } from 'lucide-react';
 import TrophyDetail from './TrophyDetail';
 import {
-  fetchTripTrophiesAllDays,
-  getTripLeaderboardNameMap,
-  type TripTrophyRow,
+  getTripTrophiesToday,
+  getTripTrophiesCumulative,
+  getTripRoster,
+  getTripParams,
+  type TripTrophyAward,
 } from '@/lib/api';
-
-const TRIP_DAY_RANGE = [
-  '2025-11-15',
-  '2025-11-14',
-  '2025-11-13',
-  '2025-11-12',
-  '2025-11-11',
-  '2025-11-10',
-  '2025-11-09',
-];
 
 const TROPHY_META = {
   daily_obs_leader: { title: 'Most Observations', icon: '🔍', valueLabel: 'observations' },
@@ -26,39 +18,26 @@ const TROPHY_META = {
 
 type TrophyId = keyof typeof TROPHY_META;
 
-type DayGroup = {
-  dateKey: string;
-  displayDate: string;
-  trophies: Partial<Record<TrophyId, TripTrophyRow>>;
+type TodayGroups = Record<TrophyId, TripTrophyAward[]>;
+
+type TripWinner = {
+  user_login: string;
+  count: number;
+  totalValue: number | null;
+  lastAwardedAt: string | null;
 };
 
-function formatCostaRicaKey(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-}
-
-function formatDisplayDate(key: string): string {
-  const date = new Date(`${key}T12:00:00-06:00`);
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(date);
-}
+type TripGroups = Record<TrophyId, TripWinner[]>;
 
 export default function Trophies() {
   const { slug } = useParams<{ slug?: string }>();
 
   const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState<DayGroup[]>([]);
+  const [mode, setMode] = useState<'today' | 'trip'>('today');
+  const [todayGroups, setTodayGroups] = useState<TodayGroups>({});
+  const [tripGroups, setTripGroups] = useState<TripGroups>({});
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
+  const [tz, setTz] = useState<string>('UTC');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,37 +48,89 @@ export default function Trophies() {
     (async () => {
       setLoading(true);
       try {
-        const [result, displayMap] = await Promise.all([
-          fetchTripTrophiesAllDays(),
-          getTripLeaderboardNameMap(),
+        const [paramsRes, rosterRes] = await Promise.all([
+          getTripParams(),
+          getTripRoster(),
         ]);
 
         if (cancelled) return;
 
-        const filtered = (result.data ?? []).filter(
-          (row) =>
-            row.place === 1 &&
-            (row.trophy_id === 'daily_obs_leader' || row.trophy_id === 'daily_variety_hero'),
+        const tzValue = paramsRes.data?.tz ?? 'UTC';
+        setTz(tzValue);
+
+        const [todayRes, tripRes] = await Promise.all([
+          getTripTrophiesToday(tzValue),
+          getTripTrophiesCumulative(),
+        ]);
+
+        if (cancelled) return;
+
+        const rosterMap = (rosterRes.data ?? []).reduce<Record<string, string>>((acc, row) => {
+          const key = row.user_login.toLowerCase();
+          if (key) {
+            acc[key] = row.display_name ?? row.user_login;
+          }
+          return acc;
+        }, {});
+        setNameMap(rosterMap);
+
+        const groupedToday = (todayRes.data ?? []).reduce<TodayGroups>((acc, award) => {
+          const id = award.trophy_id as TrophyId;
+          if (!acc[id]) acc[id] = [];
+          acc[id].push(award);
+          return acc;
+        }, {} as TodayGroups);
+        setTodayGroups(groupedToday);
+
+        type MutableWinner = TripWinner & { hasValue: boolean };
+
+        const tripAggregate = (tripRes.data ?? []).reduce<Map<TrophyId, Map<string, MutableWinner>>>(
+          (acc, award) => {
+            const trophyId = award.trophy_id as TrophyId;
+            const login = award.user_login;
+            if (!acc.has(trophyId)) {
+              acc.set(trophyId, new Map());
+            }
+            const winners = acc.get(trophyId)!;
+            const existing = winners.get(login) ?? {
+              user_login: login,
+              count: 0,
+              totalValue: 0,
+              lastAwardedAt: null,
+              hasValue: false,
+            };
+            existing.count += 1;
+            if (award.value != null) {
+              existing.totalValue = (existing.hasValue ? existing.totalValue : 0) + Number(award.value);
+              existing.hasValue = true;
+            }
+            if (!existing.lastAwardedAt || (award.awarded_at && award.awarded_at > existing.lastAwardedAt)) {
+              existing.lastAwardedAt = award.awarded_at;
+            }
+            winners.set(login, existing);
+            return acc;
+          },
+          new Map(),
         );
 
-        const grouped = new Map<string, Partial<Record<TrophyId, TripTrophyRow>>>();
-        filtered.forEach((row) => {
-          const key = formatCostaRicaKey(row.awarded_at);
-          if (!key) return;
-          const existing = grouped.get(key) ?? {};
-          existing[row.trophy_id as TrophyId] = row;
-          grouped.set(key, existing);
+        const tripGrouped: TripGroups = {};
+        tripAggregate.forEach((winners, trophyId) => {
+          tripGrouped[trophyId] = Array.from(winners.values()).map((winner) => ({
+            user_login: winner.user_login,
+            count: winner.count,
+            totalValue: winner.hasValue ? winner.totalValue : null,
+            lastAwardedAt: winner.lastAwardedAt,
+          }));
         });
 
-        const ordered = TRIP_DAY_RANGE.slice().sort((a, b) => b.localeCompare(a)).map((key) => ({
-          dateKey: key,
-          displayDate: formatDisplayDate(key),
-          trophies: grouped.get(key) ?? {},
-        }));
+        setTripGroups(tripGrouped);
 
-        setGroups(ordered);
-        setNameMap(displayMap);
-        setError(result.error?.message ?? null);
+        const errors: string[] = [];
+        if (paramsRes.error?.message) errors.push(paramsRes.error.message);
+        if (rosterRes.error?.message) errors.push(rosterRes.error.message);
+        if (todayRes.error?.message) errors.push(todayRes.error.message);
+        if (tripRes.error?.message) errors.push(tripRes.error.message);
+        setError(errors.length ? errors.join('; ') : null);
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to load trophies', err);
@@ -118,6 +149,8 @@ export default function Trophies() {
   }, [slug]);
 
   const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
+
+  const sortedTrophyIds = Object.keys(TROPHY_META) as TrophyId[];
 
   if (slug) {
     return <TrophyDetail />;
@@ -144,7 +177,7 @@ export default function Trophies() {
               Trophies
             </h1>
             <p className="text-sm text-muted-foreground">
-              Daily heroes across the Costa Rica 2025 field week
+              {mode === 'today' ? 'Daily heroes for today' : 'Cumulative field-week champions'} ({tz})
             </p>
           </div>
           <a
@@ -153,6 +186,22 @@ export default function Trophies() {
           >
             View Trophy Cabinet
           </a>
+        </div>
+
+        <div className="inline-flex rounded-lg border border-border p-1 bg-muted/60">
+          {['today', 'trip'].map((value) => (
+            <button
+              key={value}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                mode === value
+                  ? 'bg-primary text-primary-foreground shadow'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setMode(value as 'today' | 'trip')}
+            >
+              {value === 'today' ? 'Today' : 'Trip'}
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -168,43 +217,86 @@ export default function Trophies() {
                 Trophy data error: {error}
               </div>
             )}
-            <div className="space-y-4">
-              {groups.map((group) => (
-                <div key={group.dateKey} className="rounded-2xl border border-border bg-card p-5 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="text-lg font-semibold">{group.displayDate}</div>
-                    <div className="text-xs text-muted-foreground">America/Costa_Rica</div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {(Object.keys(TROPHY_META) as TrophyId[]).map((id) => {
-                      const meta = TROPHY_META[id];
-                      const row = group.trophies[id];
-                      return (
-                        <div key={id} className="rounded-xl border border-border bg-background p-4 space-y-2">
-                          <div className="text-sm font-semibold flex items-center gap-2">
-                            <span>{meta.icon}</span>
-                            {meta.title}
-                          </div>
-                          {row ? (
-                            <>
-                              <div className="text-base font-medium">{getDisplayName(row.user_login)}</div>
-                              <div className="text-xs text-muted-foreground">{row.user_login}</div>
-                              {row.value != null && (
+            {mode === 'today' ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {sortedTrophyIds.map((id) => {
+                  const meta = TROPHY_META[id];
+                  const winners = todayGroups[id] ?? [];
+                  return (
+                    <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
+                      <div className="text-sm font-semibold flex items-center gap-2">
+                        <span>{meta.icon}</span>
+                        {meta.title}
+                      </div>
+                      {winners.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">No winners recorded today.</div>
+                      ) : (
+                        <div className="space-y-3">
+                          {winners.map((winner, index) => (
+                            <div key={`${winner.user_login}-${index}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                              <div className="text-base font-medium">{getDisplayName(winner.user_login)}</div>
+                              <div className="text-xs text-muted-foreground">{winner.user_login}</div>
+                              {winner.value != null && (
                                 <div className="text-xs text-muted-foreground capitalize">
-                                  {meta.valueLabel}: {row.value}
+                                  {meta.valueLabel ?? 'Value'}: {winner.value}
                                 </div>
                               )}
-                            </>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">No winner recorded.</div>
-                          )}
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sortedTrophyIds.map((id) => {
+                  const meta = TROPHY_META[id];
+                  const winners = tripGroups[id] ?? [];
+                  const sortedWinners = [...winners].sort((a, b) => {
+                    const countDiff = b.count - a.count;
+                    if (countDiff !== 0) return countDiff;
+                    const valueDiff = (b.totalValue ?? 0) - (a.totalValue ?? 0);
+                    if (valueDiff !== 0) return valueDiff;
+                    const nameA = getDisplayName(a.user_login).toLowerCase();
+                    const nameB = getDisplayName(b.user_login).toLowerCase();
+                    return nameA.localeCompare(nameB);
+                  });
+                  return (
+                    <div key={id} className="rounded-2xl border border-border bg-card p-5 space-y-3">
+                      <div className="text-sm font-semibold flex items-center gap-2">
+                        <span>{meta.icon}</span>
+                        {meta.title}
+                      </div>
+                      {sortedWinners.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">No winners yet.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {sortedWinners.map((winner) => (
+                            <div key={winner.user_login} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                              <div className="text-base font-medium">{getDisplayName(winner.user_login)}</div>
+                              <div className="text-xs text-muted-foreground">{winner.user_login}</div>
+                              <div className="text-xs text-muted-foreground">Wins: {winner.count}</div>
+                              {winner.totalValue != null && meta.valueLabel && (
+                                <div className="text-xs text-muted-foreground capitalize">
+                                  Total {meta.valueLabel}: {winner.totalValue}
+                                </div>
+                              )}
+                              {winner.lastAwardedAt && (
+                                <div className="text-[11px] text-muted-foreground">
+                                  Last awarded: {new Date(winner.lastAwardedAt).toLocaleString('en-US', { timeZone: tz })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </div>

@@ -5,10 +5,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { fetchTripMapPoints, getTripLeaderboardNameMap } from '@/lib/api';
+import { getTripBasePoints, getTripParams, getTripRoster, type TripParams } from '@/lib/api';
 
 type MapObservation = {
-  inat_obs_id: number;
+  inat_obs_id: number | null;
   user_login: string;
   latitude: number;
   longitude: number;
@@ -44,9 +44,20 @@ function MapInvalidator() {
   return null;
 }
 
+function TripBounds({ bounds }: { bounds: [[number, number], [number, number]] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!bounds) return;
+    map.fitBounds(bounds, { padding: [24, 24] });
+  }, [map, bounds]);
+
+  return null;
+}
+
 export default function Map() {
   const navigate = useNavigate();
-  const [bbox, setBbox] = useState<{ swlat: number; swlng: number; nelat: number; nelng: number } | null>(null);
+  const [params, setParams] = useState<TripParams | null>(null);
   const [observations, setObservations] = useState<MapObservation[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
@@ -55,35 +66,44 @@ export default function Map() {
     async function loadMapData() {
       setDataLoading(true);
       try {
-        const [result, displayMap] = await Promise.all([
-          fetchTripMapPoints(),
-          getTripLeaderboardNameMap(),
+        const [baseResult, paramsResult, rosterResult] = await Promise.all([
+          getTripBasePoints(),
+          getTripParams(),
+          getTripRoster(),
         ]);
-        const points = result.data ?? [];
 
-        if (result.error) {
-          console.warn('trip map points error', result.error);
-        }
+        const filtered = (baseResult.data ?? [])
+          .filter((row) => row.latitude != null && row.longitude != null)
+          .map((row) => ({
+            inat_obs_id: row.inat_obs_id,
+            user_login: row.user_login,
+            latitude: Number(row.latitude),
+            longitude: Number(row.longitude),
+          } satisfies MapObservation));
 
-        setNameMap(displayMap);
-        setObservations(points);
+        setObservations(filtered);
+        setParams(paramsResult.data ?? null);
 
-        if (points.length > 0) {
-          const latitudes = points.map(p => Number(p.latitude));
-          const longitudes = points.map(p => Number(p.longitude));
-          setBbox({
-            swlat: Math.min(...latitudes),
-            swlng: Math.min(...longitudes),
-            nelat: Math.max(...latitudes),
-            nelng: Math.max(...longitudes),
-          });
-        } else {
-          setBbox(null);
+        const rosterMap = (rosterResult.data ?? []).reduce<Record<string, string>>((acc, row) => {
+          const key = row.user_login.toLowerCase();
+          if (key) {
+            acc[key] = row.display_name ?? row.user_login;
+          }
+          return acc;
+        }, {});
+        setNameMap(rosterMap);
+
+        const errors: string[] = [];
+        if (baseResult.error?.message) errors.push(baseResult.error.message);
+        if (paramsResult.error?.message) errors.push(paramsResult.error.message);
+        if (rosterResult.error?.message) errors.push(rosterResult.error.message);
+        if (errors.length) {
+          console.warn('map data errors', errors.join('; '));
         }
       } catch (err) {
         console.warn('Failed to load map observations', err);
         setObservations([]);
-        setBbox(null);
+        setParams(null);
       } finally {
         setDataLoading(false);
       }
@@ -93,6 +113,13 @@ export default function Map() {
   }, []);
 
   const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
+
+  const bounds = params
+    ? [
+        [params.lat_min, params.lon_min] as [number, number],
+        [params.lat_max, params.lon_max] as [number, number],
+      ]
+    : null;
 
   return (
     <div className="pb-6">
@@ -111,56 +138,63 @@ export default function Map() {
         ) : (
           <div className="map-wrap rounded-lg overflow-hidden border">
             <MapContainer
-              center={bbox ? [
-                (bbox.swlat + bbox.nelat) / 2,
-                (bbox.swlng + bbox.nelng) / 2
+              center={bounds ? [
+                (bounds[0][0] + bounds[1][0]) / 2,
+                (bounds[0][1] + bounds[1][1]) / 2,
               ] : [
                 observations[0]?.latitude ?? 10,
-                observations[0]?.longitude ?? -84
+                observations[0]?.longitude ?? -84,
               ]}
-              zoom={bbox ? 11 : 10}
+              zoom={bounds ? 12 : 10}
               style={{ height: '100%', width: '100%' }}
             >
               <MapInvalidator />
+              {bounds && <TripBounds bounds={bounds} />}
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {observations.map((obs) => (
-                <CircleMarker
-                  key={obs.inat_obs_id}
-                  center={[Number(obs.latitude), Number(obs.longitude)]}
-                  radius={6}
-                  fillColor="#22c55e"
-                  color="#fff"
-                  weight={2}
-                  fillOpacity={0.7}
-                >
-                  <Popup>
-                    <div className="text-sm space-y-1">
-                      <div className="font-semibold">{getDisplayName(obs.user_login)}</div>
-                      <div className="text-xs text-muted-foreground">{obs.user_login}</div>
-                      <div className="flex gap-2 mt-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.open(`https://www.inaturalist.org/observations/${obs.inat_obs_id}`, '_blank')}
-                        >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          iNat
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/obs/${obs.inat_obs_id}`)}
-                        >
-                          Details
-                        </Button>
+              {observations.map((obs, idx) => {
+                const obsId = obs.inat_obs_id;
+                const markerKey = obsId ?? `${obs.user_login}-${idx}`;
+                return (
+                  <CircleMarker
+                    key={markerKey}
+                    center={[Number(obs.latitude), Number(obs.longitude)]}
+                    radius={6}
+                    fillColor="#22c55e"
+                    color="#fff"
+                    weight={2}
+                    fillOpacity={0.7}
+                  >
+                    <Popup>
+                      <div className="text-sm space-y-1">
+                        <div className="font-semibold">{getDisplayName(obs.user_login)}</div>
+                        <div className="text-xs text-muted-foreground">{obs.user_login}</div>
+                        {obsId ? (
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`https://www.inaturalist.org/observations/${obsId}`, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              iNat
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(`/obs/${obsId}`)}
+                            >
+                              Details
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
             </MapContainer>
           </div>
         )}

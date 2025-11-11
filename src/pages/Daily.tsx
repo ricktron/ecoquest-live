@@ -2,23 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ChevronDown } from 'lucide-react';
 import {
-  fetchTripDays,
-  fetchTripDailySummary,
-  fetchTripDailyDetail,
-  getTripLeaderboardNameMap,
+  getTripDailySummary,
+  getTripBasePoints,
+  getTripRoster,
   type TripDailySummaryRow,
-  type TripDailyDetailRow,
 } from '@/lib/api';
-
-const TRIP_DAY_RANGE = [
-  '2025-11-15',
-  '2025-11-14',
-  '2025-11-13',
-  '2025-11-12',
-  '2025-11-11',
-  '2025-11-10',
-  '2025-11-09',
-];
 
 function formatCostaRicaDate(day: string): string {
   if (!day) return day;
@@ -31,15 +19,21 @@ function formatCostaRicaDate(day: string): string {
   }).format(date);
 }
 
+type DetailRow = {
+  user_login: string;
+  obs_count: number;
+  distinct_taxa: number;
+};
+
 type DetailState = {
   loading: boolean;
-  rows: TripDailyDetailRow[];
+  rows: DetailRow[];
   error: string | null;
 };
 
 export default function Daily() {
   const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState<string[]>(TRIP_DAY_RANGE);
+  const [days, setDays] = useState<string[]>([]);
   const [summaryByDay, setSummaryByDay] = useState<Record<string, TripDailySummaryRow>>({});
   const [details, setDetails] = useState<Record<string, DetailState>>({});
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
@@ -54,22 +48,15 @@ export default function Daily() {
     (async () => {
       setLoading(true);
       try {
-        const [daysRes, summaryRes, displayMap] = await Promise.all([
-          fetchTripDays(),
-          fetchTripDailySummary(),
-          getTripLeaderboardNameMap(),
+        const [summaryRes, rosterRes] = await Promise.all([
+          getTripDailySummary(),
+          getTripRoster(),
         ]);
 
         if (cancelled) return;
 
-        const daySet = new Set<string>(TRIP_DAY_RANGE);
-        daysRes.data.forEach((row) => {
-          if (row.day_local) {
-            daySet.add(row.day_local);
-          }
-        });
+        const orderedDays = summaryRes.data.map((row) => row.day_local).sort((a, b) => b.localeCompare(a));
 
-        const orderedDays = Array.from(daySet).sort((a, b) => b.localeCompare(a));
         const summaryMap = summaryRes.data.reduce<Record<string, TripDailySummaryRow>>((acc, row) => {
           acc[row.day_local] = row;
           return acc;
@@ -77,11 +64,18 @@ export default function Daily() {
 
         setDays(orderedDays);
         setSummaryByDay(summaryMap);
-        setNameMap(displayMap);
+        const rosterMap = (rosterRes.data ?? []).reduce<Record<string, string>>((acc, row) => {
+          const key = row.user_login.toLowerCase();
+          if (key) {
+            acc[key] = row.display_name ?? row.user_login;
+          }
+          return acc;
+        }, {});
+        setNameMap(rosterMap);
 
         const errors: string[] = [];
-        if (daysRes.error?.message) errors.push(daysRes.error.message);
         if (summaryRes.error?.message) errors.push(summaryRes.error.message);
+        if (rosterRes.error?.message) errors.push(rosterRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
       } catch (err) {
         if (!cancelled) {
@@ -114,22 +108,42 @@ export default function Daily() {
 
     (async () => {
       try {
-        const result = await fetchTripDailyDetail(expandedDay);
+        const result = await getTripBasePoints({ day: expandedDay });
         if (cancelled) return;
 
-        const sortedRows = [...result.data].sort((a, b) => {
+        const aggregated = (result.data ?? []).reduce<Record<string, { obs: number; taxa: Set<number> }>>((acc, row) => {
+          const login = row.user_login;
+          if (!login) return acc;
+          const bucket = acc[login] ?? { obs: 0, taxa: new Set<number>() };
+          bucket.obs += 1;
+          if (row.taxon_id != null) {
+            bucket.taxa.add(Number(row.taxon_id));
+          }
+          acc[login] = bucket;
+          return acc;
+        }, {});
+
+        const detailRows = Object.entries(aggregated).map(([login, bucket]) => ({
+          user_login: login,
+          obs_count: bucket.obs,
+          distinct_taxa: bucket.taxa.size,
+        } satisfies DetailRow));
+
+        detailRows.sort((a, b) => {
           const obsDiff = b.obs_count - a.obs_count;
           if (obsDiff !== 0) return obsDiff;
           const taxaDiff = b.distinct_taxa - a.distinct_taxa;
           if (taxaDiff !== 0) return taxaDiff;
-          return a.user_login.localeCompare(b.user_login);
+          const nameA = getDisplayName(a.user_login).toLowerCase();
+          const nameB = getDisplayName(b.user_login).toLowerCase();
+          return nameA.localeCompare(nameB);
         });
 
         setDetails((prev) => ({
           ...prev,
           [expandedDay]: {
             loading: false,
-            rows: sortedRows,
+            rows: detailRows,
             error: result.error?.message ?? null,
           },
         }));

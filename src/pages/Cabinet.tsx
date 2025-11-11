@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  fetchTripLeaderboard,
-  fetchTripTrophiesAllDays,
-  type TripLeaderboardRow,
-  type TripTrophyRow,
+  getTripRoster,
+  getTripTrophiesCumulative,
+  getTripParams,
+  type TripRosterEntry,
+  type TripTrophyAward,
 } from '@/lib/api';
 
 const TROPHY_LABELS: Record<string, { title: string; icon: string; valueLabel?: string }> = {
@@ -12,33 +13,12 @@ const TROPHY_LABELS: Record<string, { title: string; icon: string; valueLabel?: 
   daily_variety_hero: { title: 'Most Species', icon: '🌿', valueLabel: 'species' },
 };
 
-function formatCostaRicaKey(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-}
-
-function formatDisplayDate(key: string): string {
-  if (key === 'unknown') return 'Date to be announced';
-  const date = new Date(`${key}T12:00:00-06:00`);
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(date);
-}
-
 export default function Cabinet() {
-  const [participants, setParticipants] = useState<TripLeaderboardRow[]>([]);
-  const [trophiesByUser, setTrophiesByUser] = useState<Record<string, TripTrophyRow[]>>({});
+  const [participants, setParticipants] = useState<TripRosterEntry[]>([]);
+  const [trophiesByUser, setTrophiesByUser] = useState<Record<string, TripTrophyAward[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tz, setTz] = useState<string>('UTC');
 
   useEffect(() => {
     let cancelled = false;
@@ -46,18 +26,19 @@ export default function Cabinet() {
     (async () => {
       setLoading(true);
       try {
-        const [leaderboardRes, trophiesRes] = await Promise.all([
-          fetchTripLeaderboard(),
-          fetchTripTrophiesAllDays(),
+        const [rosterRes, trophiesRes, paramsRes] = await Promise.all([
+          getTripRoster(),
+          getTripTrophiesCumulative(),
+          getTripParams(),
         ]);
 
         if (cancelled) return;
 
-        setParticipants(leaderboardRes.data ?? []);
+        setParticipants(rosterRes.data ?? []);
+        setTz(paramsRes.data?.tz ?? 'UTC');
 
-        const grouped: Record<string, TripTrophyRow[]> = {};
+        const grouped: Record<string, TripTrophyAward[]> = {};
         (trophiesRes.data ?? []).forEach((row) => {
-          if (row.place !== 1) return;
           const login = row.user_login;
           if (!login) return;
           if (!grouped[login]) grouped[login] = [];
@@ -66,17 +47,18 @@ export default function Cabinet() {
 
         Object.keys(grouped).forEach((login) => {
           grouped[login].sort((a, b) => {
-            const keyA = formatCostaRicaKey(a.awarded_at) ?? 'unknown';
-            const keyB = formatCostaRicaKey(b.awarded_at) ?? 'unknown';
-            return keyB.localeCompare(keyA);
+            if (!a.awarded_at) return 1;
+            if (!b.awarded_at) return -1;
+            return b.awarded_at.localeCompare(a.awarded_at);
           });
         });
 
         setTrophiesByUser(grouped);
 
         const errors: string[] = [];
-        if (leaderboardRes.error?.message) errors.push(leaderboardRes.error.message);
+        if (rosterRes.error?.message) errors.push(rosterRes.error.message);
         if (trophiesRes.error?.message) errors.push(trophiesRes.error.message);
+        if (paramsRes.error?.message) errors.push(paramsRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
       } catch (err) {
         if (!cancelled) {
@@ -100,6 +82,17 @@ export default function Cabinet() {
     const nameB = (b.display_name || b.user_login).toLowerCase();
     return nameA.localeCompare(nameB);
   });
+
+  const formatAwardDate = (iso: string | null) => {
+    if (!iso) return 'Date to be announced';
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz || 'UTC',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    return formatter.format(new Date(iso));
+  };
 
   return (
     <div className="pb-6 pb-safe-bottom">
@@ -136,16 +129,6 @@ export default function Cabinet() {
                 const displayName = participant.display_name || login;
                 const trophies = trophiesByUser[login] ?? [];
 
-                const grouped = new Map<string, TripTrophyRow[]>();
-                trophies.forEach((row) => {
-                  const key = formatCostaRicaKey(row.awarded_at) ?? 'unknown';
-                  const list = grouped.get(key) ?? [];
-                  list.push(row);
-                  grouped.set(key, list);
-                });
-
-                const sortedGroups = Array.from(grouped.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-
                 return (
                   <div key={login} className="rounded-2xl border border-border bg-card p-5 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
@@ -156,35 +139,26 @@ export default function Cabinet() {
                       <div className="text-sm text-muted-foreground">No trophies earned yet.</div>
                     ) : (
                       <div className="space-y-3">
-                        {sortedGroups.map(([key, rows]) => (
-                          <div key={key} className="space-y-2">
-                            <div className="text-sm font-medium text-muted-foreground">{formatDisplayDate(key)}</div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              {rows.map((row, idx) => {
-                                const meta = TROPHY_LABELS[row.trophy_id] ?? {
-                                  title: row.trophy_id,
-                                  icon: '🏆',
-                                };
-                                return (
-                                  <div key={`${row.trophy_id}-${idx}`} className="rounded-xl border border-border bg-background p-3 space-y-2">
-                                    <div className="text-sm font-semibold flex items-center gap-2">
-                                      <span>{meta.icon}</span>
-                                      {meta.title}
-                                    </div>
-                                    {row.value != null && meta.valueLabel && (
-                                      <div className="text-xs text-muted-foreground capitalize">
-                                        {meta.valueLabel}: {row.value}
-                                      </div>
-                                    )}
-                                    {row.value != null && !meta.valueLabel && (
-                                      <div className="text-xs text-muted-foreground">Value: {row.value}</div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                        {trophies.map((row, idx) => {
+                          const meta = TROPHY_LABELS[row.trophy_id] ?? { title: row.trophy_id, icon: '🏆' };
+                          return (
+                            <div key={`${row.trophy_id}-${idx}`} className="rounded-xl border border-border bg-background p-3 space-y-1">
+                              <div className="text-sm font-semibold flex items-center gap-2">
+                                <span>{meta.icon}</span>
+                                {meta.title}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{formatAwardDate(row.awarded_at ?? null)}</div>
+                              {row.value != null && meta.valueLabel && (
+                                <div className="text-xs text-muted-foreground capitalize">
+                                  {meta.valueLabel}: {row.value}
+                                </div>
+                              )}
+                              {row.value != null && !meta.valueLabel && (
+                                <div className="text-xs text-muted-foreground">Value: {row.value}</div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

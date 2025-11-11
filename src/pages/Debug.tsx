@@ -1,61 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  fetchTripLeaderboard,
-  fetchTripDailySummary,
-  fetchTripTrophiesAllDays,
-  fetchTripMapPoints,
-  fetchTripDailyDetail,
+  getTripLeaderboard,
+  getTripDailySummary,
+  getTripTrophiesToday,
+  getTripBasePoints,
+  getTripParams,
+  getTripRoster,
   type TripLeaderboardRow,
   type TripDailySummaryRow,
-  type TripDailyDetailRow,
-  type TripTrophyRow,
-  type TripMapPointRow,
+  type TripBaseObservationRow,
+  type TripParams,
+  type TripRosterEntry,
+  type TripTrophyAward,
 } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const TROPHY_LABELS: Record<string, string> = {
   daily_obs_leader: 'Most Observations',
   daily_variety_hero: 'Most Species',
 };
 
-function formatDisplayDate(key: string): string {
-  const date = new Date(`${key}T12:00:00-06:00`);
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(date);
-}
-
-function getCostaRicaDateKey(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Costa_Rica',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-}
-
-type DetailState = {
-  rows: TripDailyDetailRow[];
-  loading: boolean;
-  error: string | null;
-};
-
 export default function Debug() {
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState<TripLeaderboardRow[]>([]);
   const [dailySummary, setDailySummary] = useState<TripDailySummaryRow[]>([]);
-  const [trophies, setTrophies] = useState<TripTrophyRow[]>([]);
-  const [mapPoints, setMapPoints] = useState<TripMapPointRow[]>([]);
-  const [dailyDetail, setDailyDetail] = useState<Record<string, DetailState>>({});
-  const [selectedDay, setSelectedDay] = useState<string>('');
+  const [todayTrophies, setTodayTrophies] = useState<TripTrophyAward[]>([]);
+  const [basePoints, setBasePoints] = useState<TripBaseObservationRow[]>([]);
+  const [params, setParams] = useState<TripParams | null>(null);
+  const [roster, setRoster] = useState<TripRosterEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [tz, setTz] = useState<string>('UTC');
 
   useEffect(() => {
     let cancelled = false;
@@ -63,27 +38,36 @@ export default function Debug() {
     (async () => {
       setLoading(true);
       try {
-        const [leaderboardRes, dailyRes, trophiesRes, mapRes] = await Promise.all([
-          fetchTripLeaderboard(),
-          fetchTripDailySummary(),
-          fetchTripTrophiesAllDays(),
-          fetchTripMapPoints(),
+        const [paramsRes, rosterRes, leaderboardRes, dailyRes, baseRes] = await Promise.all([
+          getTripParams(),
+          getTripRoster(),
+          getTripLeaderboard(),
+          getTripDailySummary(),
+          getTripBasePoints(),
         ]);
 
         if (cancelled) return;
 
+        const tzValue = paramsRes.data?.tz ?? 'UTC';
+        setParams(paramsRes.data ?? null);
+        setTz(tzValue);
+        setRoster(rosterRes.data ?? []);
         setLeaderboard(leaderboardRes.data ?? []);
         setDailySummary(dailyRes.data ?? []);
-        setTrophies(trophiesRes.data ?? []);
-        setMapPoints(mapRes.data ?? []);
-        setSelectedDay((prev) => prev || dailyRes.data?.[0]?.day_local || '');
+        setBasePoints(baseRes.data ?? []);
 
-        const errors: string[] = [];
-        if (leaderboardRes.error?.message) errors.push(leaderboardRes.error.message);
-        if (dailyRes.error?.message) errors.push(dailyRes.error.message);
-        if (trophiesRes.error?.message) errors.push(trophiesRes.error.message);
-        if (mapRes.error?.message) errors.push(mapRes.error.message);
-        setError(errors.length ? errors.join('; ') : null);
+        const todayRes = await getTripTrophiesToday(tzValue);
+        if (!cancelled) {
+          setTodayTrophies(todayRes.data ?? []);
+          const errors: string[] = [];
+          if (paramsRes.error?.message) errors.push(paramsRes.error.message);
+          if (rosterRes.error?.message) errors.push(rosterRes.error.message);
+          if (leaderboardRes.error?.message) errors.push(leaderboardRes.error.message);
+          if (dailyRes.error?.message) errors.push(dailyRes.error.message);
+          if (baseRes.error?.message) errors.push(baseRes.error.message);
+          if (todayRes.error?.message) errors.push(todayRes.error.message);
+          setError(errors.length ? errors.join('; ') : null);
+        }
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to load debug data', err);
@@ -101,82 +85,37 @@ export default function Debug() {
     };
   }, []);
 
-  const detailState = selectedDay ? dailyDetail[selectedDay] : undefined;
+  const totalObservations = useMemo(() => basePoints.length, [basePoints]);
+  const distinctTaxa = useMemo(() => {
+    const taxa = new Set<number>();
+    basePoints.forEach((row) => {
+      if (row.taxon_id != null) taxa.add(row.taxon_id);
+    });
+    return taxa.size;
+  }, [basePoints]);
 
-  useEffect(() => {
-    if (!selectedDay) return;
-    const current = dailyDetail[selectedDay];
-    if (current && (current.loading || current.rows.length > 0 || current.error)) {
-      return;
-    }
+  const participantsCount = useMemo(() => roster.length, [roster]);
 
-    let cancelled = false;
-    setDailyDetail((prev) => ({
-      ...prev,
-      [selectedDay]: { loading: true, rows: [], error: null },
-    }));
+  const sortedLeaderboard = useMemo(() => {
+    return [...leaderboard]
+      .sort((a, b) => {
+        const pointDiff = b.total_points - a.total_points;
+        if (pointDiff !== 0) return pointDiff;
+        const taxaDiff = b.distinct_taxa - a.distinct_taxa;
+        if (taxaDiff !== 0) return taxaDiff;
+        const obsDiff = b.obs_count - a.obs_count;
+        if (obsDiff !== 0) return obsDiff;
+        const nameA = (a.display_name || a.user_login).toLowerCase();
+        const nameB = (b.display_name || b.user_login).toLowerCase();
+        return nameA.localeCompare(nameB);
+      })
+      .slice(0, 5);
+  }, [leaderboard]);
 
-    (async () => {
-      try {
-        const detailRes = await fetchTripDailyDetail(selectedDay);
-        if (cancelled) return;
-        setDailyDetail((prev) => ({
-          ...prev,
-          [selectedDay]: {
-            loading: false,
-            rows: detailRes.data ?? [],
-            error: detailRes.error?.message ?? null,
-          },
-        }));
-      } catch (err) {
-        if (!cancelled) {
-          setDailyDetail((prev) => ({
-            ...prev,
-            [selectedDay]: {
-              loading: false,
-              rows: [],
-              error: err instanceof Error ? err.message : String(err),
-            },
-          }));
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDay, dailyDetail]);
-
-  const totalPoints = useMemo(
-    () => leaderboard.reduce((acc, row) => acc + (row.total_points ?? 0), 0),
-    [leaderboard],
+  const totalDailyPeople = useMemo(
+    () => dailySummary.reduce((sum, row) => sum + (row.people_count ?? 0), 0),
+    [dailySummary],
   );
-
-  const totalObservations = useMemo(
-    () => leaderboard.reduce((acc, row) => acc + (row.obs_count ?? 0), 0),
-    [leaderboard],
-  );
-
-  const totalSpecies = useMemo(
-    () => leaderboard.reduce((acc, row) => acc + (row.distinct_taxa ?? 0), 0),
-    [leaderboard],
-  );
-
-  const trophiesByDate = useMemo(() => {
-    const map = new Map<string, TripTrophyRow[]>();
-    trophies
-      .filter((row) => row.place === 1)
-      .forEach((row) => {
-        const key = getCostaRicaDateKey(row.awarded_at);
-        if (!key) return;
-        const list = map.get(key) ?? [];
-        list.push(row);
-        map.set(key, list);
-      });
-    return map;
-  }, [trophies]);
-
-  const days = useMemo(() => dailySummary.map((row) => row.day_local), [dailySummary]);
 
   return (
     <div className="pb-6 pb-safe-bottom">
@@ -201,15 +140,52 @@ export default function Debug() {
                 {error}
               </div>
             )}
+            <Card>
+              <CardHeader>
+                <CardTitle>Trip Parameters</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2 text-muted-foreground">
+                <div>Timezone: {tz}</div>
+                {params ? (
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    <div>Start: {params.start_date}</div>
+                    <div>End: {params.end_date}</div>
+                    <div>Lat range: {params.lat_min} → {params.lat_max}</div>
+                    <div>Lon range: {params.lon_min} → {params.lon_max}</div>
+                  </div>
+                ) : (
+                  <div>No parameter record found.</div>
+                )}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Leaderboard Snapshot</CardTitle>
+                <CardTitle>Roster ({participantsCount})</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                {roster.length === 0 ? (
+                  <div>No roster entries.</div>
+                ) : (
+                  <ul className="grid gap-1 sm:grid-cols-2">
+                    {roster.map((member) => (
+                      <li key={member.user_login}>
+                        <span className="font-medium text-foreground">{member.display_name || member.user_login}</span>
+                        <span className="ml-2 text-xs">({member.user_login})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Leaderboard Preview</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {leaderboard.length} participants · {totalObservations} observations · {totalSpecies} species · {totalPoints}{' '}
-                  total points
+                  Top 5 of {leaderboard.length} · Total observations {totalObservations} · Distinct taxa {distinctTaxa}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
@@ -222,7 +198,7 @@ export default function Debug() {
                       </tr>
                     </thead>
                     <tbody>
-                      {leaderboard.map((row) => (
+                      {sortedLeaderboard.map((row) => (
                         <tr key={row.user_login} className="border-t">
                           <td className="py-2 pr-3 font-medium">{row.display_name || row.user_login}</td>
                           <td className="py-2 pr-3">{row.total_points}</td>
@@ -237,27 +213,18 @@ export default function Debug() {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <CardTitle>Daily Summary</CardTitle>
-                <Select value={selectedDay} onValueChange={setSelectedDay} disabled={days.length === 0}>
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Select day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {days.map((day) => (
-                      <SelectItem key={day} value={day}>
-                        {formatDisplayDate(day)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <CardHeader>
+                <CardTitle>Base Observation Counts</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  Totals: {totalObservations} observations · {distinctTaxa} distinct taxa · {totalDailyPeople} person-days
+                </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-left text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Date</th>
+                        <th className="py-2 pr-3 font-medium">Day</th>
                         <th className="py-2 pr-3 font-medium">Observations</th>
                         <th className="py-2 pr-3 font-medium">Species</th>
                         <th className="py-2 pr-3 font-medium">People</th>
@@ -266,7 +233,7 @@ export default function Debug() {
                     <tbody>
                       {dailySummary.map((row) => (
                         <tr key={row.day_local} className="border-t">
-                          <td className="py-2 pr-3 font-medium">{formatDisplayDate(row.day_local)}</td>
+                          <td className="py-2 pr-3 font-medium">{row.day_local}</td>
                           <td className="py-2 pr-3">{row.obs_count}</td>
                           <td className="py-2 pr-3">{row.distinct_taxa}</td>
                           <td className="py-2 pr-3">{row.people_count}</td>
@@ -275,77 +242,29 @@ export default function Debug() {
                     </tbody>
                   </table>
                 </div>
-
-                {selectedDay && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">Participants on {formatDisplayDate(selectedDay)}</h3>
-                    {detailState?.loading ? (
-                      <Skeleton className="h-20 w-full" />
-                    ) : detailState?.error ? (
-                      <div className="text-sm text-destructive">{detailState.error}</div>
-                    ) : detailState && detailState.rows.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-muted-foreground">
-                              <th className="py-2 pr-3 font-medium">Participant</th>
-                              <th className="py-2 pr-3 font-medium">Observations</th>
-                              <th className="py-2 pr-3 font-medium">Species</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {detailState.rows.map((row) => (
-                              <tr key={row.user_login} className="border-t">
-                                <td className="py-2 pr-3">{row.user_login}</td>
-                                <td className="py-2 pr-3">{row.obs_count}</td>
-                                <td className="py-2 pr-3">{row.distinct_taxa}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-muted-foreground">No participant records for this day.</div>
-                    )}
-                  </div>
-                )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Trophies</CardTitle>
+                <CardTitle>Today&apos;s Trophies</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {Array.from(trophiesByDate.entries())
-                  .sort((a, b) => b[0].localeCompare(a[0]))
-                  .map(([dateKey, rows]) => (
-                    <div key={dateKey} className="rounded-lg border border-border bg-background p-4 space-y-2">
-                      <div className="text-sm font-semibold text-muted-foreground">{formatDisplayDate(dateKey)}</div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {rows.map((row, idx) => (
-                          <div key={`${row.trophy_id}-${idx}`} className="rounded-lg border border-border bg-card p-3 space-y-1">
-                            <div className="text-sm font-semibold">
-                              {TROPHY_LABELS[row.trophy_id] ?? row.trophy_id}
-                            </div>
-                            <div className="text-xs text-muted-foreground">{row.user_login}</div>
-                            {row.value != null && (
-                              <div className="text-xs text-muted-foreground">Value: {row.value}</div>
-                            )}
-                          </div>
-                        ))}
+                {todayTrophies.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No trophies recorded for today ({tz}).</div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {todayTrophies.map((row, idx) => (
+                      <div key={`${row.trophy_id}-${idx}`} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                        <div className="text-sm font-semibold">{TROPHY_LABELS[row.trophy_id] ?? row.trophy_id}</div>
+                        <div className="text-xs text-muted-foreground">{row.user_login}</div>
+                        {row.value != null && (
+                          <div className="text-xs text-muted-foreground">Value: {row.value}</div>
+                        )}
                       </div>
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Map Points</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                {mapPoints.length} observations with map coordinates.
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </>
