@@ -1,112 +1,99 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { fetchLeaderboardCR2025, type TripLeaderboardRow } from '@/lib/api';
+import {
+  fetchLeaderboardCR2025,
+  fetchTodayTrophiesCR2025,
+  fetchDailySummaryCR2025,
+  type TripLeaderboardPayload,
+  type TripDailySummaryRow,
+  type TripTrophyAward,
+} from '@/lib/api';
 import { formatPoints } from '@/lib/scoring';
 
-const RANK_STORAGE_KEY = 'ecoqlb:cr2025';
 const MIN_NEWS_ITEMS = 12;
 
-function computeRankSnapshot(rows: TripLeaderboardRow[]) {
-  const sorted = [...rows].sort((a, b) => {
-    const pointDiff = b.total_points - a.total_points;
-    if (pointDiff !== 0) return pointDiff;
-    const taxaDiff = b.distinct_taxa - a.distinct_taxa;
-    if (taxaDiff !== 0) return taxaDiff;
-    const obsDiff = b.obs_count - a.obs_count;
-    if (obsDiff !== 0) return obsDiff;
-    const nameA = a.user_login.toLowerCase();
-    const nameB = b.user_login.toLowerCase();
-    return nameA.localeCompare(nameB);
-  });
+const TROPHY_LABELS: Record<string, string> = {
+  daily_obs_leader: 'Most Observations',
+  daily_variety_hero: 'Most Species',
+  taxa_birds_champion: 'Bird Specialist',
+  taxa_insect_champion: 'Insect Investigator',
+  taxa_mammal_champion: 'Mammal Tracker',
+  taxa_plant_champion: 'Plant Whisperer',
+  taxa_amphibian_champion: 'Amphibian Aficionado',
+};
 
-  const snapshot = sorted.map((row, index) => ({
-    login: row.user_login,
-    rank: index + 1,
-  }));
-
-  return snapshot;
-}
-
-function computeRankChanges(rows: TripLeaderboardRow[]) {
-  if (typeof window === 'undefined') return [] as { login: string; rank: number; delta: number }[];
-
-  const latestSnapshot = computeRankSnapshot(rows);
-
-  let previous: Record<string, number> | null = null;
-  try {
-    const raw = window.localStorage.getItem(RANK_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { ranks?: Record<string, number> };
-      if (parsed && parsed.ranks) previous = parsed.ranks;
-    }
-  } catch (err) {
-    console.warn('rank snapshot parse failed', err);
-  }
-
-  const changes = latestSnapshot.map(({ login, rank }) => {
-    const prevRank = previous?.[login.toLowerCase()];
-    return {
-      login,
-      rank,
-      delta: typeof prevRank === 'number' ? prevRank - rank : 0,
-    };
-  });
-
-  const snapshotToStore: Record<string, number> = {};
-  latestSnapshot.forEach(({ login, rank }) => {
-    snapshotToStore[login.toLowerCase()] = rank;
-  });
-
-  try {
-    window.localStorage.setItem(
-      RANK_STORAGE_KEY,
-      JSON.stringify({ ranks: snapshotToStore, timestamp: Date.now() }),
-    );
-  } catch (err) {
-    console.warn('rank snapshot store failed', err);
-  }
-
-  return changes;
-}
-
-function buildLeaderboardItems(rows: TripLeaderboardRow[]): string[] {
+function buildLeaderboardNews(payload: TripLeaderboardPayload | null | undefined): string[] {
+  if (!payload) return [];
+  const rows = payload.rows ?? [];
+  const silverByLogin = payload.silverByLogin ?? {};
   const items: string[] = [];
 
-  const sorted = [...rows]
-    .sort((a, b) => {
-      const pointDiff = b.total_points - a.total_points;
-      if (pointDiff !== 0) return pointDiff;
-      const taxaDiff = b.distinct_taxa - a.distinct_taxa;
-      if (taxaDiff !== 0) return taxaDiff;
-      return a.user_login.localeCompare(b.user_login);
-    })
-    .slice(0, 12);
+  rows.slice(0, 3).forEach((row, index) => {
+    const login = row.user_login;
+    const silver = payload.hasSilver ? silverByLogin[login.toLowerCase()] : undefined;
+    const total = silver ? silver.total_points : row.total_points;
+    if (index === 0) {
+      items.push(`${login} leads with ${formatPoints(total)} pts`);
+    } else {
+      items.push(`${login} holds #${index + 1} at ${formatPoints(total)} pts`);
+    }
 
-  sorted.forEach((row) => {
-    items.push(`${row.user_login} has ${formatPoints(row.total_points)} pts`);
-    if (row.obs_count > 0) {
-      const percent = Math.round((row.research_grade_count / Math.max(row.obs_count, 1)) * 100);
-      items.push(`${row.user_login} hit ${percent}% RG`);
+    if (row.research_grade_count >= 5) {
+      items.push(`${login} logged ${row.research_grade_count} research-grade finds`);
+    }
+    if (row.distinct_taxa >= 25) {
+      items.push(`${login} has noted ${row.distinct_taxa} species so far`);
     }
   });
 
-  const rankHighlights = computeRankChanges(rows)
-    .filter((entry) => entry.delta > 0)
-    .sort((a, b) => b.delta - a.delta)
-    .slice(0, 5);
-  rankHighlights.forEach(({ login, rank }) => {
-    items.push(`${login} moved up to #${rank}`);
+  return items;
+}
+
+function formatDayLabel(day: string): string {
+  const date = new Date(`${day}T12:00:00`);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+function buildDailyNews(rows: TripDailySummaryRow[]): string[] {
+  if (!rows || rows.length === 0) return [];
+  const items: string[] = [];
+  const recent = rows.slice(-3);
+  recent.forEach((row) => {
+    if (!row.day_local) return;
+    const dayLabel = formatDayLabel(row.day_local);
+    items.push(`${dayLabel}: ${row.obs_count} observations from ${row.people_count} people`);
+    if (row.distinct_taxa > 0) {
+      items.push(`${dayLabel}: ${row.distinct_taxa} species spotted`);
+    }
   });
+  return items;
+}
 
-  const uniqueItems = items.filter((item, index) => items.indexOf(item) === index);
-  const result = uniqueItems.length > 0 ? uniqueItems : ['EcoQuest Live leaderboard is warming up'];
+function buildTrophyNews(awards: TripTrophyAward[]): string[] {
+  if (!awards || awards.length === 0) return [];
+  const items: string[] = [];
+  awards.forEach((award) => {
+    const label = TROPHY_LABELS[award.trophy_id] ?? award.trophy_id.replace(/_/g, ' ');
+    items.push(`${award.user_login} earned the ${label} trophy`);
+  });
+  return items;
+}
 
+function padItems(items: string[]): string[] {
+  const unique = items.filter((item, index) => items.indexOf(item) === index);
+  if (unique.length === 0) {
+    return ['Trip updates loading…'];
+  }
+
+  const result = [...unique];
   while (result.length < MIN_NEWS_ITEMS) {
     const needed = MIN_NEWS_ITEMS - result.length;
     const toCopy = result.slice(0, Math.min(result.length, needed));
     if (toCopy.length === 0) break;
     result.push(...toCopy);
   }
-
   return result.slice(0, Math.max(result.length, MIN_NEWS_ITEMS));
 }
 
@@ -115,29 +102,27 @@ function useNewsItems() {
 
   useEffect(() => {
     let active = true;
+
     (async () => {
       try {
-        const leaderboardRes = await fetchLeaderboardCR2025();
+        const [leaderboardRes, trophiesRes, dailyRes] = await Promise.all([
+          fetchLeaderboardCR2025(),
+          fetchTodayTrophiesCR2025(),
+          fetchDailySummaryCR2025(),
+        ]);
 
         if (!active) return;
 
-        if (leaderboardRes.missing) {
-          setItems(['Leaderboard view unavailable']);
-          return;
-        }
+        const leaderboardItems = buildLeaderboardNews(leaderboardRes.data);
+        const trophyItems = buildTrophyNews(trophiesRes.data ?? []);
+        const dailyItems = buildDailyNews(dailyRes.data ?? []);
 
-        if (leaderboardRes.data.length === 0) {
-          setItems(['Leaderboard data not yet available']);
-          return;
-        }
-
-        const news = buildLeaderboardItems(leaderboardRes.data);
-
-        setItems(news.length > 0 ? news : ['EcoQuest Live news feed will be back soon']);
+        const combined = padItems([...leaderboardItems, ...trophyItems, ...dailyItems]);
+        setItems(combined);
       } catch (err) {
-        console.warn('Failed to build news ticker', err);
+        console.warn('Failed to load ticker items', err);
         if (active) {
-          setItems(['EcoQuest Live news feed will be back soon']);
+          setItems(['Trip updates will resume shortly']);
         }
       }
     })();
@@ -153,11 +138,11 @@ function useNewsItems() {
 function useBottomItems() {
   return useMemo(
     () => [
-      'Trip Mode active: scoring Nov 9–15',
-      'Tips: Research Grade adds +1 point each',
-      'Adults can award bonus points for field behavior',
-      'Remember: log observations before midnight local time',
-      'Check the Map tab for the latest sightings',
+      'Trip Mode Active — log observations to earn points!',
+      'Tip: Research-grade IDs add bonus points',
+      'Tip: Novel species earn Silver bonus points',
+      'Reminder: Adults can award bonus points in the field',
+      'Check the Map for the latest sightings',
     ],
     [],
   );
@@ -202,13 +187,14 @@ function Ticker({ items, speedMs = 24000, className }: TickerProps) {
   );
 }
 
-export function TripNewsTicker() {
-  const items = useNewsItems();
-  return <Ticker items={items} speedMs={28000} className="top-news-ticker" />;
-}
+export default function TripTickers() {
+  const newsItems = useNewsItems();
+  const bottomItems = useBottomItems();
 
-export function TripInfoTicker() {
-  const items = useBottomItems();
-  return <Ticker items={items} speedMs={32000} className="bottom-info-ticker" />;
+  return (
+    <div className="space-y-2">
+      <Ticker items={newsItems} speedMs={20000} className="rounded-lg" />
+      <Ticker items={bottomItems} speedMs={26000} className="rounded-lg bg-muted/60" />
+    </div>
+  );
 }
-

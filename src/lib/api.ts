@@ -44,6 +44,24 @@ export type TripLeaderboardRow = {
   distinct_taxa: number;
   research_grade_count: number;
   bonus_points: number;
+  last_observed_at_utc: string | null;
+};
+
+export type TripSilverBreakdown = {
+  user_login: string;
+  total_points: number;
+  base_obs: number;
+  novelty_trip: number;
+  novelty_day: number;
+  rarity: number;
+  research: number;
+  multipliers_delta: number;
+};
+
+export type TripLeaderboardPayload = {
+  rows: TripLeaderboardRow[];
+  hasSilver: boolean;
+  silverByLogin: Record<string, TripSilverBreakdown>;
 };
 
 export type TripDailySummaryRow = {
@@ -106,6 +124,14 @@ export type TripTrophyCabinetRow = {
   day_local: string | null;
 };
 
+export type TripCabinetDayGroup = {
+  day_local: string | null;
+  trophies: {
+    trophy_id: string;
+    awards: TripTrophyCabinetRow[];
+  }[];
+};
+
 export type TripTrophyCatalogRow = {
   trophy_id: string;
   label: string;
@@ -144,6 +170,18 @@ type RawTripLeaderboardRow = {
   distinct_taxa?: NumericLike;
   research_grade_count?: NumericLike;
   bonus_points?: NumericLike;
+  last_observed_at_utc?: string | null;
+};
+
+type RawTripSilverRow = {
+  user_login?: string | null;
+  total_points?: NumericLike;
+  base_obs?: NumericLike;
+  novelty_trip?: NumericLike;
+  novelty_day?: NumericLike;
+  rarity?: NumericLike;
+  research?: NumericLike;
+  multipliers_delta?: NumericLike;
 };
 
 type RawTripDailySummaryRow = {
@@ -239,7 +277,7 @@ export async function getTripParams(): Promise<ApiResult<TripParams | null>> {
 
 export async function fetchRosterCR2025(): Promise<ApiResult<TripRosterEntry[]>> {
   const { data, error } = await supabase()
-    .from('trip_members_roster_v1')
+    .from('trip_members_roster_cr2025_v1')
     .select('user_login, display_name, is_adult')
     .order('display_name', { ascending: true, nullsFirst: false })
     .order('user_login', { ascending: true, nullsFirst: false });
@@ -268,15 +306,19 @@ export async function getTripRoster(): Promise<ApiResult<TripRosterEntry[]>> {
   return fetchRosterCR2025();
 }
 
-export async function fetchLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardRow[]>> {
+export async function fetchLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardPayload>> {
   const { data, error } = await supabase()
     .from('trip_leaderboard_cr2025_v1')
-    .select('user_login, display_name, total_points, obs_count, distinct_taxa, research_grade_count, bonus_points')
+    .select('user_login, display_name, total_points, obs_count, distinct_taxa, research_grade_count, bonus_points, last_observed_at_utc')
     .order('total_points', { ascending: false, nullsFirst: false })
     .order('obs_count', { ascending: false, nullsFirst: false });
 
   if (isMissingView(error)) {
-    return { data: [], error: null, missing: true };
+    return {
+      data: { rows: [], hasSilver: false, silverByLogin: {} },
+      error: null,
+      missing: true,
+    };
   }
 
   const rawRows = (data ?? []) as RawTripLeaderboardRow[];
@@ -292,22 +334,80 @@ export async function fetchLeaderboardCR2025(): Promise<ApiResult<TripLeaderboar
         distinct_taxa: toNumber(row.distinct_taxa),
         research_grade_count: toNumber(row.research_grade_count),
         bonus_points: toNumber(row.bonus_points),
+        last_observed_at_utc: row.last_observed_at_utc ?? null,
       } satisfies TripLeaderboardRow;
     })
     .filter((row): row is TripLeaderboardRow => Boolean(row));
 
-  return { data: rows, error };
+  let hasSilver = false;
+  const silverByLogin: Record<string, TripSilverBreakdown> = {};
+  let silverError: PostgrestError | null = null;
+
+  try {
+    const { data: silverData, error: silverQueryError } = await supabase()
+      .from('trip_points_user_silver_cr2025_v1')
+      .select('user_login, total_points, base_obs, novelty_trip, novelty_day, rarity, research, multipliers_delta');
+
+    if (isMissingView(silverQueryError)) {
+      hasSilver = false;
+    } else if (silverQueryError) {
+      silverError = silverQueryError;
+    } else {
+      const rawSilverRows = (silverData ?? []) as RawTripSilverRow[];
+      rawSilverRows.forEach((row) => {
+        const user_login = (row.user_login ?? '').toString();
+        if (!user_login) return;
+        silverByLogin[user_login.toLowerCase()] = {
+          user_login,
+          total_points: toNumber(row.total_points),
+          base_obs: toNumber(row.base_obs),
+          novelty_trip: toNumber(row.novelty_trip),
+          novelty_day: toNumber(row.novelty_day),
+          rarity: toNumber(row.rarity),
+          research: toNumber(row.research),
+          multipliers_delta: toNumber(row.multipliers_delta),
+        } satisfies TripSilverBreakdown;
+      });
+      hasSilver = Object.keys(silverByLogin).length > 0;
+    }
+  } catch (err) {
+    console.error('Silver leaderboard probe failed', err);
+  }
+
+  return {
+    data: {
+      rows,
+      hasSilver,
+      silverByLogin,
+    },
+    error: error ?? silverError,
+  };
 }
 
-export async function getTripLeaderboard(): Promise<ApiResult<TripLeaderboardRow[]>> {
+export async function getTripLeaderboard(): Promise<ApiResult<TripLeaderboardPayload>> {
   return fetchLeaderboardCR2025();
+}
+
+export function getLastUpdatedTs(rows: TripLeaderboardRow[]): string | null {
+  let latest: string | null = null;
+  rows.forEach((row) => {
+    if (!row.last_observed_at_utc) return;
+    if (!latest) {
+      latest = row.last_observed_at_utc;
+      return;
+    }
+    if (new Date(row.last_observed_at_utc).getTime() > new Date(latest).getTime()) {
+      latest = row.last_observed_at_utc;
+    }
+  });
+  return latest;
 }
 
 export async function fetchDailySummaryCR2025(): Promise<ApiResult<TripDailySummaryRow[]>> {
   const { data, error } = await supabase()
     .from('trip_daily_summary_cr2025_v1')
     .select('day_local, obs_count, distinct_taxa, people_count')
-    .order('day_local', { ascending: false });
+    .order('day_local', { ascending: true });
 
   if (isMissingView(error)) {
     return { data: [], error: null, missing: true };
@@ -361,7 +461,7 @@ export async function fetchDayPeopleCR2025(day: string): Promise<ApiResult<TripD
   return { data: rows, error };
 }
 
-export async function getTripBasePoints(options: { day?: string } = {}): Promise<ApiResult<TripBaseObservationRow[]>> {
+export async function fetchObsAllCR2025(options: { day?: string } = {}): Promise<ApiResult<TripBaseObservationRow[]>> {
   let query = supabase()
     .from('trip_obs_base_cr2025_v1')
     .select('user_login, inat_obs_id, latitude, longitude, taxon_id, quality_grade, observed_at_utc, day_local');
@@ -377,6 +477,10 @@ export async function getTripBasePoints(options: { day?: string } = {}): Promise
   }
 
   return { data: mapObservationRows(data), error };
+}
+
+export async function getTripBasePoints(options: { day?: string } = {}): Promise<ApiResult<TripBaseObservationRow[]>> {
+  return fetchObsAllCR2025(options);
 }
 
 export async function fetchUserObsCR2025(login: string): Promise<ApiResult<TripUserObservationRow[]>> {
@@ -409,7 +513,7 @@ export async function fetchUserObsCR2025(login: string): Promise<ApiResult<TripU
   return { data: rows, error };
 }
 
-export async function fetchLatest10CR2025(): Promise<ApiResult<TripLatestObservationRow[]>> {
+export async function fetchObsLatest10CR2025(): Promise<ApiResult<TripLatestObservationRow[]>> {
   const { data, error } = await supabase()
     .from('trip_obs_latest10_cr2025_v1')
     .select('user_login, inat_obs_id, observed_at_utc, latitude, longitude')
@@ -433,15 +537,11 @@ export async function fetchLatest10CR2025(): Promise<ApiResult<TripLatestObserva
   return { data: rows, error };
 }
 
+export async function fetchLatest10CR2025(): Promise<ApiResult<TripLatestObservationRow[]>> {
+  return fetchObsLatest10CR2025();
+}
+
 export async function fetchTodayTrophiesCR2025(tz = 'UTC'): Promise<ApiResult<TripTrophyAward[]>> {
-  const { data, error } = await supabase()
-    .from('trophies_daily_trip_cr2025_v1')
-    .select('trophy_id, user_login, value, awarded_at');
-
-  if (isMissingView(error)) {
-    return { data: [], error: null, missing: true };
-  }
-
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz || 'UTC',
     year: 'numeric',
@@ -450,53 +550,135 @@ export async function fetchTodayTrophiesCR2025(tz = 'UTC'): Promise<ApiResult<Tr
   });
   const todayKey = formatter.format(new Date());
 
-  const rawRows = (data ?? []) as (RawTripTaxaTrophyRow & { value?: NumericLike })[];
-  const rows: TripTrophyAward[] = rawRows
-    .map((row) => {
+  const [dailyResult, taxaResult] = await Promise.all([
+    supabase()
+      .from('trophies_daily_trip_cr2025_v1')
+      .select('trophy_id, user_login, value, awarded_at'),
+    supabase()
+      .from('trophies_taxa_daily_cr2025_v1')
+      .select('trophy_id, user_login, awarded_at, day_local'),
+  ]);
+
+  const rows: TripTrophyAward[] = [];
+
+  let missingDaily = false;
+  let missingTaxa = false;
+  let combinedError: PostgrestError | null = null;
+
+  if (isMissingView(dailyResult.error)) {
+    missingDaily = true;
+  } else if (dailyResult.error) {
+    combinedError = dailyResult.error;
+  } else {
+    const rawDaily = (dailyResult.data ?? []) as (RawTripTaxaTrophyRow & { value?: NumericLike })[];
+    rawDaily.forEach((row) => {
       const trophy_id = (row.trophy_id ?? '').toString();
       const user_login = (row.user_login ?? '').toString();
-      if (!trophy_id || !user_login) return null;
-      return {
+      if (!trophy_id || !user_login) return;
+      const awardedAt = row.awarded_at ?? null;
+      const awardedKey = awardedAt ? formatter.format(new Date(awardedAt)) : null;
+      if (awardedKey && awardedKey !== todayKey) return;
+      rows.push({
         trophy_id,
         user_login,
         value: row.value != null ? Number(row.value) : null,
-        awarded_at: row.awarded_at ?? null,
-      } satisfies TripTrophyAward;
-    })
-    .filter((row): row is TripTrophyAward => {
-      if (!row || !row.awarded_at) return false;
-      const awardedKey = formatter.format(new Date(row.awarded_at));
-      return awardedKey === todayKey;
+        awarded_at: awardedAt,
+      });
     });
+  }
 
-  return { data: rows, error };
+  if (isMissingView(taxaResult.error)) {
+    missingTaxa = true;
+  } else if (taxaResult.error) {
+    combinedError = combinedError ?? taxaResult.error;
+  } else {
+    const rawTaxa = (taxaResult.data ?? []) as RawTripTaxaTrophyRow[];
+    rawTaxa.forEach((row) => {
+      const trophy_id = (row.trophy_id ?? '').toString();
+      const user_login = (row.user_login ?? '').toString();
+      if (!trophy_id || !user_login) return;
+      const dayLocal = row.day_local ?? null;
+      if (dayLocal && dayLocal !== todayKey) return;
+      rows.push({
+        trophy_id,
+        user_login,
+        value: null,
+        awarded_at: row.awarded_at ?? null,
+      });
+    });
+  }
+
+  return {
+    data: rows,
+    error: combinedError,
+    ...(missingDaily && missingTaxa ? { missing: true } : {}),
+  };
 }
 
 export async function fetchTripTrophiesCR2025(): Promise<ApiResult<TripTrophyAward[]>> {
-  const { data, error } = await supabase()
-    .from('trophies_daily_trip_cr2025_v1')
-    .select('trophy_id, user_login, value, awarded_at');
+  const [dailyResult, taxaResult] = await Promise.all([
+    supabase()
+      .from('trophies_daily_trip_cr2025_v1')
+      .select('trophy_id, user_login, value, awarded_at'),
+    supabase()
+      .from('trophies_taxa_daily_cr2025_v1')
+      .select('trophy_id, user_login, awarded_at, day_local'),
+  ]);
 
-  if (isMissingView(error)) {
-    return { data: [], error: null, missing: true };
-  }
+  const rows: TripTrophyAward[] = [];
+  let missingDaily = false;
+  let missingTaxa = false;
+  let combinedError: PostgrestError | null = null;
 
-  const rawRows = (data ?? []) as (RawTripTaxaTrophyRow & { value?: NumericLike })[];
-  const rows: TripTrophyAward[] = rawRows
-    .map((row) => {
+  if (isMissingView(dailyResult.error)) {
+    missingDaily = true;
+  } else if (dailyResult.error) {
+    combinedError = dailyResult.error;
+  } else {
+    const rawDaily = (dailyResult.data ?? []) as (RawTripTaxaTrophyRow & { value?: NumericLike })[];
+    rawDaily.forEach((row) => {
       const trophy_id = (row.trophy_id ?? '').toString();
       const user_login = (row.user_login ?? '').toString();
-      if (!trophy_id || !user_login) return null;
-      return {
+      if (!trophy_id || !user_login) return;
+      rows.push({
         trophy_id,
         user_login,
         value: row.value != null ? Number(row.value) : null,
         awarded_at: row.awarded_at ?? null,
-      } satisfies TripTrophyAward;
-    })
-    .filter((row): row is TripTrophyAward => Boolean(row));
+      });
+    });
+  }
 
-  return { data: rows, error };
+  if (isMissingView(taxaResult.error)) {
+    missingTaxa = true;
+  } else if (taxaResult.error) {
+    combinedError = combinedError ?? taxaResult.error;
+  } else {
+    const rawTaxa = (taxaResult.data ?? []) as RawTripTaxaTrophyRow[];
+    rawTaxa.forEach((row) => {
+      const trophy_id = (row.trophy_id ?? '').toString();
+      const user_login = (row.user_login ?? '').toString();
+      if (!trophy_id || !user_login) return;
+      rows.push({
+        trophy_id,
+        user_login,
+        value: null,
+        awarded_at: row.awarded_at ?? null,
+      });
+    });
+  }
+
+  rows.sort((a, b) => {
+    const aTime = a.awarded_at ? new Date(a.awarded_at).getTime() : 0;
+    const bTime = b.awarded_at ? new Date(b.awarded_at).getTime() : 0;
+    return aTime - bTime;
+  });
+
+  return {
+    data: rows,
+    error: combinedError,
+    ...(missingDaily && missingTaxa ? { missing: true } : {}),
+  };
 }
 
 export async function fetchTaxaTrophiesTodayCR2025(): Promise<ApiResult<TripTaxaTrophyRow[]>> {
@@ -558,6 +740,57 @@ export async function fetchTrophyCabinetCR2025(): Promise<ApiResult<TripTrophyCa
   return { data: rows, error };
 }
 
+export async function fetchCabinetCR2025(): Promise<ApiResult<TripCabinetDayGroup[]>> {
+  const base = await fetchTrophyCabinetCR2025();
+
+  if (base.missing) {
+    return { data: [], error: null, missing: true };
+  }
+
+  const dayMap = new Map<string | null, Map<string, TripTrophyCabinetRow[]>>();
+
+  (base.data ?? []).forEach((row) => {
+    const dayKey = row.day_local ?? null;
+    if (!dayMap.has(dayKey)) {
+      dayMap.set(dayKey, new Map());
+    }
+    const trophies = dayMap.get(dayKey)!;
+    if (!trophies.has(row.trophy_id)) {
+      trophies.set(row.trophy_id, []);
+    }
+    trophies.get(row.trophy_id)!.push(row);
+  });
+
+  const grouped: TripCabinetDayGroup[] = Array.from(dayMap.entries())
+    .sort(([a], [b]) => {
+      if (!a && !b) return 0;
+      if (!a) return 1;
+      if (!b) return -1;
+      return b.localeCompare(a);
+    })
+    .map(([day_local, trophies]) => ({
+      day_local,
+      trophies: Array.from(trophies.entries())
+        .map(([trophy_id, awards]) => ({
+          trophy_id,
+          awards: awards
+            .slice()
+            .sort((a, b) => {
+              const nameA = a.user_login.toLowerCase();
+              const nameB = b.user_login.toLowerCase();
+              if (nameA !== nameB) return nameA.localeCompare(nameB);
+              return (a.awarded_at ?? '').localeCompare(b.awarded_at ?? '');
+            }),
+        }))
+        .sort((a, b) => a.trophy_id.localeCompare(b.trophy_id)),
+    }));
+
+  return {
+    data: grouped,
+    error: base.error ?? null,
+  };
+}
+
 export async function fetchTrophiesCatalogCR2025(): Promise<ApiResult<TripTrophyCatalogRow[]>> {
   const { data, error } = await supabase()
     .from('trophies_catalog_cr2025_v1')
@@ -589,6 +822,28 @@ export async function getTripTrophiesToday(tz: string): Promise<ApiResult<TripTr
 
 export async function getTripTrophiesCumulative(): Promise<ApiResult<TripTrophyAward[]>> {
   return fetchTripTrophiesCR2025();
+}
+
+export async function submitAdultPoints(user_login: string, points: number, reason: string) {
+  const payload = {
+    user_login,
+    points,
+    reason: reason?.trim() || 'manual-award',
+  };
+
+  const { error } = await supabase()
+    .from('trip_awards_manual_cr2025')
+    .insert([payload]);
+
+  if (isMissingView(error)) {
+    return { ok: false, missingTable: true as const };
+  }
+
+  if (error) {
+    return { ok: false, error };
+  }
+
+  return { ok: true };
 }
 
 export async function lastUpdatedCR2025(): Promise<ApiResult<string | null>> {
@@ -628,7 +883,7 @@ export async function fetchBingo(userLogin: string) {
 
 export async function fetchMembers() {
   const { data, error } = await supabase()
-    .from('trip_members_roster_v1')
+    .from('trip_members_roster_cr2025_v1')
     .select('user_login')
     .order('display_name', { ascending: true, nullsFirst: false })
     .order('user_login', { ascending: true, nullsFirst: false });

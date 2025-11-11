@@ -1,197 +1,315 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 import { Trophy, Info, Clock } from 'lucide-react';
-import { formatPoints } from '@/lib/scoring';
+import { Skeleton } from '@/components/ui/skeleton';
 import Legend from '@/components/Legend';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { formatPoints } from '@/lib/scoring';
 import {
   fetchLeaderboardCR2025,
   fetchRosterCR2025,
   fetchDisplayFlags,
-  lastUpdatedCR2025,
+  getLastUpdatedTs,
+  type TripLeaderboardPayload,
   type TripLeaderboardRow,
   type TripRosterEntry,
+  type TripSilverBreakdown,
 } from '@/lib/api';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { formatDistanceToNow } from 'date-fns';
 import { isLive } from '@/lib/config/profile';
-
-type RankedLeaderboardRow = TripLeaderboardRow & {
-  rank: number;
-  rankDelta: number | null;
-  rankIndicator: '▲' | '▼' | '—';
-};
 
 type RankSnapshot = {
   timestamp: number;
   ranks: Record<string, number>;
 };
 
-const RANK_STORAGE_KEY = 'ecoqlb:cr2025';
-const RANK_STALE_WINDOW_MS = 60 * 60 * 1000;
+type RankedRow = TripLeaderboardRow & {
+  rank: number;
+  rankDelta: number | null;
+  rankIndicator: '▲' | '▼' | '—';
+  effectiveTotal: number;
+  silver?: TripSilverBreakdown;
+};
 
-export default function Leaderboard() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [leaderboardData, setLeaderboardData] = useState<RankedLeaderboardRow[]>([]);
-  const [error, setError] = useState<{ message?: string } | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [isBlackout, setIsBlackout] = useState(false);
-  const [displayNameMap, setDisplayNameMap] = useState<Record<string, string>>({});
-  const [warnings, setWarnings] = useState<string[]>([]);
+const RANK_STORAGE_KEY = 'cr2025-rank-snapshot-v1';
+const RANK_STALE_WINDOW_MS = 10 * 60 * 1000;
 
-  const computeRankedRows = (rows: TripLeaderboardRow[]): RankedLeaderboardRow[] => {
-    const sorted = [...rows]
-      .sort((a, b) => {
-        const pointDiff = b.total_points - a.total_points;
-        if (pointDiff !== 0) return pointDiff;
-        const taxaDiff = b.distinct_taxa - a.distinct_taxa;
-        if (taxaDiff !== 0) return taxaDiff;
-        const obsDiff = b.obs_count - a.obs_count;
-        if (obsDiff !== 0) return obsDiff;
-        const nameA = (a.display_name || a.user_login).toLowerCase();
-        const nameB = (b.display_name || b.user_login).toLowerCase();
-        return nameA.localeCompare(nameB);
-      })
-      .map((row, idx) => ({
-        ...row,
-        rank: idx + 1,
-        rankDelta: null,
-        rankIndicator: '—' as const,
-      }));
+function mergeRosterAndLeaderboard(
+  roster: TripRosterEntry[],
+  leaderboardRows: TripLeaderboardRow[],
+): TripLeaderboardRow[] {
+  const rosterMap = new Map<string, TripRosterEntry>();
+  roster.forEach((entry) => {
+    rosterMap.set(entry.user_login.toLowerCase(), entry);
+  });
 
-    if (typeof window === 'undefined') {
-      return sorted;
+  const leaderboardMap = new Map<string, TripLeaderboardRow>();
+  leaderboardRows.forEach((row) => {
+    leaderboardMap.set(row.user_login.toLowerCase(), row);
+  });
+
+  const merged: TripLeaderboardRow[] = [];
+
+  roster.forEach((entry) => {
+    const key = entry.user_login.toLowerCase();
+    const leaderboardRow = leaderboardMap.get(key);
+    if (leaderboardRow) {
+      merged.push({
+        ...leaderboardRow,
+        display_name: leaderboardRow.display_name ?? entry.display_name ?? leaderboardRow.user_login,
+      });
+    } else {
+      merged.push({
+        user_login: entry.user_login,
+        display_name: entry.display_name ?? entry.user_login,
+        total_points: 0,
+        obs_count: 0,
+        distinct_taxa: 0,
+        research_grade_count: 0,
+        bonus_points: 0,
+        last_observed_at_utc: null,
+      });
     }
+  });
 
-    let snapshot: RankSnapshot | null = null;
+  leaderboardRows.forEach((row) => {
+    const key = row.user_login.toLowerCase();
+    if (!rosterMap.has(key)) {
+      merged.push(row);
+    }
+  });
+
+  return merged;
+}
+
+function computeRankedRows(
+  rows: TripLeaderboardRow[],
+  hasSilver: boolean,
+  silverByLogin: Record<string, TripSilverBreakdown>,
+): RankedRow[] {
+  const decorated = rows.map((row) => {
+    const key = row.user_login.toLowerCase();
+    const silver = hasSilver ? silverByLogin[key] : undefined;
+    const effectiveTotal = silver ? silver.total_points : row.total_points;
+    return {
+      ...row,
+      silver,
+      effectiveTotal,
+      rank: 0,
+      rankDelta: null,
+      rankIndicator: '—' as const,
+    } satisfies RankedRow;
+  });
+
+  decorated.sort((a, b) => {
+    if (b.effectiveTotal !== a.effectiveTotal) return b.effectiveTotal - a.effectiveTotal;
+    if (b.distinct_taxa !== a.distinct_taxa) return b.distinct_taxa - a.distinct_taxa;
+    if (b.obs_count !== a.obs_count) return b.obs_count - a.obs_count;
+    return a.user_login.localeCompare(b.user_login);
+  });
+
+  const now = typeof window !== 'undefined' ? Date.now() : 0;
+  let snapshot: RankSnapshot | null = null;
+
+  if (typeof window !== 'undefined') {
     try {
       const raw = window.localStorage.getItem(RANK_STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          const candidate = parsed as RankSnapshot;
-          if (typeof candidate.timestamp === 'number' && candidate.ranks && typeof candidate.ranks === 'object') {
-            snapshot = candidate;
-          }
+        const parsed = JSON.parse(raw) as RankSnapshot;
+        if (parsed && typeof parsed.timestamp === 'number' && parsed.ranks && typeof parsed.ranks === 'object') {
+          snapshot = parsed;
         }
       }
     } catch (err) {
       console.warn('rank snapshot parse error', err);
     }
+  }
 
-    const now = Date.now();
+  const fresh = snapshot ? now - snapshot.timestamp <= RANK_STALE_WINDOW_MS : false;
 
-    const isFresh = snapshot ? now - snapshot.timestamp <= RANK_STALE_WINDOW_MS : false;
+  const ranked = decorated.map((row, index) => {
+    const key = row.user_login.toLowerCase();
+    const prevRank = snapshot?.ranks?.[key];
+    let rankDelta: number | null = null;
+    let rankIndicator: '▲' | '▼' | '—' = '—';
 
-    const annotated = sorted.map((row) => {
-      const key = row.user_login.toLowerCase();
-      const prevRank = snapshot?.ranks?.[key];
-      let rankDelta: number | null = null;
-      let rankIndicator: '▲' | '▼' | '—' = '—';
-
-      if (typeof prevRank === 'number') {
-        rankDelta = prevRank - row.rank;
-        if (isFresh && rankDelta !== 0) {
-          if (rankDelta > 0) {
-            rankIndicator = '▲';
-          } else if (rankDelta < 0) {
-            rankIndicator = '▼';
-          }
-        }
+    if (typeof prevRank === 'number') {
+      rankDelta = prevRank - (index + 1);
+      if (fresh && rankDelta !== 0) {
+        rankIndicator = rankDelta > 0 ? '▲' : '▼';
       }
+    }
 
-      return { ...row, rankDelta, rankIndicator };
-    });
+    return {
+      ...row,
+      rank: index + 1,
+      rankDelta,
+      rankIndicator,
+    } satisfies RankedRow;
+  });
 
+  if (typeof window !== 'undefined') {
     const nextSnapshot: RankSnapshot = {
       timestamp: now,
       ranks: {},
     };
-    annotated.forEach((row) => {
+    ranked.forEach((row) => {
       const key = row.user_login.toLowerCase();
       if (key) {
         nextSnapshot.ranks[key] = row.rank;
       }
     });
-
     try {
       window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(nextSnapshot));
     } catch (err) {
       console.warn('rank snapshot store error', err);
     }
+  }
 
-    return annotated;
-  };
+  return ranked;
+}
+
+export default function Leaderboard() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<RankedRow[]>([]);
+  const [displayNameMap, setDisplayNameMap] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isBlackout, setIsBlackout] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadData = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const [leaderboardResult, rosterResult, flags, updatedResult] = await Promise.all([
+        const [leaderboardResult, rosterResult, flags] = await Promise.all([
           fetchLeaderboardCR2025(),
           fetchRosterCR2025(),
           fetchDisplayFlags(),
-          lastUpdatedCR2025(),
         ]);
 
-        setLeaderboardData(computeRankedRows(leaderboardResult.data));
+        if (cancelled) return;
 
-        const rosterMap = (rosterResult.data ?? []).reduce<Record<string, string>>((acc, row: TripRosterEntry) => {
-          const key = row.user_login.toLowerCase();
+        const leaderboardPayload: TripLeaderboardPayload = leaderboardResult.data ?? {
+          rows: [],
+          hasSilver: false,
+          silverByLogin: {},
+        };
+
+        const rosterEntries = rosterResult.data ?? [];
+        const rosterMap = rosterEntries.reduce<Record<string, string>>((acc, member) => {
+          const key = member.user_login.toLowerCase();
           if (key) {
-            acc[key] = row.display_name ?? row.user_login;
+            acc[key] = member.display_name ?? member.user_login;
           }
           return acc;
         }, {});
         setDisplayNameMap(rosterMap);
 
+        const mergedRows = mergeRosterAndLeaderboard(rosterEntries, leaderboardPayload.rows ?? []);
+        const rankedRows = computeRankedRows(mergedRows, leaderboardPayload.hasSilver ?? false, leaderboardPayload.silverByLogin ?? {});
+        setRows(rankedRows);
+
+        const updatedIso = getLastUpdatedTs(leaderboardPayload.rows ?? []);
+        setLastUpdated(updatedIso ? new Date(updatedIso) : null);
+
         const warningsList: string[] = [];
         if (leaderboardResult.missing) warningsList.push('Leaderboard view is unavailable.');
         if (rosterResult.missing) warningsList.push('Roster view is unavailable; display names limited.');
-        if (updatedResult.missing) warningsList.push('Latest observation window unavailable; timestamp hidden.');
         setWarnings(warningsList);
 
-        const errors: string[] = [];
-        if (leaderboardResult.error?.message) errors.push(leaderboardResult.error.message);
-        if (rosterResult.error?.message) errors.push(rosterResult.error.message);
-        if (updatedResult.error?.message) errors.push(updatedResult.error.message);
-        setError(errors.length ? { message: errors.join('; ') } : null);
+        const errorMessages = [leaderboardResult.error?.message, rosterResult.error?.message]
+          .filter((msg): msg is string => Boolean(msg));
+        setError(errorMessages.length ? errorMessages.join('; ') : null);
 
-        if (updatedResult.data) {
-          const updatedDate = new Date(updatedResult.data);
-          if (!Number.isNaN(updatedDate.valueOf())) {
-            setLastUpdated(updatedDate);
-          } else {
-            setLastUpdated(null);
-          }
-        } else {
-          setLastUpdated(null);
-        }
-
-        if (flags.score_blackout_until) {
+        if (flags?.score_blackout_until) {
           setIsBlackout(new Date() < new Date(flags.score_blackout_until));
+        } else {
+          setIsBlackout(false);
         }
       } catch (err) {
-        console.error('Failed to fetch leaderboard:', err);
-        if (err instanceof Error) {
-          setError({ message: err.message });
-        } else {
-          setError({ message: String(err) });
+        if (!cancelled) {
+          console.error('Failed to fetch leaderboard:', err);
+          setError(err instanceof Error ? err.message : String(err));
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const rows = leaderboardData;
-  const topLeaders = rows
-    .slice(0, 3)
-    .map((row) => row.user_login)
-    .filter((name): name is string => Boolean(name));
+  const topLeaders = useMemo(
+    () =>
+      rows
+        .filter((row) => row.effectiveTotal > 0)
+        .slice(0, 3)
+        .map((row) => row.user_login)
+        .filter(Boolean),
+    [rows],
+  );
+
+  const renderScoreBreakdown = (row: RankedRow) => {
+    const baseTotal = row.obs_count + row.research_grade_count + row.bonus_points;
+
+    if (row.silver) {
+      const segments: { label: string; value: number }[] = [
+        { label: 'Base observations', value: row.silver.base_obs },
+        { label: 'Trip novelty', value: row.silver.novelty_trip },
+        { label: 'Daily novelty', value: row.silver.novelty_day },
+        { label: 'Rarity bonus', value: row.silver.rarity },
+        { label: 'Research grade', value: row.silver.research },
+        { label: 'Multiplier delta', value: row.silver.multipliers_delta },
+      ];
+      const total = row.silver.total_points;
+
+      return (
+        <div className="space-y-3">
+          <div className="font-semibold text-foreground">Silver Score Breakdown</div>
+          <ul className="space-y-1 text-xs">
+            {segments.map((segment) => (
+              <li key={segment.label} className="flex items-center justify-between gap-3">
+                <span>{segment.label}</span>
+                <span className="font-mono">{formatPoints(segment.value)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
+            <span>Total</span>
+            <span className="font-mono">{formatPoints(total)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2">
+        <div className="font-semibold text-foreground">Base Score Breakdown</div>
+        <div className="font-mono text-xs text-muted-foreground">
+          {row.obs_count} + {row.research_grade_count} + {row.bonus_points} = {baseTotal}
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="chip chip--info">Obs {row.obs_count}</span>
+          <span className="chip chip--info">RG {row.research_grade_count}</span>
+          <span className="chip chip--muted">Bonus {row.bonus_points}</span>
+        </div>
+        <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
+          <span>Total</span>
+          <span className="font-mono">{formatPoints(baseTotal)}</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="pb-6 pb-safe-bottom">
@@ -228,7 +346,7 @@ export default function Leaderboard() {
 
         {loading ? (
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map(i => (
+            {[1, 2, 3, 4, 5].map((i) => (
               <Skeleton key={i} className="h-20 w-full" />
             ))}
           </div>
@@ -236,9 +354,7 @@ export default function Leaderboard() {
           <>
             {error && (
               <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <p className="text-sm text-destructive">
-                  Leaderboard error: {error.message || JSON.stringify(error)}
-                </p>
+                <p className="text-sm text-destructive">Leaderboard error: {error}</p>
               </div>
             )}
             {warnings.length > 0 && (
@@ -253,46 +369,45 @@ export default function Leaderboard() {
                 ))}
               </div>
             )}
-            {!rows || rows.length === 0 ? (
+            {rows.length === 0 ? (
               <div className="text-center py-12 bg-muted/30 rounded-lg">
                 <p className="text-lg font-semibold text-muted-foreground mb-2">
                   {isLive ? 'No leaderboard rows yet' : 'No leaderboard rows for the latest run.'}
                 </p>
                 {isLive && (
-                  <p className="text-sm text-muted-foreground">
-                    First scoring run will populate this.
-                  </p>
+                  <p className="text-sm text-muted-foreground">First scoring run will populate this.</p>
                 )}
               </div>
             ) : (
               <div className="space-y-3">
                 {rows.map((row) => {
-                  const score = row.total_points;
-                  const totalObservations = row.obs_count;
-                  const speciesCount = row.distinct_taxa;
-                  const rowKey = row.user_login;
-                  const hasIndicator = !isBlackout && row.rankIndicator !== '—' && row.rankDelta != null && row.rankDelta !== 0;
-                  const rgPercent = row.obs_count > 0
-                    ? Math.round((row.research_grade_count / Math.max(row.obs_count, 1)) * 100)
-                    : 0;
-                  const canonicalDisplayName = displayNameMap[row.user_login.toLowerCase()] ?? row.display_name ?? '';
-                  const showSecondaryName = Boolean(canonicalDisplayName) && canonicalDisplayName.toLowerCase() !== row.user_login.toLowerCase();
-                  const tooltip = showSecondaryName
-                    ? `${canonicalDisplayName} (${row.user_login})`
-                    : row.user_login;
+                  const loginKey = row.user_login.toLowerCase();
+                  const canonicalDisplay = displayNameMap[loginKey] ?? row.display_name ?? row.user_login;
+                  const showSecondary = canonicalDisplay.toLowerCase() !== row.user_login.toLowerCase();
+                  const scoreValue = row.effectiveTotal;
+                  const hasIndicator = !isBlackout && row.rankIndicator !== '—' && (row.rankDelta ?? 0) !== 0;
+
+                  const handleRowClick = () => {
+                    navigate(`/user/${row.user_login}`);
+                  };
 
                   return (
                     <div
-                      key={rowKey}
-                      className="p-4 bg-card border rounded-lg flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow group"
-                      onClick={() => navigate(`/user/${row.user_login}`)}
-                      title={tooltip}
+                      key={row.user_login}
+                      className="p-4 bg-card border rounded-lg flex items-center justify-between transition-shadow hover:shadow-lg"
+                      onClick={handleRowClick}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleRowClick();
+                        }
+                      }}
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="text-2xl font-bold text-muted-foreground">
-                            #{row.rank}
-                          </div>
+                          <div className="text-2xl font-bold text-muted-foreground">#{row.rank}</div>
                           <span
                             className={`rank-change text-xs font-medium ${
                               hasIndicator
@@ -315,14 +430,14 @@ export default function Leaderboard() {
                         </div>
                         <div className="space-y-1">
                           <div className="font-semibold text-lg text-foreground">{row.user_login}</div>
-                          {showSecondaryName && (
-                            <div className="text-xs text-muted-foreground">{canonicalDisplayName}</div>
+                          {showSecondary && (
+                            <div className="text-xs text-muted-foreground">{canonicalDisplay}</div>
                           )}
                           <div className="flex gap-2 flex-wrap text-sm">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <span className="chip chip--info" aria-label="Observations">
-                                  🔍 {totalObservations}
+                                  🔍 {row.obs_count}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
@@ -334,12 +449,12 @@ export default function Leaderboard() {
                             </Popover>
                             <Popover>
                               <PopoverTrigger asChild>
-                                <span className="chip chip--info" aria-label="Species">
-                                  🌿 {speciesCount}
+                                <span className="chip chip--info" aria-label="Distinct taxa">
+                                  🌿 {row.distinct_taxa}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
-                                <div className="font-medium">Species</div>
+                                <div className="font-medium">Distinct species</div>
                                 <p className="text-xs text-muted-foreground">
                                   Species totals break ties between players with the same points.
                                 </p>
@@ -347,8 +462,8 @@ export default function Leaderboard() {
                             </Popover>
                             <Popover>
                               <PopoverTrigger asChild>
-                                <span className="chip chip--muted" aria-label="Research grade percentage">
-                                  RG {totalObservations > 0 ? `${rgPercent}%` : '—'}
+                                <span className="chip chip--muted" aria-label="Research grade count">
+                                  RG {row.research_grade_count}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
@@ -371,23 +486,12 @@ export default function Leaderboard() {
                               onKeyDown={(event) => event.stopPropagation()}
                               aria-label="Show point breakdown"
                             >
-                              <span className="text-2xl font-bold leading-none">{formatPoints(score)}</span>
+                              <span className="text-2xl font-bold leading-none">{formatPoints(scoreValue)}</span>
                               <Info className="h-4 w-4 text-muted-foreground" />
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent align="end" className="w-64 text-sm space-y-2">
-                            <div className="font-semibold text-foreground">
-                              Points = Observations + Research Grade + Adult bonus
-                            </div>
-                            <div className="font-mono text-xs text-muted-foreground">
-                              {row.obs_count} + {row.research_grade_count} + {row.bonus_points} ={' '}
-                              {row.obs_count + row.research_grade_count + row.bonus_points}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <span className="chip chip--info">Obs {row.obs_count}</span>
-                              <span className="chip chip--info">RG {row.research_grade_count}</span>
-                              <span className="chip chip--muted">Bonus {row.bonus_points}</span>
-                            </div>
+                          <PopoverContent align="end" className="w-72 text-sm" onClick={(event) => event.stopPropagation()}>
+                            {renderScoreBreakdown(row)}
                           </PopoverContent>
                         </Popover>
                       </div>

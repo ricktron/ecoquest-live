@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   fetchRosterCR2025,
-  fetchTrophyCabinetCR2025,
+  fetchCabinetCR2025,
   fetchTrophiesCatalogCR2025,
   getTripParams,
-  type TripTrophyCabinetRow,
+  type TripCabinetDayGroup,
   type TripTrophyCatalogRow,
   type TripRosterEntry,
 } from '@/lib/api';
@@ -36,7 +36,7 @@ function getTrophyDefinition(id: string): TrophyDefinition {
 }
 
 export default function Cabinet() {
-  const [cabinetRows, setCabinetRows] = useState<TripTrophyCabinetRow[]>([]);
+  const [cabinetGroups, setCabinetGroups] = useState<TripCabinetDayGroup[]>([]);
   const [catalogLabels, setCatalogLabels] = useState<Record<string, string>>({});
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ export default function Cabinet() {
       try {
         const [rosterRes, cabinetRes, catalogRes, paramsRes] = await Promise.all([
           fetchRosterCR2025(),
-          fetchTrophyCabinetCR2025(),
+          fetchCabinetCR2025(),
           fetchTrophiesCatalogCR2025(),
           getTripParams(),
         ]);
@@ -76,7 +76,7 @@ export default function Cabinet() {
         }, {});
         setCatalogLabels(catalogMap);
 
-        setCabinetRows(cabinetRes.data ?? []);
+        setCabinetGroups(cabinetRes.data ?? []);
         setTz(paramsRes.data?.tz ?? 'UTC');
 
         const errors: string[] = [];
@@ -136,29 +136,23 @@ export default function Cabinet() {
   };
 
   const dayGroups = useMemo(() => {
-    const dayMap = new Map<string, Map<string, TripTrophyCabinetRow[]>>();
-    cabinetRows.forEach((row) => {
-      const day = row.day_local ?? 'undated';
-      if (!dayMap.has(day)) {
-        dayMap.set(day, new Map());
-      }
-      const trophyMap = dayMap.get(day)!;
-      const trophyId = row.trophy_id;
-      if (!trophyMap.has(trophyId)) {
-        trophyMap.set(trophyId, []);
-      }
-      trophyMap.get(trophyId)!.push(row);
-    });
-
-    return Array.from(dayMap.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([day, trophyMap]) => ({
-        day,
-        trophies: Array.from(trophyMap.entries())
-          .map(([trophyId, awards]) => ({
-            trophyId,
-            meta: getMeta(trophyId),
-            awards: awards
+    return cabinetGroups
+      .slice()
+      .sort((a, b) => {
+        const dayA = a.day_local ?? 'undated';
+        const dayB = b.day_local ?? 'undated';
+        if (dayA === 'undated' && dayB === 'undated') return 0;
+        if (dayA === 'undated') return 1;
+        if (dayB === 'undated') return -1;
+        return dayB.localeCompare(dayA);
+      })
+      .map((group) => ({
+        day: group.day_local ?? 'undated',
+        trophies: group.trophies
+          .map((entry) => ({
+            trophyId: entry.trophy_id,
+            meta: getMeta(entry.trophy_id),
+            awards: entry.awards
               .slice()
               .sort((a, b) => {
                 const nameA = getDisplayName(a.user_login).toLowerCase();
@@ -169,7 +163,7 @@ export default function Cabinet() {
           }))
           .sort((a, b) => a.meta.title.localeCompare(b.meta.title)),
       }));
-  }, [cabinetRows, catalogLabels, nameMap]);
+  }, [cabinetGroups, catalogLabels, nameMap, getDisplayName, getMeta]);
 
   return (
     <div className="pb-6 pb-safe-bottom">

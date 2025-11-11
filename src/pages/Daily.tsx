@@ -36,6 +36,7 @@ export default function Daily() {
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [showNoTodayMessage, setShowNoTodayMessage] = useState(false);
 
   const currentDetail = useMemo(() => (expandedDay ? details[expandedDay] : undefined), [expandedDay, details]);
 
@@ -52,9 +53,10 @@ export default function Daily() {
 
         if (cancelled) return;
 
-        const orderedDays = summaryRes.data.map((row) => row.day_local).sort((a, b) => b.localeCompare(a));
+        const summaryRows = summaryRes.data ?? [];
+        const orderedDays = summaryRows.map((row) => row.day_local);
 
-        const summaryMap = summaryRes.data.reduce<Record<string, TripDailySummaryRow>>((acc, row) => {
+        const summaryMap = summaryRows.reduce<Record<string, TripDailySummaryRow>>((acc, row) => {
           acc[row.day_local] = row;
           return acc;
         }, {});
@@ -69,6 +71,14 @@ export default function Daily() {
           return acc;
         }, {});
         setNameMap(rosterMap);
+
+        const todayKey = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Costa_Rica',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+        setShowNoTodayMessage(!summaryRows.some((row) => row.day_local === todayKey));
 
         const warningsList: string[] = [];
         if (summaryRes.missing) warningsList.push('Daily summary view is unavailable.');
@@ -113,17 +123,15 @@ export default function Daily() {
         const result = await fetchDayPeopleCR2025(expandedDay);
         if (cancelled) return;
 
-        const detailRows = (result.data ?? [])
-          .slice(0, 3)
-          .sort((a, b) => {
-            const obsDiff = b.obs_count - a.obs_count;
-            if (obsDiff !== 0) return obsDiff;
-            const taxaDiff = b.distinct_taxa - a.distinct_taxa;
-            if (taxaDiff !== 0) return taxaDiff;
-            const nameA = getDisplayName(a.user_login).toLowerCase();
-            const nameB = getDisplayName(b.user_login).toLowerCase();
-            return nameA.localeCompare(nameB);
-          });
+        const detailRows = (result.data ?? []).sort((a, b) => {
+          const obsDiff = b.obs_count - a.obs_count;
+          if (obsDiff !== 0) return obsDiff;
+          const taxaDiff = b.distinct_taxa - a.distinct_taxa;
+          if (taxaDiff !== 0) return taxaDiff;
+          const nameA = getDisplayName(a.user_login).toLowerCase();
+          const nameB = getDisplayName(b.user_login).toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
 
         setDetails((prev) => ({
           ...prev,
@@ -195,6 +203,11 @@ export default function Daily() {
                     {message}
                   </div>
                 ))}
+              </div>
+            )}
+            {showNoTodayMessage && (
+              <div className="mb-4 px-3 py-2 text-sm text-muted-foreground bg-muted/40 border border-dashed border-border rounded-md">
+                No observations yet today.
               </div>
             )}
             <div className="space-y-3">

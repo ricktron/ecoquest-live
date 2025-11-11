@@ -108,7 +108,8 @@ export default function UserPage() {
         setObservations(obsRes.data ?? []);
 
         const loginKey = safeLogin.toLowerCase();
-        const leaderboardMatch = (leaderboardRes.data ?? []).find(
+        const leaderboardRows = leaderboardRes.data?.rows ?? [];
+        const leaderboardMatch = leaderboardRows.find(
           (row) => row.user_login.toLowerCase() === loginKey,
         );
         setUserRow(leaderboardMatch ?? null);
