@@ -4,7 +4,7 @@ import { Calendar, ChevronDown } from 'lucide-react';
 import {
   fetchDailySummaryCR2025,
   fetchDayPeopleCR2025,
-  fetchRosterCR2025,
+  getRosterCR2025,
   type TripDailySummaryRow,
   type TripDayPeopleRow,
 } from '@/lib/api';
@@ -48,13 +48,15 @@ export default function Daily() {
       try {
         const [summaryRes, rosterRes] = await Promise.all([
           fetchDailySummaryCR2025(),
-          fetchRosterCR2025(),
+          getRosterCR2025(),
         ]);
 
         if (cancelled) return;
 
         const summaryRows = summaryRes.data ?? [];
-        const orderedDays = summaryRows.map((row) => row.day_local);
+        const orderedDays = summaryRows
+          .map((row) => row.day_local)
+          .sort((a, b) => a.localeCompare(b));
 
         const summaryMap = summaryRows.reduce<Record<string, TripDailySummaryRow>>((acc, row) => {
           acc[row.day_local] = row;
@@ -63,14 +65,11 @@ export default function Daily() {
 
         setDays(orderedDays);
         setSummaryByDay(summaryMap);
-        const rosterEntries = (rosterRes.data ?? []).map((row) => ({
-          ...row,
-          is_adult: Boolean(row.is_adult),
-        }));
+        const rosterEntries = rosterRes.data ?? [];
         const rosterMap = rosterEntries.reduce<Record<string, string>>((acc, row) => {
           const key = row.user_login.toLowerCase();
           if (key) {
-            acc[key] = row.display_name ?? row.user_login;
+            acc[key] = row.nameForUi;
           }
           return acc;
         }, {});

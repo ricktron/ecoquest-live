@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  fetchLeaderboardCR2025,
   fetchDailySummaryCR2025,
-  fetchRosterCR2025,
+  getLeaderboardCR2025,
+  getRosterCR2025,
   fetchObsAllCR2025,
   fetchObsLatest10CR2025,
   fetchTodayTrophiesCR2025,
@@ -67,8 +67,8 @@ export default function Debug() {
           cabinetRes,
         ] = await Promise.all([
           getTripParams(),
-          fetchRosterCR2025(),
-          fetchLeaderboardCR2025(),
+          getRosterCR2025(),
+          getLeaderboardCR2025(),
           fetchDailySummaryCR2025(),
           lastUpdatedCR2025(),
           fetchObsAllCR2025(),
@@ -87,7 +87,7 @@ export default function Debug() {
         const leaderboardPayload: TripLeaderboardPayload = leaderboardRes.data ?? {
           rows: [],
           hasSilver: false,
-          silverByLogin: {},
+          lastUpdatedAt: null,
         };
         setHasSilver(Boolean(leaderboardPayload.hasSilver));
         setLeaderboard(leaderboardPayload.rows ?? []);
@@ -151,14 +151,16 @@ export default function Debug() {
   const sortedLeaderboard = useMemo(() => {
     return [...leaderboard]
       .sort((a, b) => {
-        const pointDiff = b.total_points - a.total_points;
+        const totalA = a.silverBreakdown?.total_points ?? a.total_points;
+        const totalB = b.silverBreakdown?.total_points ?? b.total_points;
+        const pointDiff = totalB - totalA;
         if (pointDiff !== 0) return pointDiff;
         const taxaDiff = b.distinct_taxa - a.distinct_taxa;
         if (taxaDiff !== 0) return taxaDiff;
         const obsDiff = b.obs_count - a.obs_count;
         if (obsDiff !== 0) return obsDiff;
-        const nameA = (a.display_name || a.user_login).toLowerCase();
-        const nameB = (b.display_name || b.user_login).toLowerCase();
+        const nameA = (a.nameForUi || a.user_login).toLowerCase();
+        const nameB = (b.nameForUi || b.user_login).toLowerCase();
         return nameA.localeCompare(nameB);
       })
       .slice(0, 5);

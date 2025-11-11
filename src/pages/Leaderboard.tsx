@@ -7,13 +7,12 @@ import Legend from '@/components/Legend';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatPoints } from '@/lib/scoring';
 import {
-  fetchLeaderboardCR2025,
-  fetchRosterCR2025,
   fetchDisplayFlags,
+  getLeaderboardCR2025,
+  getSilverRow,
   getLastUpdatedTs,
   type TripLeaderboardPayload,
   type TripLeaderboardRow,
-  type TripRosterEntry,
   type TripSilverBreakdown,
 } from '@/lib/api';
 import { isLive } from '@/lib/config/profile';
@@ -24,70 +23,13 @@ type RankSnap = { ts: number; order: string[] };
 type RankedRow = TripLeaderboardRow & {
   rank: number;
   effectiveTotal: number;
-  silverBreakdown: TripSilverBreakdown | null;
 };
 
-function mergeRosterAndLeaderboard(
-  roster: TripRosterEntry[],
-  leaderboardRows: TripLeaderboardRow[],
-): TripLeaderboardRow[] {
-  const rosterMap = new Map<string, TripRosterEntry>();
-  roster.forEach((entry) => {
-    rosterMap.set(entry.user_login.toLowerCase(), entry);
-  });
-
-  const leaderboardMap = new Map<string, TripLeaderboardRow>();
-  leaderboardRows.forEach((row) => {
-    leaderboardMap.set(row.user_login.toLowerCase(), row);
-  });
-
-  const merged: TripLeaderboardRow[] = [];
-
-  roster.forEach((entry) => {
-    const key = entry.user_login.toLowerCase();
-    const leaderboardRow = leaderboardMap.get(key);
-    if (leaderboardRow) {
-      merged.push({
-        ...leaderboardRow,
-        display_name: leaderboardRow.display_name ?? entry.display_name ?? leaderboardRow.user_login,
-      });
-    } else {
-      merged.push({
-        user_login: entry.user_login,
-        display_name: entry.display_name ?? entry.user_login,
-        total_points: 0,
-        obs_count: 0,
-        distinct_taxa: 0,
-        research_grade_count: 0,
-        bonus_points: 0,
-        last_observed_at_utc: null,
-      });
-    }
-  });
-
-  leaderboardRows.forEach((row) => {
-    const key = row.user_login.toLowerCase();
-    if (!rosterMap.has(key)) {
-      merged.push(row);
-    }
-  });
-
-  return merged;
-}
-
-function computeRankedRows(
-  rows: TripLeaderboardRow[],
-  hasSilver: boolean,
-  silverByLogin: Record<string, TripSilverBreakdown>,
-): RankedRow[] {
+function computeRankedRows(rows: TripLeaderboardRow[]): RankedRow[] {
   const decorated = rows.map((row) => {
-    const key = row.user_login.toLowerCase();
-    const silver = hasSilver ? silverByLogin[key] : undefined;
-    const silverBreakdown = silver ? { ...silver } : null;
-    const effectiveTotal = silverBreakdown?.total_points ?? row.total_points;
+    const effectiveTotal = row.silverBreakdown?.total_points ?? row.total_points;
     return {
       ...row,
-      silverBreakdown,
       effectiveTotal,
       rank: 0,
     } satisfies RankedRow;
@@ -109,13 +51,23 @@ function computeRankedRows(
 export default function Leaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<RankedRow[]>([]);
+  const [baseRows, setBaseRows] = useState<TripLeaderboardRow[]>([]);
   const [rankDeltas, setRankDeltas] = useState<Record<string, number>>({});
-  const [displayNameMap, setDisplayNameMap] = useState<Record<string, string>>({});
+  const [showRankIndicators, setShowRankIndicators] = useState(false);
+  const [hasSilver, setHasSilver] = useState(false);
+  const [silverCache, setSilverCache] = useState<Record<string, TripSilverBreakdown>>({});
+  const [silverLoading, setSilverLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
+
+  const rows = useMemo(() => computeRankedRows(baseRows), [baseRows]);
+
+  useEffect(() => {
+    const iso = getLastUpdatedTs(baseRows);
+    setLastUpdated(iso ? new Date(iso) : null);
+  }, [baseRows]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,9 +75,8 @@ export default function Leaderboard() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [leaderboardResult, rosterResult, flags] = await Promise.all([
-          fetchLeaderboardCR2025(),
-          fetchRosterCR2025(),
+        const [leaderboardResult, flags] = await Promise.all([
+          getLeaderboardCR2025(),
           fetchDisplayFlags(),
         ]);
 
@@ -134,32 +85,27 @@ export default function Leaderboard() {
         const leaderboardPayload: TripLeaderboardPayload = leaderboardResult.data ?? {
           rows: [],
           hasSilver: false,
-          silverByLogin: {},
+          lastUpdatedAt: null,
         };
 
-        const rosterEntries = rosterResult.data ?? [];
-        const rosterMap = rosterEntries.reduce<Record<string, string>>((acc, member) => {
-          const key = member.user_login.toLowerCase();
-          if (key) {
-            acc[key] = member.display_name ?? member.user_login;
+        const payloadRows = leaderboardPayload.rows ?? [];
+        setBaseRows(payloadRows);
+        setHasSilver(Boolean(leaderboardPayload.hasSilver));
+
+        const initialSilver = payloadRows.reduce<Record<string, TripSilverBreakdown>>((acc, row) => {
+          if (row.silverBreakdown) {
+            acc[row.user_login.toLowerCase()] = row.silverBreakdown;
           }
           return acc;
         }, {});
-        setDisplayNameMap(rosterMap);
-
-        const mergedRows = mergeRosterAndLeaderboard(rosterEntries, leaderboardPayload.rows ?? []);
-        const rankedRows = computeRankedRows(mergedRows, leaderboardPayload.hasSilver ?? false, leaderboardPayload.silverByLogin ?? {});
-        setRows(rankedRows);
-
-        const updatedIso = getLastUpdatedTs(leaderboardPayload.rows ?? []);
-        setLastUpdated(updatedIso ? new Date(updatedIso) : null);
+        setSilverCache(initialSilver);
+        setSilverLoading({});
 
         const warningsList: string[] = [];
         if (leaderboardResult.missing) warningsList.push('Leaderboard view is unavailable.');
-        if (rosterResult.missing) warningsList.push('Roster view is unavailable; display names limited.');
         setWarnings(warningsList);
 
-        const errorMessages = [leaderboardResult.error?.message, rosterResult.error?.message]
+        const errorMessages = [leaderboardResult.error?.message]
           .filter((msg): msg is string => Boolean(msg));
         setError(errorMessages.length ? errorMessages.join('; ') : null);
 
@@ -192,7 +138,7 @@ export default function Leaderboard() {
       rows
         .filter((row) => row.effectiveTotal > 0)
         .slice(0, 3)
-        .map((row) => row.user_login)
+        .map((row) => row.nameForUi)
         .filter(Boolean),
     [rows],
   );
@@ -203,6 +149,7 @@ export default function Leaderboard() {
     if (typeof window === 'undefined') return;
     if (!rankOrderKey) {
       setRankDeltas({});
+      setShowRankIndicators(false);
       return;
     }
 
@@ -217,12 +164,20 @@ export default function Leaderboard() {
     }
 
     const prevIdx = new Map((snap?.order ?? []).map((u, i) => [u, i] as const));
-    const deltas: Record<string, number> = {};
-    currOrder.forEach((u, i) => {
-      const j = prevIdx.get(u);
-      deltas[u] = j == null ? 0 : j - i;
-    });
-    setRankDeltas(deltas);
+    const thresholdReached = snap != null && now - snap.ts >= 10 * 60 * 1000;
+
+    if (thresholdReached) {
+      const deltas: Record<string, number> = {};
+      currOrder.forEach((u, i) => {
+        const j = prevIdx.get(u);
+        deltas[u] = j == null ? 0 : j - i;
+      });
+      setRankDeltas(deltas);
+      setShowRankIndicators(true);
+    } else {
+      setRankDeltas({});
+      setShowRankIndicators(false);
+    }
 
     const hasNewUser = currOrder.length !== (snap?.order?.length ?? 0) || currOrder.some((u) => !prevIdx.has(u));
 
@@ -236,35 +191,79 @@ export default function Leaderboard() {
     // also refresh when the set of users changes (new roster member)
   }, [rankOrderKey]);
 
+  const ensureSilverBreakdown = async (row: TripLeaderboardRow) => {
+    if (!hasSilver) return null;
+    const key = row.user_login.toLowerCase();
+    if (silverCache[key]) return silverCache[key];
+    if (silverLoading[key]) return null;
+
+    setSilverLoading((prev) => ({ ...prev, [key]: true }));
+    try {
+      const result = await getSilverRow(row.user_login);
+      const breakdown = result.data ?? null;
+      if (breakdown) {
+        setSilverCache((prev) => ({ ...prev, [key]: breakdown }));
+        setBaseRows((prev) =>
+          prev.map((existing) =>
+            existing.user_login.toLowerCase() === key
+              ? {
+                  ...existing,
+                  silverBreakdown: breakdown,
+                  last_observed_at_utc: breakdown.last_observed_at_utc ?? existing.last_observed_at_utc,
+                }
+              : existing,
+          ),
+        );
+      }
+      return breakdown;
+    } finally {
+      setSilverLoading((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
   const renderScoreBreakdown = (row: RankedRow) => {
+    const key = row.user_login.toLowerCase();
+    const breakdown = silverCache[key] ?? row.silverBreakdown ?? null;
+    const loading = silverLoading[key];
     const baseTotal = row.obs_count + row.research_grade_count + row.bonus_points;
 
-    if (row.silverBreakdown) {
+    if (loading) {
+      return <div className="text-sm text-muted-foreground">Loading silver breakdown…</div>;
+    }
+
+    if (breakdown) {
       const segments: { label: string; value: number }[] = [
-        { label: 'Base observations', value: row.silverBreakdown.base_obs },
-        { label: 'Trip novelty', value: row.silverBreakdown.novelty_trip },
-        { label: 'Daily novelty', value: row.silverBreakdown.novelty_day },
-        { label: 'Rarity bonus', value: row.silverBreakdown.rarity },
-        { label: 'Research grade', value: row.silverBreakdown.research },
-        { label: 'Multiplier delta', value: row.silverBreakdown.multipliers_delta },
+        { label: 'Base observations', value: breakdown.base_obs },
+        { label: 'Research grade', value: breakdown.research },
+        { label: 'Daily novelty', value: breakdown.novelty_day },
+        { label: 'Trip novelty', value: breakdown.novelty_trip },
+        { label: 'Rarity bonus', value: breakdown.rarity },
+        { label: 'Multiplier delta', value: breakdown.multipliers_delta },
       ];
-      const total = row.silverBreakdown.total_points;
 
       return (
         <div className="space-y-3">
           <div className="font-semibold text-foreground">Silver Score Breakdown</div>
-          <ul className="space-y-1 text-xs">
-            {segments.map((segment) => (
-              <li key={segment.label} className="flex items-center justify-between gap-3">
-                <span>{segment.label}</span>
-                <span className="font-mono">{formatPoints(segment.value)}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
-            <span>Total</span>
-            <span className="font-mono">{formatPoints(total)}</span>
-          </div>
+          <table className="w-full text-xs">
+            <tbody>
+              {segments.map((segment) => (
+                <tr key={segment.label}>
+                  <td className="py-1 pr-3 text-muted-foreground">{segment.label}</td>
+                  <td className="py-1 text-right font-mono">{formatPoints(segment.value)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td className="pt-2 text-sm font-semibold">Total</td>
+                <td className="pt-2 text-right font-mono text-sm font-semibold">
+                  {formatPoints(breakdown.total_points)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       );
     }
@@ -359,12 +358,12 @@ export default function Leaderboard() {
               <div className="space-y-3">
                 {rows.map((row) => {
                   const loginKey = row.user_login.toLowerCase();
-                  const canonicalDisplay = displayNameMap[loginKey] ?? row.display_name ?? row.user_login;
-                  const showSecondary = canonicalDisplay.toLowerCase() !== row.user_login.toLowerCase();
+                  const primaryName = row.nameForUi;
+                  const showSecondary = primaryName.toLowerCase() !== row.user_login.toLowerCase();
                   const scoreValue = row.effectiveTotal;
                   const delta = rankDeltas[row.user_login] ?? 0;
                   const indicator = delta > 0 ? '▲' : delta < 0 ? '▼' : '—';
-                  const hasIndicator = !isBlackout && delta !== 0;
+                  const hasIndicator = !isBlackout && showRankIndicators && delta !== 0;
                   const indicatorMagnitude = Math.abs(delta);
 
                   const handleRowClick = () => {
@@ -398,7 +397,9 @@ export default function Leaderboard() {
                             }`}
                             aria-label="rank change"
                           >
-                            {hasIndicator ? (
+                            {!showRankIndicators || isBlackout ? (
+                              ' '
+                            ) : hasIndicator ? (
                               <>
                                 <span>{indicator}</span>
                                 <span>{indicatorMagnitude}</span>
@@ -409,9 +410,9 @@ export default function Leaderboard() {
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <div className="font-semibold text-lg text-foreground">{row.user_login}</div>
+                          <div className="font-semibold text-lg text-foreground">{primaryName}</div>
                           {showSecondary && (
-                            <div className="text-xs text-muted-foreground">{canonicalDisplay}</div>
+                            <div className="text-xs text-muted-foreground">{row.user_login}</div>
                           )}
                           <div className="flex gap-2 flex-wrap text-sm">
                             <Popover>
@@ -457,7 +458,13 @@ export default function Leaderboard() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <Popover>
+                        <Popover
+                          onOpenChange={(open) => {
+                            if (open) {
+                              ensureSilverBreakdown(row);
+                            }
+                          }}
+                        >
                           <PopoverTrigger asChild>
                             <button
                               type="button"
@@ -467,7 +474,7 @@ export default function Leaderboard() {
                               aria-label="Show point breakdown"
                             >
                               <span className="text-2xl font-bold leading-none">{formatPoints(scoreValue)}</span>
-                              <Info className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">ⓘ</span>
                             </button>
                           </PopoverTrigger>
                           <PopoverContent align="end" className="w-72 text-sm" onClick={(event) => event.stopPropagation()}>
