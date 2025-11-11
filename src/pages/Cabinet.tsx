@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   fetchRosterCR2025,
-  fetchTripTrophiesCR2025,
+  fetchTrophyCabinetCR2025,
+  fetchTrophiesCatalogCR2025,
   getTripParams,
+  type TripTrophyCabinetRow,
+  type TripTrophyCatalogRow,
   type TripRosterEntry,
-  type TripTrophyAward,
 } from '@/lib/api';
 
 type TrophyDefinition = {
@@ -34,8 +36,9 @@ function getTrophyDefinition(id: string): TrophyDefinition {
 }
 
 export default function Cabinet() {
-  const [participants, setParticipants] = useState<TripRosterEntry[]>([]);
-  const [trophiesByUser, setTrophiesByUser] = useState<Record<string, TripTrophyAward[]>>({});
+  const [cabinetRows, setCabinetRows] = useState<TripTrophyCabinetRow[]>([]);
+  const [catalogLabels, setCatalogLabels] = useState<Record<string, string>>({});
+  const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tz, setTz] = useState<string>('UTC');
@@ -47,44 +50,46 @@ export default function Cabinet() {
     (async () => {
       setLoading(true);
       try {
-        const [rosterRes, trophiesRes, paramsRes] = await Promise.all([
+        const [rosterRes, cabinetRes, catalogRes, paramsRes] = await Promise.all([
           fetchRosterCR2025(),
-          fetchTripTrophiesCR2025(),
+          fetchTrophyCabinetCR2025(),
+          fetchTrophiesCatalogCR2025(),
           getTripParams(),
         ]);
 
         if (cancelled) return;
 
-        setParticipants(rosterRes.data ?? []);
+        const rosterMap = (rosterRes.data ?? []).reduce<Record<string, string>>((acc, row: TripRosterEntry) => {
+          const key = row.user_login.toLowerCase();
+          if (key) {
+            acc[key] = row.display_name ?? row.user_login;
+          }
+          return acc;
+        }, {});
+        setNameMap(rosterMap);
+
+        const catalogMap = (catalogRes.data ?? []).reduce<Record<string, string>>((acc, row: TripTrophyCatalogRow) => {
+          if (row.trophy_id) {
+            acc[row.trophy_id] = row.label;
+          }
+          return acc;
+        }, {});
+        setCatalogLabels(catalogMap);
+
+        setCabinetRows(cabinetRes.data ?? []);
         setTz(paramsRes.data?.tz ?? 'UTC');
-
-        const grouped: Record<string, TripTrophyAward[]> = {};
-        (trophiesRes.data ?? []).forEach((row) => {
-          const login = row.user_login;
-          if (!login) return;
-          if (!grouped[login]) grouped[login] = [];
-          grouped[login].push(row);
-        });
-
-        Object.keys(grouped).forEach((login) => {
-          grouped[login].sort((a, b) => {
-            if (!a.awarded_at) return 1;
-            if (!b.awarded_at) return -1;
-            return b.awarded_at.localeCompare(a.awarded_at);
-          });
-        });
-
-        setTrophiesByUser(grouped);
 
         const errors: string[] = [];
         if (rosterRes.error?.message) errors.push(rosterRes.error.message);
-        if (trophiesRes.error?.message) errors.push(trophiesRes.error.message);
+        if (cabinetRes.error?.message) errors.push(cabinetRes.error.message);
+        if (catalogRes.error?.message) errors.push(catalogRes.error.message);
         if (paramsRes.error?.message) errors.push(paramsRes.error.message);
         setError(errors.length ? errors.join('; ') : null);
 
         const warningList: string[] = [];
         if (rosterRes.missing) warningList.push('Roster view is unavailable; display names limited.');
-        if (trophiesRes.missing) warningList.push('Trophy view is unavailable.');
+        if (catalogRes.missing) warningList.push('Trophy catalog view is unavailable; labels may be limited.');
+        if (cabinetRes.missing) warningList.push('Trophy cabinet view is unavailable.');
         setWarnings(warningList);
       } catch (err) {
         if (!cancelled) {
@@ -103,22 +108,68 @@ export default function Cabinet() {
     };
   }, []);
 
-  const sortedParticipants = [...participants].sort((a, b) => {
-    const nameA = (a.display_name || a.user_login).toLowerCase();
-    const nameB = (b.display_name || b.user_login).toLowerCase();
-    return nameA.localeCompare(nameB);
-  });
+  const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
+  const getMeta = (id: string) => {
+    const base = getTrophyDefinition(id);
+    const label = catalogLabels[id];
+    return label ? { ...base, title: label } : base;
+  };
 
-  const formatAwardDate = (iso: string | null) => {
-    if (!iso) return 'Date to be announced';
+  const formatDayLabel = (day: string | null) => {
+    if (!day) return 'Date to be announced';
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: tz || 'UTC',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-    return formatter.format(new Date(iso));
+    return formatter.format(new Date(`${day}T12:00:00`));
   };
+
+  const formatAwardDateTime = (iso: string | null) => {
+    if (!iso) return null;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: tz || 'UTC',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(iso));
+  };
+
+  const dayGroups = useMemo(() => {
+    const dayMap = new Map<string, Map<string, TripTrophyCabinetRow[]>>();
+    cabinetRows.forEach((row) => {
+      const day = row.day_local ?? 'undated';
+      if (!dayMap.has(day)) {
+        dayMap.set(day, new Map());
+      }
+      const trophyMap = dayMap.get(day)!;
+      const trophyId = row.trophy_id;
+      if (!trophyMap.has(trophyId)) {
+        trophyMap.set(trophyId, []);
+      }
+      trophyMap.get(trophyId)!.push(row);
+    });
+
+    return Array.from(dayMap.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([day, trophyMap]) => ({
+        day,
+        trophies: Array.from(trophyMap.entries())
+          .map(([trophyId, awards]) => ({
+            trophyId,
+            meta: getMeta(trophyId),
+            awards: awards
+              .slice()
+              .sort((a, b) => {
+                const nameA = getDisplayName(a.user_login).toLowerCase();
+                const nameB = getDisplayName(b.user_login).toLowerCase();
+                if (nameA !== nameB) return nameA.localeCompare(nameB);
+                return (a.awarded_at ?? '').localeCompare(b.awarded_at ?? '');
+              }),
+          }))
+          .sort((a, b) => a.meta.title.localeCompare(b.meta.title)),
+      }));
+  }, [cabinetRows, catalogLabels, nameMap]);
 
   return (
     <div className="pb-6 pb-safe-bottom">
@@ -161,50 +212,54 @@ export default function Cabinet() {
                 ))}
               </div>
             )}
-            <div className="space-y-6">
-              {sortedParticipants.map((participant) => {
-                const login = participant.user_login;
-                const displayName = participant.display_name || login;
-                const trophies = trophiesByUser[login] ?? [];
-
-                return (
-                  <div key={login} className="rounded-2xl border border-border bg-card p-5 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                      <div className="text-lg font-semibold">{login}</div>
-                      {displayName.toLowerCase() !== login.toLowerCase() && (
-                        <div className="text-xs text-muted-foreground">{displayName}</div>
-                      )}
-                    </div>
+            {dayGroups.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
+                No trophies have been awarded yet.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {dayGroups.map(({ day, trophies }) => (
+                  <div key={day} className="rounded-2xl border border-border bg-card p-5 space-y-4">
+                    <div className="text-lg font-semibold">{formatDayLabel(day)}</div>
                     {trophies.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No trophies earned yet.</div>
+                      <div className="text-sm text-muted-foreground">No awards recorded for this day.</div>
                     ) : (
-                      <div className="space-y-3">
-                        {trophies.map((row, idx) => {
-                          const meta = getTrophyDefinition(row.trophy_id);
-                          return (
-                            <div key={`${row.trophy_id}-${idx}`} className="rounded-xl border border-border bg-background p-3 space-y-1">
-                              <div className="text-sm font-semibold flex items-center gap-2">
-                                <span>{meta.icon}</span>
-                                {meta.title}
-                              </div>
-                              <div className="text-xs text-muted-foreground">{formatAwardDate(row.awarded_at ?? null)}</div>
-                              {row.value != null && meta.valueLabel && (
-                                <div className="text-xs text-muted-foreground capitalize">
-                                  {meta.valueLabel}: {row.value}
-                                </div>
-                              )}
-                              {row.value != null && !meta.valueLabel && (
-                                <div className="text-xs text-muted-foreground">Value: {row.value}</div>
-                              )}
+                      <div className="space-y-4">
+                        {trophies.map(({ trophyId, meta, awards }) => (
+                          <div key={trophyId} className="space-y-2">
+                            <div className="text-sm font-semibold flex items-center gap-2">
+                              <span>{meta.icon}</span>
+                              {meta.title}
                             </div>
-                          );
-                        })}
+                            <div className="space-y-2">
+                              {awards.map((award, index) => {
+                                const prettyName = getDisplayName(award.user_login);
+                                const showSecondary = prettyName.toLowerCase() !== award.user_login.toLowerCase();
+                                const awardedAt = formatAwardDateTime(award.awarded_at ?? null);
+                                return (
+                                  <div
+                                    key={`${award.user_login}-${award.awarded_at ?? index}`}
+                                    className="rounded-lg border border-border bg-background p-3 text-sm space-y-1"
+                                  >
+                                    <div className="font-medium">{award.user_login}</div>
+                                    {showSecondary && (
+                                      <div className="text-xs text-muted-foreground">{prettyName}</div>
+                                    )}
+                                    {awardedAt && (
+                                      <div className="text-xs text-muted-foreground">{awardedAt}</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

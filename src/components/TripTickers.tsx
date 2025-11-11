@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import {
-  fetchLeaderboardCR2025,
-  fetchDailySummaryCR2025,
-  getTripBasePoints,
-  type TripLeaderboardRow,
-} from '@/lib/api';
+import { fetchLeaderboardCR2025, type TripLeaderboardRow } from '@/lib/api';
+import { formatPoints } from '@/lib/scoring';
 
 const RANK_STORAGE_KEY = 'ecoqlb:cr2025';
 const MIN_NEWS_ITEMS = 12;
@@ -72,67 +68,46 @@ function computeRankChanges(rows: TripLeaderboardRow[]) {
   return changes;
 }
 
-function buildNewsItems({
-  leaderboard,
-  latestDay,
-  dayCounts,
-}: {
-  leaderboard: TripLeaderboardRow[];
-  latestDay: string | null;
-  dayCounts: Map<string, { obs: number; research: number }>;
-}) {
+function buildLeaderboardItems(rows: TripLeaderboardRow[]): string[] {
   const items: string[] = [];
 
-  const rankChanges = computeRankChanges(leaderboard)
+  const sorted = [...rows]
+    .sort((a, b) => {
+      const pointDiff = b.total_points - a.total_points;
+      if (pointDiff !== 0) return pointDiff;
+      const taxaDiff = b.distinct_taxa - a.distinct_taxa;
+      if (taxaDiff !== 0) return taxaDiff;
+      return a.user_login.localeCompare(b.user_login);
+    })
+    .slice(0, 12);
+
+  sorted.forEach((row) => {
+    items.push(`${row.user_login} has ${formatPoints(row.total_points)} pts`);
+    if (row.obs_count > 0) {
+      const percent = Math.round((row.research_grade_count / Math.max(row.obs_count, 1)) * 100);
+      items.push(`${row.user_login} hit ${percent}% RG`);
+    }
+  });
+
+  const rankHighlights = computeRankChanges(rows)
     .filter((entry) => entry.delta > 0)
     .sort((a, b) => b.delta - a.delta)
     .slice(0, 5);
-  rankChanges.forEach(({ login, rank }) => {
+  rankHighlights.forEach(({ login, rank }) => {
     items.push(`${login} moved up to #${rank}`);
   });
 
-  if (latestDay) {
-    const perUser = Array.from(dayCounts.entries())
-      .map(([login, value]) => ({ login, obs: value.obs }))
-      .sort((a, b) => b.obs - a.obs)
-      .slice(0, 5);
+  const uniqueItems = items.filter((item, index) => items.indexOf(item) === index);
+  const result = uniqueItems.length > 0 ? uniqueItems : ['EcoQuest Live leaderboard is warming up'];
 
-    perUser.forEach(({ login, obs }) => {
-      if (obs > 0) {
-        items.push(`${login} logged ${obs} obs today`);
-      }
-    });
+  while (result.length < MIN_NEWS_ITEMS) {
+    const needed = MIN_NEWS_ITEMS - result.length;
+    const toCopy = result.slice(0, Math.min(result.length, needed));
+    if (toCopy.length === 0) break;
+    result.push(...toCopy);
   }
 
-  const rgLeaders = [...leaderboard]
-    .filter((row) => row.obs_count > 0)
-    .map((row) => ({
-      login: row.user_login,
-      percent: Math.round((row.research_grade_count / Math.max(row.obs_count, 1)) * 100),
-    }))
-    .filter((entry) => entry.percent > 0)
-    .sort((a, b) => b.percent - a.percent)
-    .slice(0, 5);
-
-  rgLeaders.forEach(({ login, percent }) => {
-    items.push(`${login} hit ${percent}% RG`);
-  });
-
-  if (items.length < MIN_NEWS_ITEMS) {
-    const fallback = [...leaderboard]
-      .slice(0, 5)
-      .map((row) => `${row.user_login} has ${row.total_points} pts`);
-    for (const entry of fallback) {
-      if (items.length >= MIN_NEWS_ITEMS) break;
-      items.push(entry);
-    }
-  }
-
-  while (items.length < MIN_NEWS_ITEMS && items.length > 0) {
-    items.push(items[items.length % Math.max(items.length, 1)]);
-  }
-
-  return items;
+  return result.slice(0, Math.max(result.length, MIN_NEWS_ITEMS));
 }
 
 function useNewsItems() {
@@ -142,29 +117,9 @@ function useNewsItems() {
     let active = true;
     (async () => {
       try {
-        const [leaderboardRes, dailyRes] = await Promise.all([
-          fetchLeaderboardCR2025(),
-          fetchDailySummaryCR2025(),
-        ]);
+        const leaderboardRes = await fetchLeaderboardCR2025();
 
         if (!active) return;
-
-        const latestDay = dailyRes.data?.[0]?.day_local;
-        let perDayCounts = new Map<string, { obs: number; research: number }>();
-        if (latestDay) {
-          const baseRes = await getTripBasePoints({ day: latestDay });
-          perDayCounts = (baseRes.data ?? []).reduce((acc, row) => {
-            if (!row.user_login) return acc;
-            const key = row.user_login;
-            const existing = acc.get(key) ?? { obs: 0, research: 0 };
-            existing.obs += 1;
-            if ((row.quality_grade ?? '').toLowerCase() === 'research') {
-              existing.research += 1;
-            }
-            acc.set(key, existing);
-            return acc;
-          }, new Map<string, { obs: number; research: number }>());
-        }
 
         if (leaderboardRes.missing) {
           setItems(['Leaderboard view unavailable']);
@@ -176,11 +131,7 @@ function useNewsItems() {
           return;
         }
 
-        const news = buildNewsItems({
-          leaderboard: leaderboardRes.data,
-          latestDay: latestDay ?? null,
-          dayCounts: perDayCounts,
-        });
+        const news = buildLeaderboardItems(leaderboardRes.data);
 
         setItems(news.length > 0 ? news : ['EcoQuest Live news feed will be back soon']);
       } catch (err) {

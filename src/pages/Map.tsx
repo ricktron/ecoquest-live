@@ -5,7 +5,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { fetchLatestObsCR2025, getTripParams, fetchRosterCR2025, type TripParams } from '@/lib/api';
+import {
+  fetchLatest10CR2025,
+  fetchRosterCR2025,
+  getTripBasePoints,
+  getTripParams,
+  type TripLatestObservationRow,
+  type TripParams,
+} from '@/lib/api';
 
 type MapObservation = {
   inat_obs_id: number | null;
@@ -60,6 +67,7 @@ export default function Map() {
   const navigate = useNavigate();
   const [params, setParams] = useState<TripParams | null>(null);
   const [observations, setObservations] = useState<MapObservation[]>([]);
+  const [latestWindow, setLatestWindow] = useState<Array<TripLatestObservationRow & { latitude: number; longitude: number }>>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -68,13 +76,14 @@ export default function Map() {
     async function loadMapData() {
       setDataLoading(true);
       try {
-        const [latestResult, paramsResult, rosterResult] = await Promise.all([
-          fetchLatestObsCR2025(10),
+        const [baseResult, paramsResult, rosterResult, latestResult] = await Promise.all([
+          getTripBasePoints(),
           getTripParams(),
           fetchRosterCR2025(),
+          fetchLatest10CR2025(),
         ]);
 
-        const filtered = (latestResult.data ?? [])
+        const filteredBase = (baseResult.data ?? [])
           .filter((row) => row.latitude != null && row.longitude != null)
           .map((row) => ({
             inat_obs_id: row.inat_obs_id,
@@ -84,8 +93,19 @@ export default function Map() {
             observed_at_utc: row.observed_at_utc ?? null,
           } satisfies MapObservation));
 
-        setObservations(filtered);
+        setObservations(filteredBase);
         setParams(paramsResult.data ?? null);
+
+        const latestPoints = (latestResult.data ?? [])
+          .map((row) => ({
+            user_login: (row?.user_login ?? '').toString(),
+            inat_obs_id: row?.inat_obs_id != null ? Number(row.inat_obs_id) : null,
+            observed_at_utc: row?.observed_at_utc ?? null,
+            latitude: row?.latitude != null ? Number(row.latitude) : null,
+            longitude: row?.longitude != null ? Number(row.longitude) : null,
+          } satisfies TripLatestObservationRow))
+          .filter((row) => row.user_login && row.latitude != null && row.longitude != null);
+        setLatestWindow(latestPoints as Array<TripLatestObservationRow & { latitude: number; longitude: number }>);
 
         const rosterMap = (rosterResult.data ?? []).reduce<Record<string, string>>((acc, row) => {
           const key = row.user_login.toLowerCase();
@@ -97,21 +117,24 @@ export default function Map() {
         setNameMap(rosterMap);
 
         const errors: string[] = [];
-        if (latestResult.error?.message) errors.push(latestResult.error.message);
+        if (baseResult.error?.message) errors.push(baseResult.error.message);
         if (paramsResult.error?.message) errors.push(paramsResult.error.message);
         if (rosterResult.error?.message) errors.push(rosterResult.error.message);
+        if (latestResult.error?.message) errors.push(latestResult.error.message);
         if (errors.length) {
           console.warn('map data errors', errors.join('; '));
         }
 
         const warningList: string[] = [];
-        if (latestResult.missing) warningList.push('Observation view is unavailable.');
+        if (baseResult.missing) warningList.push('Observation view is unavailable.');
         if (rosterResult.missing) warningList.push('Roster view is unavailable; display names limited.');
+        if (latestResult.missing) warningList.push('Latest observation window view is unavailable.');
         setWarnings(warningList);
       } catch (err) {
         console.warn('Failed to load map observations', err);
         setObservations([]);
         setParams(null);
+        setLatestWindow([]);
       } finally {
         setDataLoading(false);
       }
@@ -121,15 +144,15 @@ export default function Map() {
   }, []);
 
   const getDisplayName = (login: string) => nameMap[login.toLowerCase()] ?? login;
-  const observationBounds = observations.length > 0
+  const latestBounds = latestWindow.length > 0
     ? ([
         [
-          Math.min(...observations.map((obs) => obs.latitude)),
-          Math.min(...observations.map((obs) => obs.longitude)),
+          Math.min(...latestWindow.map((obs) => Number(obs.latitude))),
+          Math.min(...latestWindow.map((obs) => Number(obs.longitude))),
         ],
         [
-          Math.max(...observations.map((obs) => obs.latitude)),
-          Math.max(...observations.map((obs) => obs.longitude)),
+          Math.max(...latestWindow.map((obs) => Number(obs.latitude))),
+          Math.max(...latestWindow.map((obs) => Number(obs.longitude))),
         ],
       ] as [[number, number], [number, number]])
     : null;
@@ -141,7 +164,7 @@ export default function Map() {
       ] as [[number, number], [number, number]])
     : null;
 
-  const bounds = observationBounds ?? fallbackBounds;
+  const bounds = latestBounds ?? fallbackBounds;
 
   return (
     <div className="pb-6">
