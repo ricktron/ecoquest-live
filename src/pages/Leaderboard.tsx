@@ -5,9 +5,7 @@ import { Trophy, Info, Clock } from 'lucide-react';
 import { formatPoints, computeTrends, type UserRowWithTrend, type UserRowWithRank } from '@/lib/scoring';
 import { findCloseBattles } from '@/lib/closeBattles';
 import { UI } from '@/uiConfig';
-import Chip from '@/components/Chip';
 import Legend from '@/components/Legend';
-import { Card, CardContent } from '@/components/ui/card';
 import { fetchLeaderboard, fetchDisplayFlags, type LeaderRow } from '@/lib/api';
 import { DEFAULT_AID } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
@@ -17,7 +15,7 @@ export default function Leaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leaderboardData, setLeaderboardData] = useState<LeaderRow[]>([]);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<{ message?: string } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
@@ -41,7 +39,11 @@ export default function Leaderboard() {
         }
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);
-        setError(err);
+        if (err instanceof Error) {
+          setError({ message: err.message });
+        } else {
+          setError({ message: String(err) });
+        }
       } finally {
         setLoading(false);
       }
