@@ -8,7 +8,21 @@ import { loadCatalog } from '@/lib/trophies/loadCatalog';
 import { PROFILE } from '@/lib/config/profile';
 import { InfoPopover } from '@/components/InfoPopover';
 
-type Winner = { user_login: string; unique_species?: number; value?: number };
+type Winner = { user_login: string; unique_species?: number; value?: number }; 
+
+type TrophyViewRow = {
+  user_login: string;
+  unique_species?: number | null;
+  value?: number | null;
+};
+
+type DailyAwardRow = {
+  trophy_id: string;
+  user_login: string | null;
+  place: number | null;
+  value: number | null;
+  scope?: string | null;
+};
 
 function minutesToHHMM(mins: number) {
   const h = Math.floor(mins / 60);
@@ -16,7 +30,7 @@ function minutesToHHMM(mins: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function formatTrophyValue(id: string, v: any): string {
+function formatTrophyValue(id: string, v: number | string | null | undefined): string {
   if (v == null) return '—';
   switch (id) {
     case 'early-bird':
@@ -52,24 +66,65 @@ export default function Trophies() {
       try {
         const cat = await loadCatalog();
         if (!cancelled) setCatalog(cat);
-        
+
         const { supabase } = await import('@/lib/supabaseClient');
+        const client = supabase();
         const withViews = cat.filter(t => !!t.view);
-        const results = await Promise.all(withViews.map(async t => {
-          const { data, error } = await supabase()
-            .from(t.view as any)
+        const viewPromises = withViews.map(async t => {
+          const { data, error } = await client
+            .from(t.view!)
             .select('*');
-          if (error) return [t.id, []] as const;
-          const list: Winner[] = (data ?? []).map((r: any) => ({
+          if (error) {
+            console.warn(`trophy view ${t.view} error`, error);
+            return [t.id, []] as const;
+          }
+          const list: Winner[] = ((data as TrophyViewRow[] | null) ?? []).map(r => ({
             user_login: r.user_login,
-            unique_species: r.unique_species,
-            value: r.unique_species ?? r.value ?? null
+            unique_species: r.unique_species ?? undefined,
+            value: r.unique_species ?? r.value ?? undefined
           }));
           return [t.id, list] as const;
-        }));
+        });
+
+        const dailyPromise = client
+          .from('trophies_daily_obs_leader_awards_v')
+          .select('trophy_id, user_login, place, value, scope')
+          .order('trophy_id', { ascending: true })
+          .order('place', { ascending: true });
+
+        const results = await Promise.all(viewPromises);
+        const { data: dailyData, error: dailyError } = await dailyPromise;
+
+        if (dailyError) {
+          console.warn('trophies_daily_obs_leader_awards_v error', dailyError);
+        }
+
         if (!cancelled) {
           const map: Record<string, Winner[]> = {};
-          results.forEach(([id, list]) => { map[id] = [...list]; });
+
+          const groupedDaily = new Map<string, Array<{ winner: Winner; place: number }>>();
+          ((dailyData as DailyAwardRow[] | null) ?? []).forEach((row) => {
+            if (!row?.trophy_id || (row.scope && row.scope !== 'daily')) return;
+            if (!row.user_login) return;
+            const place = typeof row.place === 'number' ? row.place : Number(row.place ?? 999);
+            const winner: Winner = {
+              user_login: row.user_login,
+              value: row.value != null ? Number(row.value) : undefined,
+            };
+            const list = groupedDaily.get(row.trophy_id) ?? [];
+            list.push({ winner, place });
+            groupedDaily.set(row.trophy_id, list);
+          });
+
+          groupedDaily.forEach((list, id) => {
+            list.sort((a, b) => (a.place ?? 999) - (b.place ?? 999));
+            map[id] = list.map(item => item.winner);
+          });
+
+          results.forEach(([id, list]) => {
+            map[id] = [...(map[id] ?? []), ...list];
+          });
+
           setWinnersById(map);
         }
       } finally {

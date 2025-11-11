@@ -5,7 +5,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabaseClient';
+
+type MapObservation = {
+  inat_obs_id: number;
+  user_login: string;
+  latitude: number | null;
+  longitude: number | null;
+  taxon_name: string | null;
+  observed_at_utc: string | null;
+  photo_url?: string | null;
+};
 
 // Helper component to invalidate map size when container changes
 function MapInvalidator() {
@@ -40,39 +50,48 @@ function MapInvalidator() {
 export default function Map() {
   const navigate = useNavigate();
   const [bbox, setBbox] = useState<{ swlat: number; swlng: number; nelat: number; nelng: number } | null>(null);
-  const [observations, setObservations] = useState<any[]>([]);
+  const [observations, setObservations] = useState<MapObservation[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     async function loadMapData() {
       setDataLoading(true);
-      
-      // Fetch bounding box from config_filters.flags.bbox
-      const { data: cfg }: any = await supabase
-        .from('config_filters')
-        .select('flags')
-        .eq('id', true)
-        .maybeSingle();
-      
-      const bboxData = (cfg?.flags as any)?.bbox || null;
-      if (bboxData && bboxData.swlat && bboxData.swlng && bboxData.nelat && bboxData.nelng) {
-        setBbox({
-          swlat: bboxData.swlat,
-          swlng: bboxData.swlng,
-          nelat: bboxData.nelat,
-          nelng: bboxData.nelng
-        });
+      try {
+        const client = supabase();
+        const { data, error } = await client
+          .from('v_trip_roster_obs_bbox')
+          .select('inat_obs_id, user_login, latitude, longitude, taxon_name, observed_at_utc, photo_url');
+
+        if (error) {
+          console.warn('v_trip_roster_obs_bbox error', error);
+        }
+
+        const points = ((data as MapObservation[] | null) ?? []).filter(
+          (row): row is MapObservation => row.latitude != null && row.longitude != null
+        );
+        setObservations(points);
+
+        if (points.length > 0) {
+          const latitudes = points.map(p => Number(p.latitude));
+          const longitudes = points.map(p => Number(p.longitude));
+          setBbox({
+            swlat: Math.min(...latitudes),
+            swlng: Math.min(...longitudes),
+            nelat: Math.max(...latitudes),
+            nelng: Math.max(...longitudes),
+          });
+        } else {
+          setBbox(null);
+        }
+      } catch (err) {
+        console.warn('Failed to load map observations', err);
+        setObservations([]);
+        setBbox(null);
+      } finally {
+        setDataLoading(false);
       }
-      
-      // Fetch observations from observations_latest_run_v
-      const { data: points }: any = await supabase
-        .from('observations_latest_run_v' as any)
-        .select('inat_obs_id,lat,lng,observed_at,user_login,taxon_name');
-      setObservations(points || []);
-      
-      setDataLoading(false);
     }
-    
+
     loadMapData();
   }, []);
 
@@ -97,8 +116,8 @@ export default function Map() {
                 (bbox.swlat + bbox.nelat) / 2,
                 (bbox.swlng + bbox.nelng) / 2
               ] : [
-                observations[0]?.lat || 10,
-                observations[0]?.lng || -84
+                observations[0]?.latitude ?? 10,
+                observations[0]?.longitude ?? -84
               ]}
               zoom={bbox ? 11 : 10}
               style={{ height: '100%', width: '100%' }}
@@ -109,11 +128,10 @@ export default function Map() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               {observations
-                .filter(obs => obs.lat && obs.lng)
-                .map(obs => (
+                .map((obs) => (
                   <CircleMarker
                     key={obs.inat_obs_id}
-                    center={[obs.lat!, obs.lng!]}
+                    center={[Number(obs.latitude), Number(obs.longitude)]}
                     radius={6}
                     fillColor="#22c55e"
                     color="#fff"
@@ -125,7 +143,7 @@ export default function Map() {
                         <div className="font-semibold">{obs.taxon_name || 'Unknown'}</div>
                         <div className="text-muted-foreground">by {obs.user_login}</div>
                         <div className="text-xs text-muted-foreground">
-                          {obs.observed_at}
+                          {obs.observed_at_utc ? new Date(obs.observed_at_utc).toLocaleString() : 'Unknown date'}
                         </div>
                         <div className="flex gap-2 mt-2">
                           <Button

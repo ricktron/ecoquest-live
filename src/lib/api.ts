@@ -1,5 +1,25 @@
 import { supabase } from './supabaseClient';
 
+const HIDDEN_LOGINS = new Set(['alishdafish', 'waterlog', 'wormzorm']);
+
+type TripPointsRow = {
+  inat_login: string | null;
+  display_name?: string | null;
+  total_points?: number | null;
+  total_obs?: number | null;
+  unique_species?: number | null;
+  prev_rank?: number | null;
+  rank?: number | null;
+  bingo_points?: number | null;
+  manual_points?: number | null;
+  trophy_points?: number | null;
+};
+
+type TripRosterRow = {
+  inat_login: string | null;
+  display_name?: string | null;
+};
+
 export type LeaderRow = {
   user_login: string;
   inat_login?: string | null;
@@ -28,87 +48,99 @@ export async function fetchHeaderTexts() {
   return { ticker: row.ticker_text || 'EcoQuest Live — ready to play', announce: row.announcement_text || undefined };
 }
 
-type MaskedLeaderboardRow = {
-  rank: number | null;
-  inat_login: string | null;
-  total_points: number | null;
-  total_obs: number | null;
-  unique_species: number | null;
-  scored_on: string | null;
-};
+export async function fetchLeaderboard(): Promise<{ data: LeaderRow[]; error: { message?: string } | null }> {
+  const client = supabase();
 
-export async function fetchLeaderboard() {
-  let rows: LeaderRow[] | null = null;
-  let lastError: any = null;
+  const [{ data: pointsData, error: pointsError }, { data: rosterData, error: rosterError }] = await Promise.all([
+    client
+      .from('leaderboard_trip_points_v1')
+      .select(
+        'inat_login, display_name, total_points, total_obs, unique_species, prev_rank, rank, bingo_points, manual_points, trophy_points'
+      ),
+    client
+      .from('trip_members_roster_v1')
+      .select('inat_login, display_name')
+  ]);
 
-  const masked = await supabase()
-    .from('public_leaderboard_masked_v1')
-    .select('rank, inat_login, total_points, total_obs, unique_species, scored_on')
-    .order('rank', { ascending: true });
+  if (pointsError) {
+    console.warn('leaderboard_trip_points_v1 error', pointsError);
+  }
 
-  if (!masked.error && masked.data) {
-    rows = masked.data.map((row: MaskedLeaderboardRow) => {
-      const login = row.inat_login ?? '';
-      return {
-        user_login: login,
-        inat_login: row.inat_login,
-        rank: row.rank,
-        total_points: row.total_points ?? 0,
-        total_obs: row.total_obs ?? 0,
-        obs_count: row.total_obs ?? 0,
-        unique_species: row.unique_species ?? 0,
-        distinct_taxa: row.unique_species ?? 0,
-        scored_on: row.scored_on,
-        bingo_points: 0,
-        manual_points: 0,
-        trophy_points: 0,
-      } satisfies LeaderRow;
+  if (rosterError) {
+    console.warn('trip_members_roster_v1 error', rosterError);
+  }
+
+  const byLogin = new Map<string, LeaderRow>();
+
+  ((pointsData as TripPointsRow[] | null) ?? []).forEach((row) => {
+    const login = (row.inat_login ?? '').toLowerCase();
+    if (!login || HIDDEN_LOGINS.has(login)) return;
+
+    byLogin.set(login, {
+      user_login: login,
+      inat_login: row.inat_login ?? login,
+      display_name: row.display_name ?? row.inat_login ?? login,
+      total_points: Number(row.total_points ?? 0),
+      total_obs: Number(row.total_obs ?? 0),
+      obs_count: Number(row.total_obs ?? 0),
+      unique_species: Number(row.unique_species ?? 0),
+      distinct_taxa: Number(row.unique_species ?? 0),
+      prev_rank: typeof row.prev_rank === 'number' ? row.prev_rank : null,
+      rank: typeof row.rank === 'number' ? row.rank : null,
+      bingo_points: Number(row.bingo_points ?? 0),
+      manual_points: Number(row.manual_points ?? 0),
+      trophy_points: Number(row.trophy_points ?? 0),
+      score: Number(row.total_points ?? 0),
+      total_score: Number(row.total_points ?? 0),
+      score_total: Number(row.total_points ?? 0),
+      scored_on: null,
     });
-  } else if (masked.error) {
-    lastError = masked.error;
-    console.error('masked leaderboard view error', masked.error);
-  }
+  });
 
-  const bronze = await supabase().rpc('get_leaderboard_bronze_v1', {}); // {} is required
+  ((rosterData as TripRosterRow[] | null) ?? []).forEach((row) => {
+    const login = (row.inat_login ?? '').toLowerCase();
+    if (!login || HIDDEN_LOGINS.has(login) || byLogin.has(login)) return;
 
-  if (!bronze.error && bronze.data?.length) {
-    const bronzeMap = new Map(bronze.data.map((row: any) => [row.user_login, row]));
-    if (rows) {
-      rows = rows.map(row => {
-        const extra = bronzeMap.get(row.user_login);
-        if (!extra) return row;
-        return {
-          ...row,
-          display_name: extra.display_name ?? row.display_name,
-          prev_rank: extra.prev_rank ?? row.prev_rank,
-          rank_delta: extra.rank_delta ?? row.rank_delta,
-          bingo_points: extra.bingo_points ?? row.bingo_points,
-          manual_points: extra.manual_points ?? row.manual_points,
-          trophy_points: extra.trophy_points ?? row.trophy_points,
-          score: extra.score ?? row.score,
-          total_score: extra.total_score ?? row.total_score,
-          score_total: extra.score_total ?? row.score_total,
-        } satisfies LeaderRow;
-      });
-    } else {
-      rows = bronze.data as LeaderRow[];
-    }
-  } else if (bronze.error) {
-    if (!rows?.length) {
-      lastError = lastError ?? bronze.error;
-    }
-    console.warn('bronze rpc failed/empty', bronze.error);
-  }
+    byLogin.set(login, {
+      user_login: login,
+      inat_login: row.inat_login ?? login,
+      display_name: row.display_name ?? row.inat_login ?? login,
+      total_points: 0,
+      total_obs: 0,
+      obs_count: 0,
+      unique_species: 0,
+      distinct_taxa: 0,
+      prev_rank: null,
+      rank: null,
+      bingo_points: 0,
+      manual_points: 0,
+      trophy_points: 0,
+      score: 0,
+      total_score: 0,
+      score_total: 0,
+      scored_on: null,
+    });
+  });
 
-  if (!rows) return { data: [], error: lastError ?? new Error('No rows from view or RPC') };
+  const rows = Array.from(byLogin.values());
 
-  rows.sort(
-    (a, b) =>
-      (a.rank ?? 9999) - (b.rank ?? 9999) ||
-      (b.total_points ?? b.score ?? 0) - (a.total_points ?? a.score ?? 0)
-  );
+  rows.sort((a, b) => {
+    const pointsDiff = (b.total_points ?? 0) - (a.total_points ?? 0);
+    if (pointsDiff !== 0) return pointsDiff;
 
-  return { data: rows, error: lastError };
+    const speciesDiff = (b.unique_species ?? 0) - (a.unique_species ?? 0);
+    if (speciesDiff !== 0) return speciesDiff;
+
+    const aLogin = (a.inat_login ?? a.user_login ?? '').toLowerCase();
+    const bLogin = (b.inat_login ?? b.user_login ?? '').toLowerCase();
+    return aLogin.localeCompare(bLogin);
+  });
+
+  rows.forEach((row, idx) => {
+    row.rank = idx + 1;
+  });
+
+  return { data: rows, error: pointsError ?? rosterError ?? null };
 }
 
 export async function pingBronze() {
@@ -220,7 +252,7 @@ export async function adminSetTrophyPointsEnabled(token: string, enabled: boolea
 
 export async function fetchTrophyPoints() {
   const { data } = await supabase()
-    .from('score_entries_trophies_latest_v1' as any)
+    .from('score_entries_trophies_latest_v1')
     .select('user_login, points');
   return data ?? [];
 }
