@@ -37,7 +37,7 @@ function computeRankedRows(rows: TripLeaderboardRow[]): RankedRow[] {
 
   decorated.sort((a, b) => {
     if (b.effectiveTotal !== a.effectiveTotal) return b.effectiveTotal - a.effectiveTotal;
-    if (b.distinct_taxa !== a.distinct_taxa) return b.distinct_taxa - a.distinct_taxa;
+    if (b.species_count !== a.species_count) return b.species_count - a.species_count;
     if (b.obs_count !== a.obs_count) return b.obs_count - a.obs_count;
     return a.user_login.localeCompare(b.user_login);
   });
@@ -229,7 +229,8 @@ export default function Leaderboard() {
     const key = row.user_login.toLowerCase();
     const breakdown = silverCache[key] ?? row.silverBreakdown ?? null;
     const loading = silverLoading[key];
-    const baseTotal = row.obs_count + row.research_grade_count + row.bonus_points;
+    const researchCount = row.research_count ?? row.research_grade_count;
+    const baseTotal = row.obs_count + researchCount + row.bonus_points;
 
     if (loading) {
       return <div className="text-sm text-muted-foreground">Loading silver breakdown…</div>;
@@ -272,11 +273,11 @@ export default function Leaderboard() {
       <div className="space-y-2">
         <div className="font-semibold text-foreground">Base Score Breakdown</div>
         <div className="font-mono text-xs text-muted-foreground">
-          {row.obs_count} + {row.research_grade_count} + {row.bonus_points} = {baseTotal}
+          {row.obs_count} + {researchCount} + {row.bonus_points} = {baseTotal}
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="chip chip--info">Obs {row.obs_count}</span>
-          <span className="chip chip--info">RG {row.research_grade_count}</span>
+          <span className="chip chip--info">RG {researchCount}</span>
           <span className="chip chip--muted">Bonus {row.bonus_points}</span>
         </div>
         <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
@@ -431,7 +432,7 @@ export default function Leaderboard() {
                             <Popover>
                               <PopoverTrigger asChild>
                                 <span className="chip chip--info" aria-label="Distinct taxa">
-                                  🌿 {row.distinct_taxa}
+                                  🌿 {row.species_count}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
@@ -444,7 +445,7 @@ export default function Leaderboard() {
                             <Popover>
                               <PopoverTrigger asChild>
                                 <span className="chip chip--muted" aria-label="Research grade count">
-                                  RG {row.research_grade_count}
+                                  RG {row.research_count}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">

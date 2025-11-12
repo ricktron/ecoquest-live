@@ -11,6 +11,7 @@ import {
   submitAdultPoints,
   getTripParams,
   lastUpdatedCR2025,
+  getTickerTripWindow,
   type TripLeaderboardPayload,
   type TripLeaderboardRow,
   type TripDailySummaryRow,
@@ -155,7 +156,7 @@ export default function Debug() {
         const totalB = b.silverBreakdown?.total_points ?? b.total_points;
         const pointDiff = totalB - totalA;
         if (pointDiff !== 0) return pointDiff;
-        const taxaDiff = b.distinct_taxa - a.distinct_taxa;
+        const taxaDiff = b.species_count - a.species_count;
         if (taxaDiff !== 0) return taxaDiff;
         const obsDiff = b.obs_count - a.obs_count;
         if (obsDiff !== 0) return obsDiff;
@@ -182,6 +183,20 @@ export default function Debug() {
     () => leaderboard.reduce((sum, row) => sum + row.bonus_points, 0),
     [leaderboard],
   );
+
+  const tickerTopThree = useMemo(() => {
+    return sortedLeaderboard
+      .slice(0, 3)
+      .map((row) => {
+        const trimmed = row.nameForUi && row.nameForUi.trim() ? row.nameForUi.trim() : '';
+        if (trimmed) return trimmed;
+        const display = row.display_name && row.display_name.trim() ? row.display_name.trim() : '';
+        return display || row.user_login;
+      })
+      .filter((name, index, array) => name.length > 0 && array.indexOf(name) === index);
+  }, [sortedLeaderboard]);
+
+  const tickerTripWindow = useMemo(() => getTickerTripWindow(), []);
 
   const formattedLastUpdated = useMemo(() => {
     if (!lastUpdated) return null;
@@ -343,6 +358,19 @@ export default function Debug() {
 
             <Card>
               <CardHeader>
+                <CardTitle>Ticker sources</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground space-y-2">
+                <div>
+                  Top 3 leaders:{' '}
+                  {tickerTopThree.length > 0 ? tickerTopThree.join(', ') : 'n/a'}
+                </div>
+                <div>Trip window: {tickerTripWindow}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>Roster ({participantsCount})</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
@@ -394,8 +422,8 @@ export default function Debug() {
                           </td>
                           <td className="py-2 pr-3">{row.total_points}</td>
                           <td className="py-2 pr-3">{row.obs_count}</td>
-                          <td className="py-2 pr-3">{row.distinct_taxa}</td>
-                          <td className="py-2 pr-3">{row.research_grade_count}</td>
+                          <td className="py-2 pr-3">{row.species_count}</td>
+                          <td className="py-2 pr-3">{row.research_count}</td>
                           <td className="py-2 pr-3">{row.bonus_points}</td>
                         </tr>
                       ))}
