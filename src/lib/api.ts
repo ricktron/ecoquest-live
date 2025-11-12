@@ -103,6 +103,12 @@ export type TripLeaderboardRow = {
   display_name: string | null;
   nameForUi: string;
   total_points: number;
+  base_obs?: number;
+  research?: number;
+  novelty_day?: number;
+  novelty_trip?: number;
+  rarity?: number;
+  multipliers_delta?: number;
   obs_count: number;
   species_count: number;
   distinct_taxa: number;
@@ -261,6 +267,13 @@ type RawTripLeaderboardRow = {
   distinct_taxa?: NumericLike;
   research_grade_count?: NumericLike;
   bonus_points?: NumericLike;
+  adult_points?: NumericLike;
+  base_obs?: NumericLike;
+  research?: NumericLike;
+  novelty_day?: NumericLike;
+  novelty_trip?: NumericLike;
+  rarity?: NumericLike;
+  multipliers_delta?: NumericLike;
   last_observed_at_utc?: string | null;
 };
 
@@ -457,12 +470,20 @@ function mapLeaderboardRows(data: unknown[] | null | undefined): TripLeaderboard
         display_name: row.display_name ?? null,
         nameForUi: ((row.display_name && row.display_name.trim()) ? row.display_name.trim() : '') || user_login,
         total_points: toNumber(row.total_points),
+        base_obs: row.base_obs == null ? undefined : toNumber(row.base_obs),
+        research: row.research == null ? undefined : toNumber(row.research),
+        novelty_day: row.novelty_day == null ? undefined : toNumber(row.novelty_day),
+        novelty_trip: row.novelty_trip == null ? undefined : toNumber(row.novelty_trip),
+        rarity: row.rarity == null ? undefined : toNumber(row.rarity),
+        multipliers_delta:
+          row.multipliers_delta == null ? undefined : toNumber(row.multipliers_delta),
         obs_count: toNumber(row.obs_count),
         species_count: toNumber(row.distinct_taxa),
         distinct_taxa: toNumber(row.distinct_taxa),
         research_count: toNumber(row.research_grade_count),
         research_grade_count: toNumber(row.research_grade_count),
         bonus_points: toNumber(row.bonus_points),
+        adult_points: row.adult_points == null ? undefined : toNumber(row.adult_points),
         last_observed_at_utc: row.last_observed_at_utc ?? null,
         silverBreakdown: null,
       } satisfies TripLeaderboardRow;
@@ -534,7 +555,9 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
   const [leaderboardResult, rosterResult, silverTotalsResult, silverBreakdownResult] = await Promise.all([
     supabase()
       .from('trip_leaderboard_cr2025_v1')
-      .select('user_login, display_name, total_points, obs_count, distinct_taxa, research_grade_count, bonus_points, last_observed_at_utc')
+      .select(
+        'user_login, display_name, total_points, obs_count, distinct_taxa, research_grade_count, bonus_points, adult_points, last_observed_at_utc',
+      )
       .order('total_points', { ascending: false, nullsFirst: false })
       .order('obs_count', { ascending: false, nullsFirst: false }),
     getRosterCR2025(),
@@ -604,13 +627,40 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
     const speciesCount = baseRow?.species_count ?? baseRow?.distinct_taxa ?? 0;
     const researchCount = baseRow?.research_count ?? baseRow?.research_grade_count ?? 0;
     const bonusPoints = baseRow?.bonus_points ?? 0;
-    const adultPoints = baseRow?.bonus_points ?? 0;
+    const adultPoints = baseRow?.adult_points ?? 0;
+
+    const baseSilver = silverBreakdown?.base_obs ?? baseRow?.base_obs;
+    const researchSilver = silverBreakdown?.research ?? baseRow?.research;
+    const noveltyDaySilver = silverBreakdown?.novelty_day ?? baseRow?.novelty_day;
+    const noveltyTripSilver = silverBreakdown?.novelty_trip ?? baseRow?.novelty_trip;
+    const raritySilver = silverBreakdown?.rarity ?? baseRow?.rarity;
+    const multipliersSilver = silverBreakdown?.multipliers_delta ?? baseRow?.multipliers_delta;
+
+    const silverSubtotal =
+      (baseSilver ?? 0) +
+      (researchSilver ?? 0) +
+      (noveltyDaySilver ?? 0) +
+      (noveltyTripSilver ?? 0) +
+      (raritySilver ?? 0) +
+      (multipliersSilver ?? 0);
+    const adult = adultPoints ?? 0;
+
+    let totalPoints: number | undefined = silverTotals?.total_points ?? baseRow?.total_points;
+    if (typeof totalPoints !== 'number' || Number.isNaN(totalPoints)) {
+      totalPoints = Math.round(silverSubtotal + adult);
+    }
 
     const merged: TripLeaderboardRow = {
       user_login: primaryLogin,
       display_name,
       nameForUi,
-      total_points: silverTotals?.total_points ?? baseRow?.total_points ?? 0,
+      total_points: totalPoints ?? Math.round(silverSubtotal + adult),
+      base_obs: baseSilver,
+      research: researchSilver,
+      novelty_day: noveltyDaySilver,
+      novelty_trip: noveltyTripSilver,
+      rarity: raritySilver,
+      multipliers_delta: multipliersSilver,
       obs_count: obsCount,
       species_count: speciesCount,
       distinct_taxa: baseRow?.distinct_taxa ?? speciesCount,

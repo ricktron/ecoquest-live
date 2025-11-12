@@ -381,6 +381,43 @@ export default function Debug() {
 
             <Card>
               <CardHeader>
+                <CardTitle>Leaderboard math audit</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm">
+                <p>
+                  We recompute total = silver subtotal + adult_points client-side and compare with total_points from
+                  SQL. If drift &gt; 0, we show a line.
+                </p>
+                {leaderboard
+                  .filter((r) => {
+                    const silver =
+                      (r.base_obs ?? 0) +
+                      (r.research ?? 0) +
+                      (r.novelty_day ?? 0) +
+                      (r.novelty_trip ?? 0) +
+                      (r.rarity ?? 0) +
+                      (r.multipliers_delta ?? 0);
+                    const adult = r.adult_points ?? 0;
+                    const recomputed = silver + adult;
+                    return typeof r.total_points === 'number' && r.total_points !== recomputed;
+                  })
+                  .map((r) => (
+                    <div key={r.user_login}>
+                      {r.user_login}: sql={r.total_points} ui=
+                      {(r.base_obs ?? 0) +
+                        (r.research ?? 0) +
+                        (r.novelty_day ?? 0) +
+                        (r.novelty_trip ?? 0) +
+                        (r.rarity ?? 0) +
+                        (r.multipliers_delta ?? 0) +
+                        (r.adult_points ?? 0)}
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>Latest Observation</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
