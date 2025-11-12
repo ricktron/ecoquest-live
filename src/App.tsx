@@ -22,14 +22,21 @@ import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
 import BingoBoard from './features/bingo/BingoBoard';
 import Cabinet from './pages/Cabinet';
-import { FLAGS, getEnv } from './env';
+import { FLAGS } from './env';
 import { fetchHeaderTexts } from './lib/api';
 import TripTicker from './components/TripTickers';
+
+const readFlag = (k: string, d = '0') => {
+  const runtime = (window as any).__ENV?.[k];
+  const build = (import.meta as any).env?.[k];
+  const v = runtime ?? build ?? d;
+  return ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase());
+};
 
 export default function App() {
   const [tickerText, setTicker] = useState<string>();
   const [announceText, setAnnounce] = useState<string | undefined>();
-  const tickersEnabled = getEnv('VITE_FEATURE_TICKERS') === '1'; // Feature gate: tickers (CR off, Big Bend on)
+  const showTickers = readFlag('VITE_FEATURE_TICKERS', '0');
 
   useEffect(() => {
     let on = true;
@@ -47,7 +54,7 @@ export default function App() {
       <BrowserRouter>
         <HeaderStack tabs={<TabNav />} tickerText={tickerText} announceText={announceText}>
           <>
-            {tickersEnabled && <TripTicker />}
+            {showTickers ? <TripTicker /> : null}
             <Routes>
               <Route path="/" element={<Navigate to="/leaderboard" replace />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
