@@ -1,4 +1,4 @@
-import type { PostgrestError } from '@supabase/supabase-js';
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 
 const HIDDEN_LOGINS = new Set(['alishdafish', 'waterlog', 'wormzorm']);
@@ -114,6 +114,8 @@ export type TripUserObservationRow = {
   day_local: string | null;
   latitude: number | null;
   longitude: number | null;
+  commonName?: string | null;
+  scientificName?: string | null;
 };
 
 export type TripTaxaTrophyRow = {
@@ -150,6 +152,37 @@ export type TripLatestObservationRow = {
   latitude: number | null;
   longitude: number | null;
 };
+
+export type TripTaxonName = {
+  taxon_id: number;
+  common_name: string | null;
+  scientific_name: string | null;
+};
+
+export async function fetchTaxaNamesCR2025(
+  client: SupabaseClient = supabase(),
+): Promise<Map<number, TripTaxonName>> {
+  const { data, error } = await client
+    .from('trip_taxa_names_cr2025_v1')
+    .select('taxon_id, common_name, scientific_name');
+
+  if (error) throw error;
+
+  const map = new Map<number, TripTaxonName>();
+  const rows = (data ?? []) as Partial<TripTaxonName & { taxon_id: number | string }>[];
+  rows.forEach((row) => {
+    if (row?.taxon_id == null) return;
+    const taxonId = Number(row.taxon_id);
+    if (Number.isNaN(taxonId)) return;
+    map.set(taxonId, {
+      taxon_id: taxonId,
+      common_name: row.common_name ?? null,
+      scientific_name: row.scientific_name ?? null,
+    });
+  });
+
+  return map;
+}
 
 type RawTripBaseObservationRow = {
   user_login?: string | null;
@@ -211,6 +244,8 @@ type RawTripUserObservationRow = RawTripBaseObservationRow & {
   iconic_taxon_name?: string | null;
   taxon_common_name?: string | null;
   taxon_scientific_name?: string | null;
+  commonName?: string | null;
+  scientificName?: string | null;
 };
 
 type RawTripTaxaTrophyRow = {
@@ -454,7 +489,7 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
     const silver = silverMap.get(key) ?? null;
 
     const display_name = baseRow?.display_name ?? rosterEntry?.display_name ?? null;
-    const nameForUi = rosterEntry?.nameForUi ?? (display_name ?? '').trim() || login;
+    const nameForUi = (rosterEntry?.nameForUi ?? (display_name ?? '').trim()) || login;
 
     const merged: TripLeaderboardRow = {
       user_login: login,
@@ -592,7 +627,8 @@ export async function getTripBasePoints(options: { day?: string } = {}): Promise
 }
 
 export async function fetchUserObsCR2025(login: string): Promise<ApiResult<TripUserObservationRow[]>> {
-  const { data, error } = await supabase()
+  const client = supabase();
+  const { data, error } = await client
     .from('trip_user_obs_cr2025_v1')
     .select('user_login, inat_login, inat_obs_id, taxon_id, iconic_taxon_name, taxon_common_name, taxon_scientific_name, quality_grade, observed_at_utc, day_local, latitude, longitude')
     .eq('user_login', login)
@@ -603,7 +639,7 @@ export async function fetchUserObsCR2025(login: string): Promise<ApiResult<TripU
   }
 
   const rawRows = (data ?? []) as RawTripUserObservationRow[];
-  const rows: TripUserObservationRow[] = rawRows
+  let rows: TripUserObservationRow[] = rawRows
     .map((row) => ({
       user_login: (row.user_login ?? '').toString(),
       inat_login: row.inat_login ?? null,
@@ -617,8 +653,28 @@ export async function fetchUserObsCR2025(login: string): Promise<ApiResult<TripU
       day_local: row.day_local ?? null,
       latitude: row.latitude != null ? Number(row.latitude) : null,
       longitude: row.longitude != null ? Number(row.longitude) : null,
+      commonName: row.commonName ?? row.taxon_common_name ?? null,
+      scientificName: row.scientificName ?? row.taxon_scientific_name ?? null,
     }))
     .filter((row) => row.user_login === login);
+
+  if (!isMissingView(error) && rows.length > 0) {
+    try {
+      const names = await fetchTaxaNamesCR2025(client);
+      rows = rows.map((row) => {
+        if (row.taxon_id == null) return row;
+        const name = names.get(Number(row.taxon_id));
+        if (!name) return row;
+        return {
+          ...row,
+          commonName: name.common_name ?? row.commonName ?? null,
+          scientificName: name.scientific_name ?? row.scientificName ?? null,
+        } satisfies TripUserObservationRow;
+      });
+    } catch (err) {
+      console.warn('fetchTaxaNamesCR2025 failed', err);
+    }
+  }
 
   return { data: rows, error };
 }

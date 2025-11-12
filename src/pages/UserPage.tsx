@@ -208,12 +208,20 @@ export default function UserPage() {
     >();
     observations.forEach((obs) => {
       const key = obs.taxon_id != null ? obs.taxon_id.toString() : 'unknown';
+      const preferredCommon = obs.commonName ?? obs.taxon_common_name ?? null;
+      const preferredScientific = obs.scientificName ?? obs.taxon_scientific_name ?? null;
       const bucket = map.get(key) ?? {
         taxonId: obs.taxon_id != null ? Number(obs.taxon_id) : null,
-        commonName: obs.taxon_common_name ?? null,
-        scientificName: obs.taxon_scientific_name ?? null,
+        commonName: preferredCommon,
+        scientificName: preferredScientific,
         items: [],
       };
+      if (!bucket.commonName && preferredCommon) {
+        bucket.commonName = preferredCommon;
+      }
+      if (!bucket.scientificName && preferredScientific) {
+        bucket.scientificName = preferredScientific;
+      }
       bucket.items.push(obs);
       map.set(key, bucket);
     });
@@ -413,32 +421,21 @@ export default function UserPage() {
                 <div key={`${group.taxonId ?? 'unknown'}-${index}`} className="rounded-2xl border border-border bg-card p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="space-y-1">
-                      {group.commonName ? (
-                        <div className="text-base font-semibold text-foreground">{group.commonName}</div>
-                      ) : null}
-                      <div className="text-xs text-muted-foreground">
-                        {group.commonName ? (
-                          <>
-                            {group.scientificName ? (
-                              <span className="italic">{group.scientificName}</span>
-                            ) : null}
-                            {group.scientificName ? ' • ' : null}
-                            <span>
-                              Taxon #{group.taxonId != null ? group.taxonId : 'pending'}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="italic">
-                              {group.scientificName ?? 'Scientific name pending'}
-                            </span>
-                            {' • '}
-                            <span>
-                              Taxon #{group.taxonId != null ? group.taxonId : 'pending'}
-                            </span>
-                          </>
-                        )}
+                      <div className="text-base font-semibold text-foreground">
+                        {group.commonName ?? group.scientificName ?? `Taxon #${group.taxonId != null ? group.taxonId : 'pending'}`}
                       </div>
+                      {(group.scientificName || group.taxonId != null) && (
+                        <div className="flex flex-wrap items-baseline gap-2 text-xs text-muted-foreground">
+                          {group.scientificName ? (
+                            <span className="text-sm italic leading-tight text-muted-foreground">
+                              {group.scientificName}
+                            </span>
+                          ) : null}
+                          <span>
+                            Taxon #{group.taxonId != null ? group.taxonId : 'pending'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">{group.items.length} observations</span>
                   </div>
