@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -13,19 +14,25 @@ import Legend from '@/components/Legend';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatPoints } from '@/lib/scoring';
 import {
+  diffLeaderboard,
   fetchDisplayFlags,
   getLeaderboardCR2025,
+  getLeaderboardHashCR2025,
   getSilverRow,
   getLastUpdatedTs,
+  type LBRow,
   type TripLeaderboardPayload,
   type TripLeaderboardRow,
   type TripSilverBreakdown,
 } from '@/lib/api';
 import { isLive } from '@/lib/config/profile';
+import { supabase } from '@/lib/supabaseClient';
 
 const SNAP_KEY = 'EQL_RANK_SNAPSHOT_CR2025';
 const SNAPSHOT_INTERVAL_MS = 10 * 60 * 1000;
 const HEARTBEAT_MS = 30 * 1000;
+const HASH_POLL_MS = 45 * 1000;
+const MISSING_VIEW_WARNING = 'Leaderboard view is unavailable.';
 const FADE_FLOOR = 0.35;
 const FADE_WINDOW_MIN = 10;
 
@@ -84,8 +91,34 @@ export default function Leaderboard() {
   const [isBlackout, setIsBlackout] = useState(false);
   const [heartbeat, setHeartbeat] = useState(0);
   const [lastChangeAt, setLastChangeAt] = useState<Record<string, number>>({});
+  const [lbHash, setLbHash] = useState<string | null>(null);
+  const [hashComputedAt, setHashComputedAt] = useState<string | null>(null);
+  const [lastHashCheck, setLastHashCheck] = useState<Date | null>(null);
+  const [pulseVersion, setPulseVersion] = useState(0);
+  const [changedSinceRefresh, setChangedSinceRefresh] = useState<
+    Map<string, { obs?: number; spp?: number; rg?: number; bonus?: number; total?: number }>
+  >(() => new Map());
+
+  const showUpdatedPulse = pulseVersion > 0;
+  const isDev = import.meta.env.DEV;
 
   const rows = useMemo(() => computeRankedRows(baseRows), [baseRows]);
+
+  const toLBRows = useCallback((list: TripLeaderboardRow[]): LBRow[] => {
+    return list.map((row) => {
+      const obs = row.obs_count ?? 0;
+      const research = row.research_grade_count ?? row.research_count ?? 0;
+      const bonus = row.bonus_points ?? row.adult_points ?? 0;
+      return {
+        user_login: row.user_login,
+        obs_count: obs,
+        distinct_taxa: row.distinct_taxa ?? row.species_count ?? 0,
+        research_grade_count: research,
+        bonus_points: bonus,
+        total_points: row.total_points ?? row.silverBreakdown?.total_points ?? obs + research + bonus,
+      } satisfies LBRow;
+    });
+  }, []);
 
   useEffect(() => {
     const iso = getLastUpdatedTs(baseRows);
@@ -98,9 +131,11 @@ export default function Leaderboard() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [leaderboardResult, flags] = await Promise.all([
+        const client = supabase();
+        const [leaderboardResult, flags, hash] = await Promise.all([
           getLeaderboardCR2025(),
           fetchDisplayFlags(),
+          getLeaderboardHashCR2025(client),
         ]);
 
         if (cancelled) return;
@@ -123,9 +158,14 @@ export default function Leaderboard() {
         }, {});
         setSilverCache(initialSilver);
         setSilverLoading({});
+        setLbHash(hash.lb_hash ?? null);
+        setHashComputedAt(hash.computed_utc ?? null);
+        setLastHashCheck(new Date());
+        setChangedSinceRefresh(new Map());
+        setPulseVersion(0);
 
         const warningsList: string[] = [];
-        if (leaderboardResult.missing) warningsList.push('Leaderboard view is unavailable.');
+        if (leaderboardResult.missing) warningsList.push(MISSING_VIEW_WARNING);
         setWarnings(warningsList);
 
         const errorMessages = [leaderboardResult.error?.message]
@@ -165,6 +205,100 @@ export default function Leaderboard() {
       window.clearInterval(id);
     };
   }, []);
+
+  useEffect(() => {
+    if (pulseVersion === 0) return undefined;
+    if (typeof window === 'undefined') return undefined;
+    const timeout = window.setTimeout(() => {
+      setPulseVersion(0);
+      setChangedSinceRefresh(new Map());
+    }, 4000);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [pulseVersion]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let cancelled = false;
+    const client = supabase();
+
+    const syncMissingWarning = (missing?: boolean) => {
+      setWarnings((prev) => {
+        const has = prev.includes(MISSING_VIEW_WARNING);
+        if (missing) {
+          if (has) return prev;
+          return [...prev, MISSING_VIEW_WARNING];
+        }
+        if (!has) return prev;
+        return prev.filter((message) => message !== MISSING_VIEW_WARNING);
+      });
+    };
+
+    const tick = async () => {
+      try {
+        const hash = await getLeaderboardHashCR2025(client);
+        if (cancelled) return;
+        setLastHashCheck(new Date());
+        setHashComputedAt(hash.computed_utc ?? null);
+
+        const nextHash = hash.lb_hash ?? null;
+        if (!nextHash) {
+          setLbHash(null);
+          setChangedSinceRefresh(new Map());
+          return;
+        }
+        if (nextHash === lbHash) return;
+
+        const leaderboardResult = await getLeaderboardCR2025();
+        if (cancelled) return;
+
+        const leaderboardPayload: TripLeaderboardPayload = leaderboardResult.data ?? {
+          rows: [],
+          hasSilver: false,
+          lastUpdatedAt: null,
+        };
+        const payloadRows = leaderboardPayload.rows ?? [];
+
+        const diffs = diffLeaderboard(toLBRows(baseRows), toLBRows(payloadRows));
+        setChangedSinceRefresh(new Map(diffs));
+        setBaseRows(payloadRows);
+        setHasSilver(Boolean(leaderboardPayload.hasSilver));
+
+        const silverFromRows = payloadRows.reduce<Record<string, TripSilverBreakdown>>((acc, row) => {
+          if (row.silverBreakdown) {
+            acc[row.user_login.toLowerCase()] = row.silverBreakdown;
+          }
+          return acc;
+        }, {});
+        if (Object.keys(silverFromRows).length > 0) {
+          setSilverCache((prev) => ({ ...prev, ...silverFromRows }));
+        }
+
+        syncMissingWarning(leaderboardResult.missing);
+        const errorMessages = [leaderboardResult.error?.message]
+          .filter((msg): msg is string => Boolean(msg));
+        setError(errorMessages.length ? errorMessages.join('; ') : null);
+
+        setLbHash(nextHash);
+        setPulseVersion((prev) => prev + 1);
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('Leaderboard hash poll failed', err);
+        }
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, HASH_POLL_MS);
+    void tick();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [baseRows, lbHash, toLBRows]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -367,12 +501,34 @@ export default function Leaderboard() {
               How scoring works
             </Link>
             {lastUpdated && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
+              <span className="text-xs text-muted-foreground flex items-center gap-2">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
+                </span>
+                {showUpdatedPulse && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-600 updated-pulse"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span aria-hidden="true" className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    Leaderboard updated · Live
+                  </span>
+                )}
               </span>
             )}
           </div>
+          {isDev && (
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Hash: {lbHash ?? '—'} · Last check:
+              {' '}
+              {lastHashCheck ? formatDistanceToNow(lastHashCheck, { addSuffix: true }) : '—'}
+              {hashComputedAt
+                ? ` · Computed ${formatDistanceToNow(new Date(hashComputedAt), { addSuffix: true })}`
+                : ''}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -422,6 +578,22 @@ export default function Leaderboard() {
                   const arrowStyle = { opacity: deltaOpacity(lastChangeAt[row.user_login]) };
                   const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
                   const researchCount = row.research_count ?? row.research_grade_count ?? 0;
+                  const change = changedSinceRefresh.get(row.user_login);
+                  const rowChanged = Boolean(change);
+                  const formatDelta = (value: number | undefined, label: string) => {
+                    if (!value) return null;
+                    const prefix = value > 0 ? '+' : '';
+                    return `${prefix}${value} ${label}`;
+                  };
+                  const deltaBadges = change
+                    ? [
+                        formatDelta(change.obs, 'obs'),
+                        formatDelta(change.rg, 'RG'),
+                        formatDelta(change.spp, 'spp'),
+                        formatDelta(change.bonus, 'bonus'),
+                        formatDelta(change.total, 'total'),
+                      ].filter((value): value is string => Boolean(value))
+                    : [];
 
                   const metricChips = [
                     {
@@ -483,7 +655,9 @@ export default function Leaderboard() {
                   return (
                     <div
                       key={row.user_login}
-                      className="p-4 bg-card border rounded-lg flex items-center justify-between transition-shadow hover:shadow-lg"
+                      className={`p-4 border rounded-lg flex items-center justify-between transition-shadow hover:shadow-lg ${
+                        rowChanged ? 'bg-emerald-50/80 border-emerald-300 updated-pulse' : 'bg-card'
+                      }`}
                       onClick={handleRowClick}
                       role="button"
                       tabIndex={0}
@@ -546,6 +720,18 @@ export default function Leaderboard() {
                               </Popover>
                             ))}
                           </div>
+                          {deltaBadges.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-1 text-xs font-semibold text-emerald-700">
+                              {deltaBadges.map((badge) => (
+                                <span
+                                  key={badge}
+                                  className="rounded-full bg-emerald-100/80 px-2 py-0.5"
+                                >
+                                  {badge}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
@@ -572,6 +758,12 @@ export default function Leaderboard() {
                             {renderScoreBreakdown(row)}
                           </PopoverContent>
                         </Popover>
+                        {change?.total && (
+                          <div className="text-xs font-semibold text-emerald-700" aria-live="polite">
+                            {change.total > 0 ? '+' : ''}
+                            {change.total} total
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

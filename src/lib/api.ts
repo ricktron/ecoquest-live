@@ -3,6 +3,55 @@ import { supabase } from './supabaseClient';
 
 const HIDDEN_LOGINS = new Set(['alishdafish', 'waterlog', 'wormzorm']);
 
+export type LeaderboardHash = { lb_hash: string | null; computed_utc: string | null };
+
+export async function getLeaderboardHashCR2025(
+  client: SupabaseClient,
+): Promise<LeaderboardHash> {
+  const { data, error } = await client
+    .from('trip_leaderboard_hash_cr2025_v1')
+    .select('lb_hash, computed_utc')
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn('leaderboard hash fetch error', error);
+    return { lb_hash: null, computed_utc: null };
+  }
+  return { lb_hash: data?.lb_hash ?? null, computed_utc: data?.computed_utc ?? null };
+}
+
+export type LBRow = {
+  user_login: string;
+  obs_count: number;
+  distinct_taxa: number;
+  research_grade_count: number;
+  bonus_points: number;
+  total_points: number;
+};
+
+export function diffLeaderboard(prev: LBRow[], next: LBRow[]) {
+  const prevMap = new Map(prev.map((r) => [r.user_login, r] as const));
+  const changed = new Map<
+    string,
+    { obs?: number; spp?: number; rg?: number; bonus?: number; total?: number }
+  >();
+  for (const r of next) {
+    const p = prevMap.get(r.user_login);
+    if (!p) continue;
+    const delta = {
+      obs: r.obs_count - p.obs_count,
+      spp: r.distinct_taxa - p.distinct_taxa,
+      rg: r.research_grade_count - p.research_grade_count,
+      bonus: r.bonus_points - p.bonus_points,
+      total: r.total_points - p.total_points,
+    } as const;
+    if (delta.obs || delta.spp || delta.rg || delta.bonus || delta.total) {
+      changed.set(r.user_login, { ...delta });
+    }
+  }
+  return changed;
+}
+
 function toNumber(value: unknown): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'string' && value.trim() !== '') {
