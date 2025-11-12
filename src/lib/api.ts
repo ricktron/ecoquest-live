@@ -55,7 +55,9 @@ export type TripLeaderboardRow = {
   nameForUi: string;
   total_points: number;
   obs_count: number;
+  species_count: number;
   distinct_taxa: number;
+  research_count: number;
   research_grade_count: number;
   bonus_points: number;
   last_observed_at_utc: string | null;
@@ -224,6 +226,18 @@ type RawTripSilverV2Row = {
   last_observed_at_utc?: string | null;
 };
 
+type RawTripSilverTotalsRow = {
+  user_login?: string | null;
+  total_points?: NumericLike;
+  last_observed_at_utc?: string | null;
+};
+
+type TripSilverTotal = {
+  user_login: string;
+  total_points: number;
+  last_observed_at_utc: string | null;
+};
+
 type RawTripDailySummaryRow = {
   day_local?: string | null;
   obs_count?: NumericLike;
@@ -325,12 +339,15 @@ function mapRosterEntries(data: unknown[] | null | undefined): TripRosterEntry[]
     .map((row) => {
       const user_login = (row.user_login ?? '').toString().trim();
       if (!user_login) return null;
-      const display_name = row.display_name ?? null;
+      const cleanedDisplayName =
+        typeof row.display_name === 'string' && row.display_name.trim().length > 0
+          ? row.display_name.trim()
+          : null;
       const is_adult = row.is_adult != null ? Boolean(row.is_adult) : false;
-      const nameForUi = (display_name ?? '').trim() || user_login;
+      const nameForUi = cleanedDisplayName ?? user_login;
       return {
         user_login,
-        display_name,
+        display_name: cleanedDisplayName,
         is_adult,
         nameForUi,
       } satisfies TripRosterEntry;
@@ -388,10 +405,12 @@ function mapLeaderboardRows(data: unknown[] | null | undefined): TripLeaderboard
       return {
         user_login,
         display_name: row.display_name ?? null,
-        nameForUi: (row.display_name ?? '').trim() || user_login,
+        nameForUi: ((row.display_name && row.display_name.trim()) ? row.display_name.trim() : '') || user_login,
         total_points: toNumber(row.total_points),
         obs_count: toNumber(row.obs_count),
+        species_count: toNumber(row.distinct_taxa),
         distinct_taxa: toNumber(row.distinct_taxa),
+        research_count: toNumber(row.research_grade_count),
         research_grade_count: toNumber(row.research_grade_count),
         bonus_points: toNumber(row.bonus_points),
         last_observed_at_utc: row.last_observed_at_utc ?? null,
@@ -416,6 +435,21 @@ function mapSilverRows(data: unknown[] | null | undefined): Map<string, TripSilv
       rarity: toNumber(row.rarity),
       research: toNumber(row.research),
       multipliers_delta: toNumber(row.multipliers_delta),
+      last_observed_at_utc: row.last_observed_at_utc ?? null,
+    });
+  });
+  return map;
+}
+
+function mapSilverTotals(data: unknown[] | null | undefined): Map<string, TripSilverTotal> {
+  const rawRows = Array.isArray(data) ? (data as RawTripSilverTotalsRow[]) : [];
+  const map = new Map<string, TripSilverTotal>();
+  rawRows.forEach((row) => {
+    const user_login = (row.user_login ?? '').toString().trim();
+    if (!user_login) return;
+    map.set(user_login.toLowerCase(), {
+      user_login,
+      total_points: toNumber(row.total_points),
       last_observed_at_utc: row.last_observed_at_utc ?? null,
     });
   });
@@ -447,7 +481,7 @@ export async function getSilverRow(login: string): Promise<ApiResult<TripSilverB
 }
 
 export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardPayload>> {
-  const [leaderboardResult, rosterResult, silverResult] = await Promise.all([
+  const [leaderboardResult, rosterResult, silverTotalsResult, silverBreakdownResult] = await Promise.all([
     supabase()
       .from('trip_leaderboard_cr2025_v1')
       .select('user_login, display_name, total_points, obs_count, distinct_taxa, research_grade_count, bonus_points, last_observed_at_utc')
@@ -455,22 +489,30 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
       .order('obs_count', { ascending: false, nullsFirst: false }),
     getRosterCR2025(),
     supabase()
+      .from('trip_points_user_silver_cr2025_v1')
+      .select('user_login, total_points, last_observed_at_utc'),
+    supabase()
       .from('trip_points_user_silver_cr2025_v2')
       .select('user_login, total_points, base_obs, novelty_trip, novelty_day, rarity, research, multipliers_delta, last_observed_at_utc'),
   ]);
 
   const leaderboardMissing = isMissingView(leaderboardResult.error);
   const rosterMissing = rosterResult.missing ?? false;
-  const silverMissing = isMissingView(silverResult.error);
+  const silverTotalsMissing = isMissingView(silverTotalsResult.error);
+  const silverBreakdownMissing = isMissingView(silverBreakdownResult.error);
 
   const baseRows = leaderboardMissing ? [] : mapLeaderboardRows(leaderboardResult.data);
   const rosterEntries = rosterResult.data ?? [];
-  const silverMap = silverMissing ? new Map<string, TripSilverBreakdown>() : mapSilverRows(silverResult.data);
+  const silverTotalsMap = silverTotalsMissing ? new Map<string, TripSilverTotal>() : mapSilverTotals(silverTotalsResult.data);
+  const silverBreakdownMap = silverBreakdownMissing
+    ? new Map<string, TripSilverBreakdown>()
+    : mapSilverRows(silverBreakdownResult.data);
 
   const combinedLogins = new Set<string>();
   rosterEntries.forEach((entry) => combinedLogins.add(entry.user_login));
   baseRows.forEach((row) => combinedLogins.add(row.user_login));
-  Array.from(silverMap.values()).forEach((row) => combinedLogins.add(row.user_login));
+  Array.from(silverTotalsMap.values()).forEach((row) => combinedLogins.add(row.user_login));
+  Array.from(silverBreakdownMap.values()).forEach((row) => combinedLogins.add(row.user_login));
 
   const rosterMap = new Map<string, TripRosterEntry>();
   rosterEntries.forEach((entry) => {
@@ -486,22 +528,46 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
     const key = login.toLowerCase();
     const rosterEntry = rosterMap.get(key);
     const baseRow = baseMap.get(key);
-    const silver = silverMap.get(key) ?? null;
+    const silverTotals = silverTotalsMap.get(key) ?? null;
+    const silverBreakdown = silverBreakdownMap.get(key) ?? null;
 
-    const display_name = baseRow?.display_name ?? rosterEntry?.display_name ?? null;
-    const nameForUi = (rosterEntry?.nameForUi ?? (display_name ?? '').trim()) || login;
+    const rosterDisplay = rosterEntry?.display_name ? rosterEntry.display_name.trim() : '';
+    const baseDisplay = baseRow?.display_name ? baseRow.display_name.trim() : '';
+    const primaryLogin = baseRow?.user_login ?? rosterEntry?.user_login ?? silverTotals?.user_login ?? login;
+
+    let nameForUi = rosterEntry?.nameForUi && rosterEntry.nameForUi.trim()
+      ? rosterEntry.nameForUi.trim()
+      : '';
+    if (!nameForUi) {
+      if (rosterDisplay) {
+        nameForUi = rosterDisplay;
+      } else if (baseDisplay) {
+        nameForUi = baseDisplay;
+      } else {
+        nameForUi = primaryLogin;
+      }
+    }
+
+    const display_name = baseDisplay || rosterDisplay || null;
+
+    const obsCount = baseRow?.obs_count ?? 0;
+    const speciesCount = baseRow?.species_count ?? baseRow?.distinct_taxa ?? 0;
+    const researchCount = baseRow?.research_count ?? baseRow?.research_grade_count ?? 0;
+    const bonusPoints = baseRow?.bonus_points ?? 0;
 
     const merged: TripLeaderboardRow = {
-      user_login: login,
+      user_login: primaryLogin,
       display_name,
       nameForUi,
-      total_points: baseRow?.total_points ?? 0,
-      obs_count: baseRow?.obs_count ?? 0,
-      distinct_taxa: baseRow?.distinct_taxa ?? 0,
-      research_grade_count: baseRow?.research_grade_count ?? 0,
-      bonus_points: baseRow?.bonus_points ?? 0,
-      last_observed_at_utc: silver?.last_observed_at_utc ?? baseRow?.last_observed_at_utc ?? null,
-      silverBreakdown: silver,
+      total_points: silverTotals?.total_points ?? baseRow?.total_points ?? 0,
+      obs_count: obsCount,
+      species_count: speciesCount,
+      distinct_taxa: baseRow?.distinct_taxa ?? speciesCount,
+      research_count: researchCount,
+      research_grade_count: baseRow?.research_grade_count ?? researchCount,
+      bonus_points: bonusPoints,
+      last_observed_at_utc: silverTotals?.last_observed_at_utc ?? baseRow?.last_observed_at_utc ?? null,
+      silverBreakdown,
     };
 
     return merged;
@@ -509,16 +575,17 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
 
   rows.sort((a, b) => {
     if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-    if (b.distinct_taxa !== a.distinct_taxa) return b.distinct_taxa - a.distinct_taxa;
+    if (b.species_count !== a.species_count) return b.species_count - a.species_count;
     if (b.obs_count !== a.obs_count) return b.obs_count - a.obs_count;
     return a.user_login.localeCompare(b.user_login);
   });
 
   const lastUpdatedAt = getLastUpdatedTs(rows);
-  const hasSilver = silverMap.size > 0;
+  const hasSilver = silverTotalsMap.size > 0 || silverBreakdownMap.size > 0;
 
-  const error = leaderboardResult.error ?? rosterResult.error ?? silverResult.error ?? null;
-  const missing = leaderboardMissing || rosterMissing || silverMissing;
+  const error =
+    leaderboardResult.error ?? rosterResult.error ?? silverTotalsResult.error ?? silverBreakdownResult.error ?? null;
+  const missing = leaderboardMissing || rosterMissing || silverTotalsMissing || silverBreakdownMissing;
 
   return {
     data: { rows, hasSilver, lastUpdatedAt },
@@ -529,6 +596,34 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
 
 export async function getTripLeaderboard(): Promise<ApiResult<TripLeaderboardPayload>> {
   return getLeaderboardCR2025();
+}
+
+export async function getTickerLeadersCR2025(): Promise<ApiResult<string[]>> {
+  const leaderboardResult = await getLeaderboardCR2025();
+  const rows = leaderboardResult.data?.rows ?? [];
+
+  const names = rows
+    .filter((row) => row.total_points > 0)
+    .slice(0, 3)
+    .map((row) => {
+      const trimmedUiName = row.nameForUi && row.nameForUi.trim() ? row.nameForUi.trim() : '';
+      if (trimmedUiName) return trimmedUiName;
+      const trimmedDisplay = row.display_name && row.display_name.trim() ? row.display_name.trim() : '';
+      return trimmedDisplay || row.user_login;
+    })
+    .filter((value) => value.length > 0);
+
+  const strings = names.length > 0 ? [`leaders: ${names.join(', ')}`] : [];
+
+  return {
+    data: strings,
+    error: leaderboardResult.error ?? null,
+    ...(leaderboardResult.missing ? { missing: true } : {}),
+  };
+}
+
+export function getTickerTripWindow(): string {
+  return 'Trip Mode active · scoring Nov 9–15';
 }
 
 export function getLastUpdatedTs(rows: TripLeaderboardRow[]): string | null {
