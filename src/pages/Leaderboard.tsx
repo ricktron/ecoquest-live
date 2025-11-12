@@ -401,37 +401,55 @@ export default function Leaderboard() {
     const loading = silverLoading[key];
     const researchCount = row.research_count ?? row.research_grade_count;
     const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
+    const base = row.base_obs ?? breakdown?.base_obs ?? 0;
+    const research = row.research ?? breakdown?.research ?? 0;
+    const dnov = row.novelty_day ?? breakdown?.novelty_day ?? 0;
+    const tnov = row.novelty_trip ?? breakdown?.novelty_trip ?? 0;
+    const rarity = row.rarity ?? breakdown?.rarity ?? 0;
+    const mult = row.multipliers_delta ?? breakdown?.multipliers_delta ?? 0;
+    const silverSubtotal = base + research + dnov + tnov + rarity + mult;
+    const total = silverSubtotal + adultPoints;
     const baseTotal = row.obs_count + researchCount + adultPoints;
+    const adultTooltip =
+      'Adult points are discretionary awards granted by trip leads for leadership, effort, or exceptional contributions.';
 
     if (loading) {
       return <div className="text-sm text-muted-foreground">Loading silver breakdown…</div>;
     }
 
     if (breakdown) {
-      const segments: { label: string; value: number }[] = [
-        { label: 'Base observations', value: breakdown.base_obs },
-        { label: 'Research grade', value: breakdown.research },
-        { label: 'Daily novelty', value: breakdown.novelty_day },
-        { label: 'Trip novelty', value: breakdown.novelty_trip },
-        { label: 'Rarity bonus', value: breakdown.rarity },
-        { label: 'Multiplier delta', value: breakdown.multipliers_delta },
+      const segments: { key: string; label: string; value: number }[] = [
+        { key: 'base', label: 'Base observations', value: base },
+        { key: 'research', label: 'Research grade', value: research },
+        { key: 'dnov', label: 'Daily novelty', value: dnov },
+        { key: 'tnov', label: 'Trip novelty', value: tnov },
+        { key: 'rarity', label: 'Rarity bonus', value: rarity },
+        { key: 'mult', label: 'Multiplier delta', value: mult },
       ];
 
       return (
         <div className="space-y-3">
-          <div className="font-semibold text-foreground">Silver Score Breakdown</div>
+          <div className="font-semibold text-foreground">Score Breakdown</div>
           <table className="w-full text-xs">
             <tbody>
               {segments.map((segment) => (
-                <tr key={segment.label}>
+                <tr key={segment.key}>
                   <td className="py-1 pr-3 text-muted-foreground">{segment.label}</td>
                   <td className="py-1 text-right font-mono">{formatPoints(segment.value)}</td>
                 </tr>
               ))}
               <tr>
+                <td className="py-1 pr-3 text-muted-foreground">
+                  <span title={adultTooltip}>
+                    Adult points{adultPoints > 0 ? ' ⭐' : ''}
+                  </span>
+                </td>
+                <td className="py-1 text-right font-mono">{formatPoints(adultPoints)}</td>
+              </tr>
+              <tr>
                 <td className="pt-2 text-sm font-semibold">Total</td>
                 <td className="pt-2 text-right font-mono text-sm font-semibold">
-                  {formatPoints(breakdown.total_points)}
+                  {formatPoints(total)}
                 </td>
               </tr>
             </tbody>
@@ -442,14 +460,16 @@ export default function Leaderboard() {
 
     return (
       <div className="space-y-2">
-        <div className="font-semibold text-foreground">Base Score Breakdown</div>
+        <div className="font-semibold text-foreground">Score Breakdown</div>
         <div className="font-mono text-xs text-muted-foreground">
           {row.obs_count} + {researchCount} + {adultPoints} = {baseTotal}
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="chip chip--info">Obs {row.obs_count}</span>
           <span className="chip chip--info">RG {researchCount}</span>
-          <span className="chip chip--muted">Adult points {adultPoints}</span>
+          <span className="chip chip--muted" title={adultTooltip}>
+            Adult points {adultPoints}
+          </span>
         </div>
         <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
           <span>Total</span>
@@ -601,7 +621,7 @@ export default function Leaderboard() {
                       ariaLabel: 'Adult-awarded points',
                       title: 'Adult-awarded points',
                       description:
-                        'Points granted by trip adults for sportsmanship, helpfulness, or notable field contributions.',
+                        'Adult points are discretionary awards granted by trip leads for leadership, effort, or exceptional contributions.',
                       className:
                         'chip chip--trophy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
                     });
