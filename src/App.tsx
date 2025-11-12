@@ -22,13 +22,14 @@ import Rarity from './pages/Rarity';
 import Debug from './pages/Debug';
 import BingoBoard from './features/bingo/BingoBoard';
 import Cabinet from './pages/Cabinet';
-import { FLAGS } from './env';
+import { FLAGS, getEnv } from './env';
 import { fetchHeaderTexts } from './lib/api';
 import TripTicker from './components/TripTickers';
 
 export default function App() {
   const [tickerText, setTicker] = useState<string>();
   const [announceText, setAnnounce] = useState<string | undefined>();
+  const tickersEnabled = getEnv('VITE_FEATURE_TICKERS') === '1'; // Feature gate: tickers (CR off, Big Bend on)
 
   useEffect(() => {
     let on = true;
@@ -46,7 +47,7 @@ export default function App() {
       <BrowserRouter>
         <HeaderStack tabs={<TabNav />} tickerText={tickerText} announceText={announceText}>
           <>
-            <TripTicker />
+            {tickersEnabled && <TripTicker />}
             <Routes>
               <Route path="/" element={<Navigate to="/leaderboard" replace />} />
               <Route path="/leaderboard" element={<Leaderboard />} />

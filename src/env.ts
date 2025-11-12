@@ -11,6 +11,42 @@ function toBool(input: unknown, fallback = false): boolean {
   return fallback;
 }
 
+type RuntimeEnvRecord = Record<string, unknown> | undefined;
+
+function loadRuntimeEnv(): RuntimeEnvRecord {
+  const globalEnv = (globalThis as any)?.window?.env;
+  if (globalEnv && typeof globalEnv === "object") {
+    return globalEnv as Record<string, unknown>;
+  }
+
+  const direct = (globalThis as any)?.env;
+  if (direct && typeof direct === "object") {
+    return direct as Record<string, unknown>;
+  }
+
+  return undefined;
+}
+
+let cachedRuntimeEnv: RuntimeEnvRecord;
+
+export function getEnv(key: string, fallback?: string): string | undefined {
+  const viteValue = (import.meta as any)?.env?.[key];
+  if (viteValue != null) {
+    return String(viteValue);
+  }
+
+  if (cachedRuntimeEnv === undefined) {
+    cachedRuntimeEnv = loadRuntimeEnv();
+  }
+
+  const runtimeValue = cachedRuntimeEnv?.[key];
+  if (runtimeValue != null) {
+    return String(runtimeValue);
+  }
+
+  return fallback;
+}
+
 const RawEnv = {
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
   VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -22,7 +58,8 @@ const RawEnv = {
   VITE_TRIP_START: import.meta.env.VITE_TRIP_START,
   VITE_TRIP_END: import.meta.env.VITE_TRIP_END,
   VITE_LOCK_DATES: import.meta.env.VITE_LOCK_DATES,
-  VITE_FEATURE_TICKER: import.meta.env.VITE_FEATURE_TICKER,
+  VITE_FEATURE_TICKERS:
+    getEnv("VITE_FEATURE_TICKERS") ?? getEnv("VITE_FEATURE_TICKER") ?? "0",
   VITE_FEATURE_DAILY_TROPHIES: import.meta.env.VITE_FEATURE_DAILY_TROPHIES,
   VITE_TICKER_SPEED_MS: import.meta.env.VITE_TICKER_SPEED_MS,
   VITE_TZ: import.meta.env.VITE_TZ,
@@ -49,6 +86,7 @@ const EnvSchema = z.object({
   VITE_TRIP_START: z.string().optional(),
   VITE_TRIP_END: z.string().optional(),
   VITE_LOCK_DATES: z.any().optional(),
+  VITE_FEATURE_TICKERS: z.any().optional(),
   VITE_FEATURE_TICKER: z.any().optional(),
   VITE_FEATURE_DAILY_TROPHIES: z.any().optional(),
   VITE_TICKER_SPEED_MS: z.string().optional(),
@@ -95,7 +133,7 @@ export const FLAGS = {
   TROPHIES_ENABLED: toBool(RawEnv.VITE_FEATURE_TROPHIES, false),
   ADMIN_ENABLED: toBool(RawEnv.VITE_ENABLE_ADMIN, false),
   LOCK_DATES: toBool(RawEnv.VITE_LOCK_DATES, parsed.VITE_TRIP_MODE !== "testing"),
-  TICKER_ENABLED: toBool(RawEnv.VITE_FEATURE_TICKER, true),
+  TICKER_ENABLED: toBool(RawEnv.VITE_FEATURE_TICKERS, false),
   DAILY_TROPHIES_ENABLED: toBool(RawEnv.VITE_FEATURE_DAILY_TROPHIES, true),
   EMAIL_DIGEST_ENABLED: toBool(RawEnv.VITE_ENABLE_EMAIL_DIGEST, false),
   ENABLE_COMPARE: toBool(RawEnv.VITE_ENABLE_COMPARE, false),
