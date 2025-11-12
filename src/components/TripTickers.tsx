@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 
-import { getTop3ForTicker, getTickerTripWindow, lastUpdatedCR2025 } from '@/lib/api';
+import { getTop3ForTickerCR2025, getTickerTripWindow, lastUpdatedCR2025 } from '@/lib/api';
+import { supabase } from '@/lib/supabaseClient';
 
 type TickerTextItem = {
   text: string;
@@ -13,14 +14,16 @@ type TickerTextItem = {
 type TickerItem = string | TickerTextItem;
 type NormalizedTickerItem = TickerTextItem;
 
-type TickerProps = {
+type TripTickerProps = {
   items?: TickerItem[];
   ariaLabel?: string;
   pauseOnHover?: boolean;
   className?: string;
+  debug?: React.ReactNode;
 };
 
 const DEFAULT_FALLBACK_TEXT = 'EcoQuest Live';
+const OVERFLOW_RATIO = 1.5;
 
 function makeSeparatorItem(): NormalizedTickerItem {
   return {
@@ -106,8 +109,9 @@ function useTripTickerItems(providedItems?: TickerItem[]): TickerItem[] {
 
     (async () => {
       try {
+        const client = supabase();
         const [topThree, updatedResult] = await Promise.all([
-          getTop3ForTicker(),
+          getTop3ForTickerCR2025(client),
           lastUpdatedCR2025(),
         ]);
 
@@ -117,10 +121,7 @@ function useTripTickerItems(providedItems?: TickerItem[]): TickerItem[] {
           console.error('Failed to fetch ticker updated timestamp', updatedResult.error);
         }
 
-        const names = topThree
-          .filter((entry) => entry.total_points > 0)
-          .map((entry) => entry.name.trim())
-          .filter((name) => name.length > 0);
+        const names = topThree.map((name) => name.trim()).filter((name) => name.length > 0);
         const leaderLine = names.length > 0 ? `leaders: ${names.join(', ')}` : '';
 
         const iso = updatedResult.data ?? null;
@@ -159,12 +160,14 @@ function useTripTickerItems(providedItems?: TickerItem[]): TickerItem[] {
   }, [baseItems]);
 }
 
-const TickerBase: React.FC<TickerProps> = ({
-  items = [],
-  ariaLabel = 'ticker',
+const TripTicker: React.FC<TripTickerProps> = ({
+  items: providedItems,
+  ariaLabel = 'trip-info-ticker',
   pauseOnHover = true,
   className = '',
+  debug = null,
 }) => {
+  const items = useTripTickerItems(providedItems);
   const normalized = useMemo(() => normalizeItems(items), [items]);
   const [extendedItems, setExtendedItems] = useState<NormalizedTickerItem[]>(normalized);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -196,18 +199,17 @@ const TickerBase: React.FC<TickerProps> = ({
     if (normalized.length === 0) return;
 
     const measuredWidth = container.getBoundingClientRect().width || viewportWidth;
-    const targetWidth = measuredWidth > 0 ? measuredWidth * 1.5 : 0;
+    const targetWidth = measuredWidth > 0 ? measuredWidth * OVERFLOW_RATIO : 0;
     if (targetWidth === 0) return;
 
     const contentWidth = content.scrollWidth;
-    if (contentWidth === 0) return;
-
-    if (contentWidth >= targetWidth) {
+    if (contentWidth === 0 || contentWidth >= targetWidth) {
       return;
     }
 
-    const currentItems = extendedItems.length > 0 ? extendedItems : normalized;
-    const nextItems = extendWithCycle(currentItems, normalized);
+    const baseItems = normalized.length > 0 ? normalized : [{ text: DEFAULT_FALLBACK_TEXT }];
+    const currentItems = extendedItems.length > 0 ? extendedItems : baseItems;
+    const nextItems = extendWithCycle(currentItems, baseItems);
     if (nextItems.length !== extendedItems.length) {
       setExtendedItems(nextItems);
     }
@@ -216,50 +218,28 @@ const TickerBase: React.FC<TickerProps> = ({
   if (extendedItems.length === 0) return null;
 
   return (
-    <div
-      ref={containerRef}
-      aria-label={ariaLabel}
-      className={`relative w-full overflow-hidden border-t border-b border-neutral-800 bg-neutral-950/60 ${className}`}
-    >
+    <>
       <div
-        className={`flex animate-marquee will-change-transform ${
-          pauseOnHover ? 'hover:[animation-play-state:paused]' : ''
-        }`}
+        ref={containerRef}
+        aria-label={ariaLabel}
+        className={`relative w-full overflow-hidden border-t border-b border-emerald-800 bg-emerald-950/80 text-emerald-50 ${className}`}
       >
-        <div className="flex shrink-0 py-2" ref={contentRef}>
-          {extendedItems.map(renderNormalizedItem)}
-        </div>
-        <div className="flex shrink-0 py-2" aria-hidden="true">
-          {extendedItems.map(renderNormalizedItem)}
+        <div
+          className={`flex animate-marquee will-change-transform ${
+            pauseOnHover ? 'hover:[animation-play-state:paused]' : ''
+          }`}
+        >
+          <div className="flex shrink-0 py-2" ref={contentRef}>
+            {extendedItems.map(renderNormalizedItem)}
+          </div>
+          <div className="flex shrink-0 py-2" aria-hidden="true">
+            {extendedItems.map(renderNormalizedItem)}
+          </div>
         </div>
       </div>
-    </div>
+      {debug ?? null}
+    </>
   );
 };
 
-export const TripNewsTicker: React.FC<TickerProps> = ({ items: providedItems, ariaLabel = 'trip-news-ticker', ...rest }) => {
-  const items = useTripTickerItems(providedItems);
-  if (items.length === 0) return null;
-  return <TickerBase items={items} ariaLabel={ariaLabel} {...rest} />;
-};
-
-export const TripInfoTicker: React.FC<TickerProps> = ({ items: providedItems, ariaLabel = 'trip-info-ticker', ...rest }) => {
-  const items = useTripTickerItems(providedItems);
-  if (items.length === 0) return null;
-  return <TickerBase items={items} ariaLabel={ariaLabel} {...rest} />;
-};
-
-const TripTickers: React.FC<{
-  news?: TickerItem[];
-  info?: TickerItem[];
-  className?: string;
-}> = ({ news = [], info = [], className = '' }) => {
-  return (
-    <div className={className}>
-      <TripNewsTicker items={news} />
-      <TripInfoTicker items={info} />
-    </div>
-  );
-};
-
-export default TripTickers;
+export default TripTicker;

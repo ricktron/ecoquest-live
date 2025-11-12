@@ -650,49 +650,27 @@ export async function getTripLeaderboard(): Promise<ApiResult<TripLeaderboardPay
   return getLeaderboardCR2025();
 }
 
-type RawTickerLeaderboardRow = {
-  user_login: string | null;
-  display_name: string | null;
-  total_points: NumericLike;
-};
+export async function getTop3ForTickerCR2025(
+  client: SupabaseClient,
+): Promise<string[]> {
+  const { data, error } = await client
+    .from('trip_leaderboard_cr2025_v1')
+    .select('user_login, display_name, total_points')
+    .order('total_points', { ascending: false })
+    .limit(3);
 
-export async function getTop3ForTicker(): Promise<Array<{ name: string; total_points: number }>> {
-  try {
-    const { data, error } = await supabase()
-      .from('trip_leaderboard_cr2025_v1')
-      .select('user_login, display_name, total_points')
-      .order('total_points', { ascending: false, nullsFirst: false });
-
+  if (error || !data) {
     if (error) {
-      console.error('Failed to fetch ticker leaderboard rows', error);
-      return [];
+      console.warn('Failed to fetch CR2025 ticker leaderboard', error);
     }
-
-    const rows = Array.isArray(data) ? (data as RawTickerLeaderboardRow[]) : [];
-
-    const mapped = rows
-      .map((row) => {
-        const login = (row.user_login ?? '').toString().trim();
-        const display = row.display_name ? row.display_name.trim() : '';
-        const name = display || login;
-        if (!name) return null;
-        return {
-          name,
-          total_points: toNumber(row.total_points),
-        };
-      })
-      .filter((value): value is { name: string; total_points: number } => Boolean(value));
-
-    mapped.sort((a, b) => {
-      if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-      return a.name.localeCompare(b.name);
-    });
-
-    return mapped.slice(0, 3);
-  } catch (error) {
-    console.error('Unhandled error while loading ticker leaderboard rows', error);
     return [];
   }
+
+  return data.map((row) => {
+    const display = row.display_name?.trim();
+    if (display && display.length > 0) return display;
+    return row.user_login?.trim() ?? '';
+  });
 }
 
 export function getTickerTripWindow(): string {

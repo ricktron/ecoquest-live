@@ -24,7 +24,7 @@ import BingoBoard from './features/bingo/BingoBoard';
 import Cabinet from './pages/Cabinet';
 import { FLAGS } from './env';
 import { fetchHeaderTexts } from './lib/api';
-import { TripNewsTicker, TripInfoTicker } from './components/TripTickers';
+import TripTicker from './components/TripTickers';
 
 export default function App() {
   const [tickerText, setTicker] = useState<string>();
@@ -46,7 +46,7 @@ export default function App() {
       <BrowserRouter>
         <HeaderStack tabs={<TabNav />} tickerText={tickerText} announceText={announceText}>
           <>
-            <TripNewsTicker />
+            <TripTicker />
             <Routes>
               <Route path="/" element={<Navigate to="/leaderboard" replace />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
@@ -71,7 +71,6 @@ export default function App() {
           </>
         </HeaderStack>
         {localStorage.getItem('admin_token') && <ConfigButton />}
-        <TripInfoTicker />
         <BottomNav />
         {import.meta.env.DEV && (
           <div 
