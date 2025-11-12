@@ -361,6 +361,9 @@ export default function Debug() {
                 <CardTitle>Ticker sources</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-2">
+                <div>
+                  TickerTop3 source: CR2025 leaderboard view (count: {tickerTopThree.length})
+                </div>
                 <div>tickerTop3 count: {tickerTopThree.length}</div>
                 <div>
                   Top 3 leaders:{' '}

@@ -60,6 +60,7 @@ export type TripLeaderboardRow = {
   research_count: number;
   research_grade_count: number;
   bonus_points: number;
+  adult_points?: number;
   last_observed_at_utc: string | null;
   silverBreakdown: TripSilverBreakdown | null;
 };
@@ -554,6 +555,7 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
     const speciesCount = baseRow?.species_count ?? baseRow?.distinct_taxa ?? 0;
     const researchCount = baseRow?.research_count ?? baseRow?.research_grade_count ?? 0;
     const bonusPoints = baseRow?.bonus_points ?? 0;
+    const adultPoints = baseRow?.bonus_points ?? 0;
 
     const merged: TripLeaderboardRow = {
       user_login: primaryLogin,
@@ -566,6 +568,7 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
       research_count: researchCount,
       research_grade_count: baseRow?.research_grade_count ?? researchCount,
       bonus_points: bonusPoints,
+      adult_points: adultPoints,
       last_observed_at_utc: silverTotals?.last_observed_at_utc ?? baseRow?.last_observed_at_utc ?? null,
       silverBreakdown,
     };
