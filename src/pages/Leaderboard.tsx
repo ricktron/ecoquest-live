@@ -28,25 +28,17 @@ import {
 import { isLive } from '@/lib/config/profile';
 import { supabase } from '@/lib/supabaseClient';
 
-const SNAP_KEY = 'EQL_RANK_SNAPSHOT_CR2025';
-const SNAPSHOT_INTERVAL_MS = 10 * 60 * 1000;
+const SNAPSHOT_KEY = 'cr2025_rank_snapshot_v1';
+const SNAPSHOT_WINDOW_MS = 10 * 60 * 1000;
 const HEARTBEAT_MS = 30 * 1000;
 const HASH_POLL_MS = 45 * 1000;
 const MISSING_VIEW_WARNING = 'Leaderboard view is unavailable.';
-const FADE_FLOOR = 0.35;
-const FADE_WINDOW_MIN = 10;
+const MIN_ARROW_OPACITY = 0.35;
 
 type RankSnapshot = {
-  at: number;
-  ranks: Record<string, number>;
-  lastChangeAt: Record<string, number>;
+  savedAtUtc: string;
+  order: string[];
 };
-
-function deltaOpacity(changedAt?: number) {
-  if (!changedAt) return 1;
-  const mins = Math.max(0, (Date.now() - changedAt) / 60000);
-  return Math.max(FADE_FLOOR, 1 - (mins / FADE_WINDOW_MIN) * (1 - FADE_FLOOR));
-}
 
 type RankedRow = TripLeaderboardRow & {
   rank: number;
@@ -90,19 +82,23 @@ export default function Leaderboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
   const [heartbeat, setHeartbeat] = useState(0);
-  const [lastChangeAt, setLastChangeAt] = useState<Record<string, number>>({});
   const [lbHash, setLbHash] = useState<string | null>(null);
-  const [hashComputedAt, setHashComputedAt] = useState<string | null>(null);
-  const [lastHashCheck, setLastHashCheck] = useState<Date | null>(null);
+  const [snapshotAt, setSnapshotAt] = useState<number | null>(null);
   const [pulseVersion, setPulseVersion] = useState(0);
   const [changedSinceRefresh, setChangedSinceRefresh] = useState<
     Map<string, { obs?: number; spp?: number; rg?: number; bonus?: number; total?: number }>
   >(() => new Map());
 
   const showUpdatedPulse = pulseVersion > 0;
-  const isDev = import.meta.env.DEV;
 
   const rows = useMemo(() => computeRankedRows(baseRows), [baseRows]);
+  const arrowOpacity = useMemo(() => {
+    if (!snapshotAt) return 0;
+    const age = Date.now() - snapshotAt;
+    if (age <= 0) return 1;
+    const progress = Math.min(1, age / SNAPSHOT_WINDOW_MS);
+    return Math.max(MIN_ARROW_OPACITY, 1 - (1 - MIN_ARROW_OPACITY) * progress);
+  }, [snapshotAt, heartbeat]);
 
   const toLBRows = useCallback((list: TripLeaderboardRow[]): LBRow[] => {
     return list.map((row) => {
@@ -159,8 +155,6 @@ export default function Leaderboard() {
         setSilverCache(initialSilver);
         setSilverLoading({});
         setLbHash(hash.lb_hash ?? null);
-        setHashComputedAt(hash.computed_utc ?? null);
-        setLastHashCheck(new Date());
         setChangedSinceRefresh(new Map());
         setPulseVersion(0);
 
@@ -239,9 +233,6 @@ export default function Leaderboard() {
       try {
         const hash = await getLeaderboardHashCR2025(client);
         if (cancelled) return;
-        setLastHashCheck(new Date());
-        setHashComputedAt(hash.computed_utc ?? null);
-
         const nextHash = hash.lb_hash ?? null;
         if (!nextHash) {
           setLbHash(null);
@@ -305,17 +296,14 @@ export default function Leaderboard() {
     if (!rows.length) {
       setRankDeltas({});
       setShowRankIndicators(false);
-      setLastChangeAt({});
+      setSnapshotAt(null);
       return;
     }
 
     const now = Date.now();
-    const currentRanks = rows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.user_login] = row.rank;
-      return acc;
-    }, {});
+    const currentOrder = rows.map((row) => row.user_login);
 
-    const raw = window.localStorage.getItem(SNAP_KEY);
+    const raw = window.localStorage.getItem(SNAPSHOT_KEY);
     let snapshot: RankSnapshot | null = null;
     try {
       snapshot = raw ? (JSON.parse(raw) as RankSnapshot) : null;
@@ -323,64 +311,54 @@ export default function Leaderboard() {
       snapshot = null;
     }
 
-    const createSnapshot = () => {
-      const nextSnapshot: RankSnapshot = { at: now, ranks: currentRanks, lastChangeAt: {} };
+    const persistSnapshot = (order: string[]) => {
+      const payload: RankSnapshot = { savedAtUtc: new Date(now).toISOString(), order };
       try {
-        window.localStorage.setItem(SNAP_KEY, JSON.stringify(nextSnapshot));
+        window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload));
       } catch {
         // Ignore quota/storage errors
       }
       setRankDeltas({});
       setShowRankIndicators(false);
-      setLastChangeAt({});
+      setSnapshotAt(now);
     };
 
     if (!snapshot) {
-      createSnapshot();
+      persistSnapshot(currentOrder);
       return;
     }
 
-    const prevRanks = snapshot.ranks ?? {};
-    const prevLogins = Object.keys(prevRanks);
-    const currentLogins = Object.keys(currentRanks);
-    const hasRosterChange =
-      prevLogins.length !== currentLogins.length ||
-      currentLogins.some((login) => !(login in prevRanks)) ||
-      prevLogins.some((login) => !(login in currentRanks));
-
-    if (hasRosterChange) {
-      createSnapshot();
+    const savedAt = Date.parse(snapshot.savedAtUtc ?? '');
+    if (!Number.isFinite(savedAt) || Number.isNaN(savedAt)) {
+      persistSnapshot(currentOrder);
       return;
     }
 
-    const lastMap = { ...(snapshot.lastChangeAt ?? {}) };
+    const previousOrder = Array.isArray(snapshot.order) ? snapshot.order : [];
+    const rosterChanged =
+      previousOrder.length !== currentOrder.length ||
+      currentOrder.some((login) => !previousOrder.includes(login)) ||
+      previousOrder.some((login) => !currentOrder.includes(login));
+
+    if (rosterChanged) {
+      persistSnapshot(currentOrder);
+      return;
+    }
+
+    if (now - savedAt >= SNAPSHOT_WINDOW_MS) {
+      persistSnapshot(currentOrder);
+      return;
+    }
+
     const deltas: Record<string, number> = {};
-    rows.forEach((row) => {
-      const login = row.user_login;
-      const previousRank = prevRanks[login];
-      const delta = previousRank == null ? 0 : previousRank - row.rank;
-      deltas[login] = delta;
-      if (delta !== 0) {
-        lastMap[login] = now;
-      }
+    rows.forEach((row, index) => {
+      const prevIndex = previousOrder.indexOf(row.user_login);
+      deltas[row.user_login] = prevIndex === -1 ? 0 : prevIndex - index;
     });
 
     setRankDeltas(deltas);
-    setLastChangeAt(lastMap);
-
-    const elapsed = now - (snapshot.at ?? 0);
-    const thresholdReached = snapshot.at != null && elapsed >= SNAPSHOT_INTERVAL_MS;
-    setShowRankIndicators(thresholdReached);
-
-    const nextSnapshot: RankSnapshot = thresholdReached
-      ? { at: now, ranks: currentRanks, lastChangeAt: lastMap }
-      : { at: snapshot.at ?? now, ranks: snapshot.ranks ?? {}, lastChangeAt: lastMap };
-
-    try {
-      window.localStorage.setItem(SNAP_KEY, JSON.stringify(nextSnapshot));
-    } catch {
-      // Ignore quota/storage errors
-    }
+    setShowRankIndicators(true);
+    setSnapshotAt(savedAt);
   }, [rows, heartbeat]);
 
   const ensureSilverBreakdown = async (row: TripLeaderboardRow) => {
@@ -519,16 +497,6 @@ export default function Leaderboard() {
               </span>
             )}
           </div>
-          {isDev && (
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Hash: {lbHash ?? '—'} · Last check:
-              {' '}
-              {lastHashCheck ? formatDistanceToNow(lastHashCheck, { addSuffix: true }) : '—'}
-              {hashComputedAt
-                ? ` · Computed ${formatDistanceToNow(new Date(hashComputedAt), { addSuffix: true })}`
-                : ''}
-            </div>
-          )}
         </div>
 
         {loading ? (
@@ -572,10 +540,11 @@ export default function Leaderboard() {
                   const showSecondary = primaryName.toLowerCase() !== row.user_login.toLowerCase();
                   const scoreValue = row.effectiveTotal;
                   const delta = rankDeltas[row.user_login] ?? 0;
-                  const indicator = delta > 0 ? '▲' : delta < 0 ? '▼' : '—';
-                  const hasIndicator = !isBlackout && showRankIndicators && delta !== 0;
+                  const indicator = delta > 0 ? '▲' : delta < 0 ? '▼' : '–';
+                  const showArrow = !isBlackout && showRankIndicators;
+                  const showMagnitude = delta !== 0;
                   const indicatorMagnitude = Math.abs(delta);
-                  const arrowStyle = { opacity: deltaOpacity(lastChangeAt[row.user_login]) };
+                  const arrowStyle = { opacity: arrowOpacity || MIN_ARROW_OPACITY };
                   const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
                   const researchCount = row.research_count ?? row.research_grade_count ?? 0;
                   const change = changedSinceRefresh.get(row.user_login);
@@ -673,7 +642,7 @@ export default function Leaderboard() {
                           <div className="text-2xl font-bold text-muted-foreground">#{row.rank}</div>
                           <span
                             className={`rank-change text-xs font-medium ${
-                              hasIndicator
+                              showArrow && showMagnitude
                                 ? indicator === '▲'
                                   ? 'text-emerald-600'
                                   : 'text-rose-600'
@@ -681,15 +650,19 @@ export default function Leaderboard() {
                             }`}
                             aria-label="rank change"
                           >
-                            {!showRankIndicators || isBlackout ? (
+                            {!showArrow ? (
                               ' '
-                            ) : hasIndicator ? (
-                              <>
-                                <span style={arrowStyle}>{indicator}</span>
-                                <span>{indicatorMagnitude}</span>
-                              </>
                             ) : (
-                              '—'
+                              <>
+                                <span className="rank-fade" style={arrowStyle}>
+                                  {indicator}
+                                </span>
+                                {showMagnitude ? (
+                                  <span className="rank-fade" style={arrowStyle}>
+                                    {indicatorMagnitude}
+                                  </span>
+                                ) : null}
+                              </>
                             )}
                           </span>
                         </div>

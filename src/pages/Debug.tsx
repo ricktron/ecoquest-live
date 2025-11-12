@@ -12,6 +12,8 @@ import {
   getTripParams,
   lastUpdatedCR2025,
   getTickerTripWindow,
+  getLeaderboardHashCR2025,
+  getTop3ForTickerCR2025,
   type TripLeaderboardPayload,
   type TripLeaderboardRow,
   type TripDailySummaryRow,
@@ -21,6 +23,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function Debug() {
   const [loading, setLoading] = useState(true);
@@ -32,6 +35,9 @@ export default function Debug() {
   const [tz, setTz] = useState<string>('UTC');
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [tickerTopThreeDiagnostics, setTickerTopThreeDiagnostics] = useState<string[]>([]);
+  const [diagnosticHash, setDiagnosticHash] = useState<string | null>(null);
+  const [diagnosticComputedUtc, setDiagnosticComputedUtc] = useState<string | null>(null);
   const [viewCounts, setViewCounts] = useState({
     roster: 0,
     observations: 0,
@@ -55,6 +61,7 @@ export default function Debug() {
     (async () => {
       setLoading(true);
       try {
+        const client = supabase();
         const [
           paramsRes,
           rosterRes,
@@ -66,6 +73,8 @@ export default function Debug() {
           trophiesTodayRes,
           trophiesTripRes,
           cabinetRes,
+          topThree,
+          hashRes,
         ] = await Promise.all([
           getTripParams(),
           getRosterCR2025(),
@@ -77,6 +86,8 @@ export default function Debug() {
           fetchTodayTrophiesCR2025(),
           fetchTripTrophiesCR2025(),
           fetchCabinetCR2025(),
+          getTop3ForTickerCR2025(client),
+          getLeaderboardHashCR2025(client),
         ]);
 
         if (cancelled) return;
@@ -105,6 +116,10 @@ export default function Debug() {
           trophiesTrip: (trophiesTripRes.data ?? []).length,
           cabinetDays: (cabinetRes.data ?? []).length,
         });
+
+        setTickerTopThreeDiagnostics(topThree ?? []);
+        setDiagnosticHash(hashRes.lb_hash ?? null);
+        setDiagnosticComputedUtc(hashRes.computed_utc ?? null);
 
         const errors: string[] = [];
         if (paramsRes.error?.message) errors.push(paramsRes.error.message);
@@ -275,6 +290,27 @@ export default function Debug() {
                 ))}
               </div>
             )}
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-base font-semibold">CR2025 diagnostics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">Ticker top-3:</span>{' '}
+                  {tickerTopThreeDiagnostics.length > 0
+                    ? tickerTopThreeDiagnostics.join(', ')
+                    : '—'}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Leaderboard hash:</span>{' '}
+                  {diagnosticHash ?? '—'}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Computed UTC:</span>{' '}
+                  {diagnosticComputedUtc ?? '—'}
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>View Health</CardTitle>
