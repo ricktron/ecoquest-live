@@ -1,3 +1,4 @@
+// Feature flag: Rendering controlled via VITE_FEATURE_TICKERS (default off).
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 
