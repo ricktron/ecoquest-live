@@ -25,18 +25,12 @@ import Cabinet from './pages/Cabinet';
 import { FLAGS } from './env';
 import { fetchHeaderTexts } from './lib/api';
 import TripTicker from './components/TripTickers';
-
-const readFlag = (k: string, d = '0') => {
-  const runtime = (window as any).__ENV?.[k];
-  const build = (import.meta as any).env?.[k];
-  const v = runtime ?? build ?? d;
-  return ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase());
-};
+import { isTickersEnabled } from './lib/featureFlags';
 
 export default function App() {
   const [tickerText, setTicker] = useState<string>();
   const [announceText, setAnnounce] = useState<string | undefined>();
-  const showTickers = readFlag('VITE_FEATURE_TICKERS', '0');
+  const showTickers = isTickersEnabled();
 
   useEffect(() => {
     let on = true;

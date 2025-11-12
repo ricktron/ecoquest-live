@@ -6,5 +6,7 @@
 // EQL profile (LIVE or TEST)
 window.__EQL = window.__EQL || {};
 window.__EQL.PROFILE = window.__EQL.PROFILE || 'LIVE';
-window.__ENV = window.__ENV || {};
-window.__ENV.VITE_FEATURE_TICKERS = "0";
+window.__ENV = window.__ENV || { VITE_FEATURE_TICKERS: "0" };
+if (typeof window.__ENV.VITE_FEATURE_TICKERS === "undefined") {
+  window.__ENV.VITE_FEATURE_TICKERS = "0";
+}
