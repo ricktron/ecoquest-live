@@ -361,6 +361,7 @@ export default function Debug() {
                 <CardTitle>Ticker sources</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-2">
+                <div>tickerTop3 count: {tickerTopThree.length}</div>
                 <div>
                   Top 3 leaders:{' '}
                   {tickerTopThree.length > 0 ? tickerTopThree.join(', ') : 'n/a'}

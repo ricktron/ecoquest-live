@@ -18,6 +18,8 @@ import {
 import { isLive } from '@/lib/config/profile';
 
 const SNAP_KEY = 'rankSnapshot:cr2025:v1';
+const SNAPSHOT_INTERVAL_MS = 10 * 60 * 1000;
+const SNAPSHOT_HEARTBEAT_MS = 60 * 1000;
 type RankSnap = { ts: number; order: string[] };
 
 type RankedRow = TripLeaderboardRow & {
@@ -61,6 +63,7 @@ export default function Leaderboard() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
+  const [snapshotPulse, setSnapshotPulse] = useState(0);
 
   const rows = useMemo(() => computeRankedRows(baseRows), [baseRows]);
 
@@ -133,17 +136,17 @@ export default function Leaderboard() {
     };
   }, []);
 
-  const topLeaders = useMemo(
-    () =>
-      rows
-        .filter((row) => row.effectiveTotal > 0)
-        .slice(0, 3)
-        .map((row) => row.nameForUi)
-        .filter(Boolean),
-    [rows],
-  );
-
   const rankOrderKey = useMemo(() => rows.map((row) => row.user_login).join('|'), [rows]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const id = window.setInterval(() => {
+      setSnapshotPulse((prev) => prev + 1);
+    }, SNAPSHOT_HEARTBEAT_MS);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -164,9 +167,15 @@ export default function Leaderboard() {
     }
 
     const prevIdx = new Map((snap?.order ?? []).map((u, i) => [u, i] as const));
-    const thresholdReached = snap != null && now - snap.ts >= 10 * 60 * 1000;
+    const hasNewUser =
+      currOrder.length !== (snap?.order?.length ?? 0) || currOrder.some((u) => !prevIdx.has(u));
+    const elapsed = snap ? now - snap.ts : 0;
+    const thresholdReached = snap != null && elapsed >= SNAPSHOT_INTERVAL_MS;
 
-    if (thresholdReached) {
+    if (!snap || hasNewUser) {
+      setRankDeltas({});
+      setShowRankIndicators(false);
+    } else if (thresholdReached) {
       const deltas: Record<string, number> = {};
       currOrder.forEach((u, i) => {
         const j = prevIdx.get(u);
@@ -174,14 +183,9 @@ export default function Leaderboard() {
       });
       setRankDeltas(deltas);
       setShowRankIndicators(true);
-    } else {
-      setRankDeltas({});
-      setShowRankIndicators(false);
     }
 
-    const hasNewUser = currOrder.length !== (snap?.order?.length ?? 0) || currOrder.some((u) => !prevIdx.has(u));
-
-    if (!snap || now - snap.ts > 10 * 60 * 1000 || hasNewUser) {
+    if (!snap || elapsed >= SNAPSHOT_INTERVAL_MS || hasNewUser) {
       try {
         window.localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: now, order: currOrder } satisfies RankSnap));
       } catch {
@@ -189,7 +193,7 @@ export default function Leaderboard() {
       }
     }
     // also refresh when the set of users changes (new roster member)
-  }, [rankOrderKey]);
+  }, [rankOrderKey, snapshotPulse]);
 
   const ensureSilverBreakdown = async (row: TripLeaderboardRow) => {
     if (!hasSilver) return null;
@@ -300,11 +304,6 @@ export default function Leaderboard() {
           {isBlackout && (
             <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
               <p className="text-sm text-primary font-medium">🔒 Final reveal after blackout.</p>
-            </div>
-          )}
-          {!loading && topLeaders.length > 0 && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700 font-medium">
-              🏅 leaders: {topLeaders.join(', ')}
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
@@ -418,9 +417,19 @@ export default function Leaderboard() {
                           <div className="flex gap-2 flex-wrap text-sm">
                             <Popover>
                               <PopoverTrigger asChild>
-                                <span className="chip chip--info" aria-label="Observations">
+                                <button
+                                  type="button"
+                                  className="chip chip--info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
+                                  aria-label="Observations"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                      event.stopPropagation();
+                                    }
+                                  }}
+                                >
                                   🔍 {row.obs_count}
-                                </span>
+                                </button>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
                                 <div className="font-medium">Observations</div>
@@ -431,9 +440,19 @@ export default function Leaderboard() {
                             </Popover>
                             <Popover>
                               <PopoverTrigger asChild>
-                                <span className="chip chip--info" aria-label="Distinct taxa">
+                                <button
+                                  type="button"
+                                  className="chip chip--info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
+                                  aria-label="Distinct taxa"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                      event.stopPropagation();
+                                    }
+                                  }}
+                                >
                                   🌿 {row.species_count}
-                                </span>
+                                </button>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
                                 <div className="font-medium">Distinct species</div>
@@ -444,9 +463,19 @@ export default function Leaderboard() {
                             </Popover>
                             <Popover>
                               <PopoverTrigger asChild>
-                                <span className="chip chip--muted" aria-label="Research grade count">
+                                <button
+                                  type="button"
+                                  className="chip chip--muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
+                                  aria-label="Research grade count"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                      event.stopPropagation();
+                                    }
+                                  }}
+                                >
                                   RG {row.research_count}
-                                </span>
+                                </button>
                               </PopoverTrigger>
                               <PopoverContent className="max-w-xs text-sm" align="start">
                                 <div className="font-medium">Research Grade</div>
