@@ -24,6 +24,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient';
+import { getTickersFlagDetails } from '@/lib/featureFlags';
 
 export default function Debug() {
   const [loading, setLoading] = useState(true);
@@ -54,6 +55,7 @@ export default function Debug() {
   const [adultStatus, setAdultStatus] = useState<string | null>(null);
   const [adultError, setAdultError] = useState<string | null>(null);
   const adultPointsEnabled = import.meta.env.VITE_FEATURE_ADULT_POINTS === '1';
+  const tickerFlag = useMemo(() => getTickersFlagDetails(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -290,6 +292,28 @@ export default function Debug() {
                 ))}
               </div>
             )}
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-base font-semibold">Feature flags</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">effective:</span>{' '}
+                  {String(tickerFlag.effective)}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">source:</span>{' '}
+                  {tickerFlag.source}
+                </div>
+                <div className="space-y-1">
+                  <div className="font-medium text-foreground">raw values</div>
+                  <div className="grid gap-1 text-xs">
+                    <div>import.meta.env: {tickerFlag.raw.importMeta ?? '—'}</div>
+                    <div>window.__ENV: {tickerFlag.raw.windowEnv ?? '—'}</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="py-3">
                 <CardTitle className="text-base font-semibold">CR2025 diagnostics</CardTitle>
