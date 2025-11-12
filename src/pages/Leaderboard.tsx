@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { Trophy, Info, Clock } from 'lucide-react';
@@ -17,10 +23,23 @@ import {
 } from '@/lib/api';
 import { isLive } from '@/lib/config/profile';
 
-const SNAP_KEY = 'rankSnapshot:cr2025:v1';
+const SNAP_KEY = 'EQL_RANK_SNAPSHOT_CR2025';
 const SNAPSHOT_INTERVAL_MS = 10 * 60 * 1000;
-const SNAPSHOT_HEARTBEAT_MS = 60 * 1000;
-type RankSnap = { ts: number; order: string[] };
+const HEARTBEAT_MS = 30 * 1000;
+const FADE_FLOOR = 0.35;
+const FADE_WINDOW_MIN = 10;
+
+type RankSnapshot = {
+  at: number;
+  ranks: Record<string, number>;
+  lastChangeAt: Record<string, number>;
+};
+
+function deltaOpacity(changedAt?: number) {
+  if (!changedAt) return 1;
+  const mins = Math.max(0, (Date.now() - changedAt) / 60000);
+  return Math.max(FADE_FLOOR, 1 - (mins / FADE_WINDOW_MIN) * (1 - FADE_FLOOR));
+}
 
 type RankedRow = TripLeaderboardRow & {
   rank: number;
@@ -63,7 +82,8 @@ export default function Leaderboard() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isBlackout, setIsBlackout] = useState(false);
-  const [snapshotPulse, setSnapshotPulse] = useState(0);
+  const [heartbeat, setHeartbeat] = useState(0);
+  const [lastChangeAt, setLastChangeAt] = useState<Record<string, number>>({});
 
   const rows = useMemo(() => computeRankedRows(baseRows), [baseRows]);
 
@@ -136,13 +156,11 @@ export default function Leaderboard() {
     };
   }, []);
 
-  const rankOrderKey = useMemo(() => rows.map((row) => row.user_login).join('|'), [rows]);
-
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const id = window.setInterval(() => {
-      setSnapshotPulse((prev) => prev + 1);
-    }, SNAPSHOT_HEARTBEAT_MS);
+      setHeartbeat((prev) => prev + 1);
+    }, HEARTBEAT_MS);
     return () => {
       window.clearInterval(id);
     };
@@ -150,50 +168,86 @@ export default function Leaderboard() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!rankOrderKey) {
+    if (!rows.length) {
       setRankDeltas({});
       setShowRankIndicators(false);
+      setLastChangeAt({});
       return;
     }
 
     const now = Date.now();
-    const currOrder = rankOrderKey.split('|').filter((value) => value.length > 0);
+    const currentRanks = rows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.user_login] = row.rank;
+      return acc;
+    }, {});
+
     const raw = window.localStorage.getItem(SNAP_KEY);
-    let snap: RankSnap | null = null;
+    let snapshot: RankSnapshot | null = null;
     try {
-      snap = raw ? (JSON.parse(raw) as RankSnap) : null;
+      snapshot = raw ? (JSON.parse(raw) as RankSnapshot) : null;
     } catch {
-      snap = null;
+      snapshot = null;
     }
 
-    const prevIdx = new Map((snap?.order ?? []).map((u, i) => [u, i] as const));
-    const hasNewUser =
-      currOrder.length !== (snap?.order?.length ?? 0) || currOrder.some((u) => !prevIdx.has(u));
-    const elapsed = snap ? now - snap.ts : 0;
-    const thresholdReached = snap != null && elapsed >= SNAPSHOT_INTERVAL_MS;
-
-    if (!snap || hasNewUser) {
-      setRankDeltas({});
-      setShowRankIndicators(false);
-    } else if (thresholdReached) {
-      const deltas: Record<string, number> = {};
-      currOrder.forEach((u, i) => {
-        const j = prevIdx.get(u);
-        deltas[u] = j == null ? 0 : j - i;
-      });
-      setRankDeltas(deltas);
-      setShowRankIndicators(true);
-    }
-
-    if (!snap || elapsed >= SNAPSHOT_INTERVAL_MS || hasNewUser) {
+    const createSnapshot = () => {
+      const nextSnapshot: RankSnapshot = { at: now, ranks: currentRanks, lastChangeAt: {} };
       try {
-        window.localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: now, order: currOrder } satisfies RankSnap));
+        window.localStorage.setItem(SNAP_KEY, JSON.stringify(nextSnapshot));
       } catch {
         // Ignore quota/storage errors
       }
+      setRankDeltas({});
+      setShowRankIndicators(false);
+      setLastChangeAt({});
+    };
+
+    if (!snapshot) {
+      createSnapshot();
+      return;
     }
-    // also refresh when the set of users changes (new roster member)
-  }, [rankOrderKey, snapshotPulse]);
+
+    const prevRanks = snapshot.ranks ?? {};
+    const prevLogins = Object.keys(prevRanks);
+    const currentLogins = Object.keys(currentRanks);
+    const hasRosterChange =
+      prevLogins.length !== currentLogins.length ||
+      currentLogins.some((login) => !(login in prevRanks)) ||
+      prevLogins.some((login) => !(login in currentRanks));
+
+    if (hasRosterChange) {
+      createSnapshot();
+      return;
+    }
+
+    const lastMap = { ...(snapshot.lastChangeAt ?? {}) };
+    const deltas: Record<string, number> = {};
+    rows.forEach((row) => {
+      const login = row.user_login;
+      const previousRank = prevRanks[login];
+      const delta = previousRank == null ? 0 : previousRank - row.rank;
+      deltas[login] = delta;
+      if (delta !== 0) {
+        lastMap[login] = now;
+      }
+    });
+
+    setRankDeltas(deltas);
+    setLastChangeAt(lastMap);
+
+    const elapsed = now - (snapshot.at ?? 0);
+    const thresholdReached = snapshot.at != null && elapsed >= SNAPSHOT_INTERVAL_MS;
+    setShowRankIndicators(thresholdReached);
+
+    const nextSnapshot: RankSnapshot = thresholdReached
+      ? { at: now, ranks: currentRanks, lastChangeAt: lastMap }
+      : { at: snapshot.at ?? now, ranks: snapshot.ranks ?? {}, lastChangeAt: lastMap };
+
+    try {
+      window.localStorage.setItem(SNAP_KEY, JSON.stringify(nextSnapshot));
+    } catch {
+      // Ignore quota/storage errors
+    }
+  }, [rows, heartbeat]);
 
   const ensureSilverBreakdown = async (row: TripLeaderboardRow) => {
     if (!hasSilver) return null;
@@ -234,7 +288,8 @@ export default function Leaderboard() {
     const breakdown = silverCache[key] ?? row.silverBreakdown ?? null;
     const loading = silverLoading[key];
     const researchCount = row.research_count ?? row.research_grade_count;
-    const baseTotal = row.obs_count + researchCount + row.bonus_points;
+    const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
+    const baseTotal = row.obs_count + researchCount + adultPoints;
 
     if (loading) {
       return <div className="text-sm text-muted-foreground">Loading silver breakdown…</div>;
@@ -277,12 +332,12 @@ export default function Leaderboard() {
       <div className="space-y-2">
         <div className="font-semibold text-foreground">Base Score Breakdown</div>
         <div className="font-mono text-xs text-muted-foreground">
-          {row.obs_count} + {researchCount} + {row.bonus_points} = {baseTotal}
+          {row.obs_count} + {researchCount} + {adultPoints} = {baseTotal}
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="chip chip--info">Obs {row.obs_count}</span>
           <span className="chip chip--info">RG {researchCount}</span>
-          <span className="chip chip--muted">Bonus {row.bonus_points}</span>
+          <span className="chip chip--muted">Adult points {adultPoints}</span>
         </div>
         <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
           <span>Total</span>
@@ -357,7 +412,6 @@ export default function Leaderboard() {
             ) : (
               <div className="space-y-3">
                 {rows.map((row) => {
-                  const loginKey = row.user_login.toLowerCase();
                   const primaryName = row.nameForUi;
                   const showSecondary = primaryName.toLowerCase() !== row.user_login.toLowerCase();
                   const scoreValue = row.effectiveTotal;
@@ -365,6 +419,62 @@ export default function Leaderboard() {
                   const indicator = delta > 0 ? '▲' : delta < 0 ? '▼' : '—';
                   const hasIndicator = !isBlackout && showRankIndicators && delta !== 0;
                   const indicatorMagnitude = Math.abs(delta);
+                  const arrowStyle = { opacity: deltaOpacity(lastChangeAt[row.user_login]) };
+                  const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
+                  const researchCount = row.research_count ?? row.research_grade_count ?? 0;
+
+                  const metricChips = [
+                    {
+                      key: 'obs',
+                      label: `🔍 ${row.obs_count}`,
+                      ariaLabel: 'Observations',
+                      title: 'Observations',
+                      description: 'Count of all trip observations.',
+                      className:
+                        'chip chip--info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
+                    },
+                    {
+                      key: 'species',
+                      label: `🌿 ${row.species_count}`,
+                      ariaLabel: 'Distinct taxa',
+                      title: 'Distinct species',
+                      description: 'Distinct taxa observed.',
+                      className:
+                        'chip chip--info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
+                    },
+                    {
+                      key: 'rg',
+                      label: `RG ${researchCount}`,
+                      ariaLabel: 'Research grade count',
+                      title: 'Research Grade',
+                      description: 'Research-grade observations.',
+                      className:
+                        'chip chip--muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
+                    },
+                  ];
+
+                  if (adultPoints > 0) {
+                    metricChips.push({
+                      key: 'adult',
+                      label: `⭐ ${adultPoints}`,
+                      ariaLabel: 'Adult-awarded points',
+                      title: 'Adult-awarded points',
+                      description:
+                        'Points granted by trip adults for sportsmanship, helpfulness, or notable field contributions.',
+                      className:
+                        'chip chip--trophy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
+                    });
+                  }
+
+                  const stopChipClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                    event.stopPropagation();
+                  };
+
+                  const handleChipKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.stopPropagation();
+                    }
+                  };
 
                   const handleRowClick = () => {
                     navigate(`/user/${row.user_login}`);
@@ -401,7 +511,7 @@ export default function Leaderboard() {
                               ' '
                             ) : hasIndicator ? (
                               <>
-                                <span>{indicator}</span>
+                                <span style={arrowStyle}>{indicator}</span>
                                 <span>{indicatorMagnitude}</span>
                               </>
                             ) : (
@@ -415,75 +525,26 @@ export default function Leaderboard() {
                             <div className="text-xs text-muted-foreground">{row.user_login}</div>
                           )}
                           <div className="flex gap-2 flex-wrap text-sm">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="chip chip--info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
-                                  aria-label="Observations"
-                                  onClick={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                      event.stopPropagation();
-                                    }
-                                  }}
-                                >
-                                  🔍 {row.obs_count}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="max-w-xs text-sm" align="start">
-                                <div className="font-medium">Observations</div>
-                                <p className="text-xs text-muted-foreground">
-                                  Count of all trip observations.
-                                </p>
-                              </PopoverContent>
-                            </Popover>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="chip chip--info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
-                                  aria-label="Distinct taxa"
-                                  onClick={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                      event.stopPropagation();
-                                    }
-                                  }}
-                                >
-                                  🌿 {row.species_count}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="max-w-xs text-sm" align="start">
-                                <div className="font-medium">Distinct species</div>
-                                <p className="text-xs text-muted-foreground">
-                                  Distinct taxa observed.
-                                </p>
-                              </PopoverContent>
-                            </Popover>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="chip chip--muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
-                                  aria-label="Research grade count"
-                                  onClick={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                      event.stopPropagation();
-                                    }
-                                  }}
-                                >
-                                  RG {row.research_count}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="max-w-xs text-sm" align="start">
-                                <div className="font-medium">Research Grade</div>
-                                <p className="text-xs text-muted-foreground">
-                                  Research-grade observations.
-                                </p>
-                              </PopoverContent>
-                            </Popover>
+                            {metricChips.map((chip) => (
+                              <Popover key={chip.key}>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={chip.className}
+                                    aria-label={chip.ariaLabel}
+                                    title={chip.title}
+                                    onClick={stopChipClick}
+                                    onKeyDown={handleChipKeyDown}
+                                  >
+                                    {chip.label}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="max-w-xs text-sm" align="start">
+                                  <div className="font-medium">{chip.title}</div>
+                                  <p className="text-xs text-muted-foreground">{chip.description}</p>
+                                </PopoverContent>
+                              </Popover>
+                            ))}
                           </div>
                         </div>
                       </div>
