@@ -424,7 +424,7 @@ export default function Leaderboard() {
                               <PopoverContent className="max-w-xs text-sm" align="start">
                                 <div className="font-medium">Observations</div>
                                 <p className="text-xs text-muted-foreground">
-                                  Every observation counts for 1 point. Adults can also award extra bonus points.
+                                  Count of all trip observations.
                                 </p>
                               </PopoverContent>
                             </Popover>
@@ -437,7 +437,7 @@ export default function Leaderboard() {
                               <PopoverContent className="max-w-xs text-sm" align="start">
                                 <div className="font-medium">Distinct species</div>
                                 <p className="text-xs text-muted-foreground">
-                                  Species totals break ties between players with the same points.
+                                  Distinct taxa observed.
                                 </p>
                               </PopoverContent>
                             </Popover>
@@ -450,7 +450,7 @@ export default function Leaderboard() {
                               <PopoverContent className="max-w-xs text-sm" align="start">
                                 <div className="font-medium">Research Grade</div>
                                 <p className="text-xs text-muted-foreground">
-                                  Each research-grade observation adds +1 bonus point to the total.
+                                  Research-grade observations.
                                 </p>
                               </PopoverContent>
                             </Popover>
