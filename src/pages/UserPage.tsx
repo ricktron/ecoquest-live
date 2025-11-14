@@ -240,8 +240,8 @@ export default function UserPage() {
       });
   }, [observations]);
 
-  const bonusPoints = userRow?.bonus_points ?? 0;
-  const totalPoints = userRow?.total_points ?? totalObservations + researchCount + bonusPoints;
+  const adultPoints = userRow?.adult_points ?? 0;
+  const totalPoints = userRow?.total_points ?? totalObservations + researchCount + adultPoints;
 
   if (!hasLogin) {
     return (
@@ -304,7 +304,7 @@ export default function UserPage() {
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Points</p>
             <p className="text-2xl font-semibold text-primary">{formatPoints(totalPoints)}</p>
             <p className="text-xs text-muted-foreground">
-              {totalObservations} obs + {researchCount} RG + {bonusPoints} bonus
+              {totalObservations} obs + {researchCount} RG{adultPoints > 0 ? ` + ${adultPoints} adult` : ''}
             </p>
           </div>
         </div>
