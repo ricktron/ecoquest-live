@@ -645,7 +645,7 @@ export async function getLeaderboardCR2025(): Promise<ApiResult<TripLeaderboardP
       (multipliersSilver ?? 0);
     const adult = adultPoints ?? 0;
 
-    let totalPoints: number | undefined = silverTotals?.total_points ?? baseRow?.total_points;
+    let totalPoints: number | undefined = baseRow?.total_points ?? silverTotals?.total_points;
     if (typeof totalPoints !== 'number' || Number.isNaN(totalPoints)) {
       totalPoints = Math.round(silverSubtotal + adult);
     }

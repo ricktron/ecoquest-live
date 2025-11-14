@@ -47,7 +47,7 @@ type RankedRow = TripLeaderboardRow & {
 
 function computeRankedRows(rows: TripLeaderboardRow[]): RankedRow[] {
   const decorated = rows.map((row) => {
-    const effectiveTotal = row.silverBreakdown?.total_points ?? row.total_points;
+    const effectiveTotal = row.total_points;
     return {
       ...row,
       effectiveTotal,
@@ -111,7 +111,7 @@ export default function Leaderboard() {
         distinct_taxa: row.distinct_taxa ?? row.species_count ?? 0,
         research_grade_count: research,
         bonus_points: bonus,
-        total_points: row.total_points ?? row.silverBreakdown?.total_points ?? obs + research + bonus,
+        total_points: row.total_points ?? obs + research + bonus,
       } satisfies LBRow;
     });
   }, []);
