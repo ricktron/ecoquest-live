@@ -400,7 +400,8 @@ export default function Leaderboard() {
     const breakdown = silverCache[key] ?? row.silverBreakdown ?? null;
     const loading = silverLoading[key];
     const researchCount = row.research_count ?? row.research_grade_count;
-    const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
+    const adultPoints = row.adult_points ?? 0;
+    const bonusPoints = row.bonus_points ?? 0;
     const base = row.base_obs ?? breakdown?.base_obs ?? 0;
     const research = row.research ?? breakdown?.research ?? 0;
     const dnov = row.novelty_day ?? breakdown?.novelty_day ?? 0;
@@ -408,8 +409,8 @@ export default function Leaderboard() {
     const rarity = row.rarity ?? breakdown?.rarity ?? 0;
     const mult = row.multipliers_delta ?? breakdown?.multipliers_delta ?? 0;
     const silverSubtotal = base + research + dnov + tnov + rarity + mult;
-    const total = silverSubtotal + adultPoints;
-    const baseTotal = row.obs_count + researchCount + adultPoints;
+    const total = row.total_points;
+    const baseTotal = row.obs_count + researchCount + adultPoints + bonusPoints;
     const adultTooltip =
       'Adult points are discretionary awards granted by trip leads for leadership, effort, or exceptional contributions.';
 
@@ -438,14 +439,22 @@ export default function Leaderboard() {
                   <td className="py-1 text-right font-mono">{formatPoints(segment.value)}</td>
                 </tr>
               ))}
-              <tr>
-                <td className="py-1 pr-3 text-muted-foreground">
-                  <span title={adultTooltip}>
-                    Adult points{adultPoints > 0 ? ' ⭐' : ''}
-                  </span>
-                </td>
-                <td className="py-1 text-right font-mono">{formatPoints(adultPoints)}</td>
-              </tr>
+              {bonusPoints > 0 && (
+                <tr>
+                  <td className="py-1 pr-3 text-muted-foreground">Bonus points</td>
+                  <td className="py-1 text-right font-mono">{formatPoints(bonusPoints)}</td>
+                </tr>
+              )}
+              {adultPoints > 0 && (
+                <tr>
+                  <td className="py-1 pr-3 text-muted-foreground">
+                    <span title={adultTooltip}>
+                      Adult points ⭐
+                    </span>
+                  </td>
+                  <td className="py-1 text-right font-mono">{formatPoints(adultPoints)}</td>
+                </tr>
+              )}
               <tr>
                 <td className="pt-2 text-sm font-semibold">Total</td>
                 <td className="pt-2 text-right font-mono text-sm font-semibold">
@@ -462,18 +471,25 @@ export default function Leaderboard() {
       <div className="space-y-2">
         <div className="font-semibold text-foreground">Score Breakdown</div>
         <div className="font-mono text-xs text-muted-foreground">
-          {row.obs_count} + {researchCount} + {adultPoints} = {baseTotal}
+          {row.obs_count} + {researchCount}{bonusPoints > 0 ? ` + ${bonusPoints}` : ''}{adultPoints > 0 ? ` + ${adultPoints}` : ''} = {baseTotal}
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="chip chip--info">Obs {row.obs_count}</span>
           <span className="chip chip--info">RG {researchCount}</span>
-          <span className="chip chip--muted" title={adultTooltip}>
-            Adult points {adultPoints}
-          </span>
+          {bonusPoints > 0 && (
+            <span className="chip chip--muted">
+              Bonus points {bonusPoints}
+            </span>
+          )}
+          {adultPoints > 0 && (
+            <span className="chip chip--muted" title={adultTooltip}>
+              Adult points {adultPoints}
+            </span>
+          )}
         </div>
         <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
           <span>Total</span>
-          <span className="font-mono">{formatPoints(baseTotal)}</span>
+          <span className="font-mono">{formatPoints(total)}</span>
         </div>
       </div>
     );
@@ -565,7 +581,8 @@ export default function Leaderboard() {
                   const showMagnitude = delta !== 0;
                   const indicatorMagnitude = Math.abs(delta);
                   const arrowStyle = { opacity: arrowOpacity || MIN_ARROW_OPACITY };
-                  const adultPoints = row.adult_points ?? row.bonus_points ?? 0;
+                  const adultPoints = row.adult_points ?? 0;
+                  const bonusPoints = row.bonus_points ?? 0;
                   const researchCount = row.research_count ?? row.research_grade_count ?? 0;
                   const change = changedSinceRefresh.get(row.user_login);
                   const rowChanged = Boolean(change);
@@ -613,6 +630,18 @@ export default function Leaderboard() {
                         'chip chip--muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
                     },
                   ];
+
+                  if (bonusPoints > 0) {
+                    metricChips.push({
+                      key: 'bonus',
+                      label: `🎁 ${bonusPoints}`,
+                      ariaLabel: 'Bonus points',
+                      title: 'Bonus points',
+                      description: 'Special bonus points awarded for achievements or milestones.',
+                      className:
+                        'chip chip--trophy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
+                    });
+                  }
 
                   if (adultPoints > 0) {
                     metricChips.push({
